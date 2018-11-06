@@ -436,8 +436,13 @@ func (r *PEXReactor) ensurePeers() {
 
 	// If we are not connected to nor dialing anybody, fallback to dialing a seed.
 	if out+in+dial+len(toDial) == 0 {
-		r.Logger.Info("No addresses to dial nor connected peers. Falling back to seeds")
-		r.dialSeeds()
+		r.Logger.Info("No addresses to dial nor connected peers")
+		if len(r.seedAddrs) > 0 {
+			r.Logger.Info("Falling back to seeds")
+			r.dialSeeds()
+		} else {
+			r.Logger.Info("No seeds")
+		}
 	}
 }
 
@@ -527,7 +532,6 @@ func (r *PEXReactor) dialSeeds() {
 		}
 		r.Switch.Logger.Error("Error dialing seed", "err", err, "seed", seedAddr)
 	}
-	r.Switch.Logger.Error("Couldn't connect to any seeds")
 }
 
 // AttemptsToDial returns the number of attempts to dial specific address. It
