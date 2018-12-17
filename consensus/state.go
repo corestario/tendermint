@@ -116,6 +116,24 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
+
+	randomState *RandomState
+}
+
+type RandomState struct {
+	Height2BLS map[int64]*BLSSet
+}
+
+func (m *RandomState) Update(height int64, share *types.RandomShare) {
+	if _, ok := m.Height2BLS[height]; !ok {
+		m.Height2BLS[height] = &BLSSet{}
+	}
+	blsSet := m.Height2BLS[height]
+	blsSet.Shares = append(blsSet.Shares, share)
+}
+
+type BLSSet struct {
+	Shares []*types.RandomShare
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -146,6 +164,7 @@ func NewConsensusState(
 		evpool:           evpool,
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
+		randomState:      &RandomState{Height2BLS: map[int64]*BLSSet{}},
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -587,6 +606,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 	}()
 
 	for {
+		cs.doRandomShare()
+
 		if maxSteps > 0 {
 			if cs.nSteps >= maxSteps {
 				cs.Logger.Info("reached max steps. exiting receive routine")
@@ -660,18 +681,26 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			// https://github.com/tendermint/tendermint/issues/1281
 		}
 
-		// NOTE: the vote is broadcast to peers by the reactor listening
-		// for vote events
+	// NOTE: the vote is broadcast to peers by the reactor listening
+	// for vote events
 
-		// TODO: If rs.Height == vote.Height && rs.Round < vote.Round,
-		// the peer is sending us CatchupCommit precommits.
-		// We could make note of this and help filter in broadcastHasVoteMessage().
+	// TODO: If rs.Height == vote.Height && rs.Round < vote.Round,
+	// the peer is sending us CatchupCommit precommits.
+	// We could make note of this and help filter in broadcastHasVoteMessage().
+	case *RandomShareMessage:
+		cs.handleRandomShare(msg, peerID)
 	default:
 		cs.Logger.Error("Unknown msg type", reflect.TypeOf(msg))
 	}
 	if err != nil {
 		cs.Logger.Error("Error with msg", "height", cs.Height, "round", cs.Round, "type", reflect.TypeOf(msg), "peer", peerID, "err", err, "msg", msg)
 	}
+}
+
+func (cs *ConsensusState) handleRandomShare(msg *RandomShareMessage, peerID p2p.ID) {
+	cs.Logger.Info("Received RandomShare message", "peer", peerID, "msg", msg)
+	// Totally useless action, just accumulate state for the sake of demo.
+	cs.randomState.Update(cs.Height, msg.Share)
 }
 
 func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
@@ -1075,6 +1104,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
 		return
 	}
+
+	// Broadcast random share.
+	cs.doRandomShare()
 
 	// At this point, +2/3 prevoted for a particular block.
 
@@ -1688,6 +1720,22 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
 	return nil
+}
+
+func (cs *ConsensusState) doRandomShare() *types.RandomShare {
+	// if we don't have a key or we're not in the validator set, do nothing
+	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetAddress()) {
+		return nil
+	}
+
+	randomShare := &types.RandomShare{
+		Data: []byte(fmt.Sprintf("RandomShare from %s", cs.privValidator.GetPubKey().Address().String())),
+	}
+
+	cs.sendInternalMessage(msgInfo{&RandomShareMessage{randomShare}, ""})
+	cs.Logger.Info("Pushed random share", "height", cs.Height, "round", cs.Round, "share", randomShare)
+
+	return randomShare
 }
 
 //---------------------------------------------------------

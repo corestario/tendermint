@@ -81,6 +81,18 @@ func CanonicalizeVote(chainID string, vote *Vote) CanonicalVote {
 	}
 }
 
+func CanonicalizeRandomShare(chainID string, randomShare *RandomShare) CanonicalRandShare {
+	return CanonicalRandShare{
+		CanonicalVote: CanonicalizeVote(chainID, randomShare.Vote),
+		Data:          randomShare.Data,
+	}
+}
+
+type CanonicalRandShare struct {
+	CanonicalVote
+	Data []byte
+}
+
 // CanonicalTime can be used to stringify time in a canonical way.
 func CanonicalTime(t time.Time) string {
 	// Note that sending time over amino resets it to
