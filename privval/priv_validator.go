@@ -17,10 +17,11 @@ import (
 
 // TODO: type ?
 const (
-	stepNone      int8 = 0 // Used to distinguish the initial state
-	stepPropose   int8 = 1
-	stepPrevote   int8 = 2
-	stepPrecommit int8 = 3
+	stepNone        int8 = 0 // Used to distinguish the initial state
+	stepPropose     int8 = 1
+	stepPrevote     int8 = 2
+	stepPrecommit   int8 = 3
+	stepRandomShare int8 = 4
 )
 
 func voteToStep(vote *types.Vote) int8 {
@@ -29,6 +30,8 @@ func voteToStep(vote *types.Vote) int8 {
 		return stepPrevote
 	case types.PrecommitType:
 		return stepPrecommit
+	case types.RandomType:
+		return stepRandomShare
 	default:
 		cmn.PanicSanity("Unknown vote type")
 		return 0

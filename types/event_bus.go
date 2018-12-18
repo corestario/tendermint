@@ -186,10 +186,6 @@ func (b *EventBus) PublishEventValidatorSetUpdates(data EventDataValidatorSetUpd
 	return b.Publish(EventValidatorSetUpdates, data)
 }
 
-func (b *EventBus) PublishEventDataRandomShare(data EventDataRandomShare) error {
-	return b.Publish(EventRandomShare, data)
-}
-
 func logIfTagExists(tag string, tags map[string]string, logger log.Logger) {
 	if value, ok := tags[tag]; ok {
 		logger.Error("Found predefined tag (value will be overwritten)", "tag", tag, "value", value)

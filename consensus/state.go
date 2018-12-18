@@ -117,23 +117,7 @@ type ConsensusState struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	randomState *RandomState
-}
-
-type RandomState struct {
-	Height2BLS map[int64]*BLSSet
-}
-
-func (m *RandomState) Update(height int64, share *types.RandomShare) {
-	if _, ok := m.Height2BLS[height]; !ok {
-		m.Height2BLS[height] = &BLSSet{}
-	}
-	blsSet := m.Height2BLS[height]
-	blsSet.Shares = append(blsSet.Shares, share)
-}
-
-type BLSSet struct {
-	Shares []*types.RandomShare
+	triggeredTimeoutRandom bool
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -164,7 +148,6 @@ func NewConsensusState(
 		evpool:           evpool,
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
-		randomState:      &RandomState{Height2BLS: map[int64]*BLSSet{}},
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -606,8 +589,6 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 	}()
 
 	for {
-		cs.doRandomShare()
-
 		if maxSteps > 0 {
 			if cs.nSteps >= maxSteps {
 				cs.Logger.Info("reached max steps. exiting receive routine")
@@ -687,20 +668,12 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 	// TODO: If rs.Height == vote.Height && rs.Round < vote.Round,
 	// the peer is sending us CatchupCommit precommits.
 	// We could make note of this and help filter in broadcastHasVoteMessage().
-	case *RandomShareMessage:
-		cs.handleRandomShare(msg, peerID)
 	default:
 		cs.Logger.Error("Unknown msg type", reflect.TypeOf(msg))
 	}
 	if err != nil {
 		cs.Logger.Error("Error with msg", "height", cs.Height, "round", cs.Round, "type", reflect.TypeOf(msg), "peer", peerID, "err", err, "msg", msg)
 	}
-}
-
-func (cs *ConsensusState) handleRandomShare(msg *RandomShareMessage, peerID p2p.ID) {
-	cs.Logger.Info("Received RandomShare message", "peer", peerID, "msg", msg)
-	// Totally useless action, just accumulate state for the sake of demo.
-	cs.randomState.Update(cs.Height, msg.Share)
 }
 
 func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
@@ -732,6 +705,9 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	case cstypes.RoundStepPrecommitWait:
 		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
 		cs.enterPrecommit(ti.Height, ti.Round)
+	case cstypes.RoundStepRandomWait:
+		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
+		cs.enterRandom(ti.Height, ti.Round)
 		cs.enterNewRound(ti.Height, ti.Round+1)
 	default:
 		panic(fmt.Sprintf("Invalid timeout step: %v", ti.Step))
@@ -794,6 +770,7 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 	cs.triggeredTimeoutPrecommit = false
+	cs.triggeredTimeoutRandom = false
 
 	cs.eventBus.PublishEventNewRound(cs.NewRoundEvent())
 	cs.metrics.Rounds.Set(float64(round))
@@ -995,14 +972,14 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		logger.Info("enterPrevote: Block was locked")
-		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header())
+		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header(), nil)
 		return
 	}
 
 	// If ProposalBlock is nil, prevote nil.
 	if cs.ProposalBlock == nil {
 		logger.Info("enterPrevote: ProposalBlock is nil")
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, nil)
 		return
 	}
 
@@ -1011,7 +988,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, nil)
 		return
 	}
 
@@ -1019,7 +996,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
 	logger.Info("enterPrevote: ProposalBlock is valid")
-	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
+	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header(), nil)
 }
 
 // Enter: any +2/3 prevotes at next round.
@@ -1077,7 +1054,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		} else {
 			logger.Info("enterPrecommit: No +2/3 prevotes during enterPrecommit. Precommitting nil.")
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 		return
 	}
 
@@ -1101,12 +1078,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 			cs.LockedBlockParts = nil
 			cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 		return
 	}
-
-	// Broadcast random share.
-	cs.doRandomShare()
 
 	// At this point, +2/3 prevoted for a particular block.
 
@@ -1115,7 +1089,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
 		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, nil)
 		return
 	}
 
@@ -1130,7 +1104,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
 		cs.eventBus.PublishEventLock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, nil)
 		return
 	}
 
@@ -1146,7 +1120,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
 	cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
-	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 }
 
 // Enter: any +2/3 precommits for next round.
@@ -1651,7 +1625,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommit(height, vote.Round)
 			if len(blockID.Hash) != 0 {
-				cs.enterCommit(height, vote.Round)
+				cs.enterRandom(height, vote.Round)
 				if cs.config.SkipTimeoutCommit && precommits.HasAll() {
 					cs.enterNewRound(cs.Height, 0)
 				}
@@ -1662,7 +1636,31 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommitWait(height, vote.Round)
 		}
+	case types.RandomType:
+		randoms := cs.Votes.Randoms(vote.Round)
+		cs.Logger.Info("Added to random", "vote", vote, "precommits", randoms.StringShort())
 
+		blockID, ok := randoms.TwoThirdsMajority()
+		if ok {
+			if err := cs.computeRandom(randoms); err != nil {
+				panic(fmt.Sprintf("failed to computeRandom: %v", err))
+			}
+
+			// Executed as TwoThirdsMajority could be from a higher round
+			cs.enterNewRound(height, vote.Round)
+			cs.enterRandom(height, vote.Round)
+			if len(blockID.Hash) != 0 {
+				cs.enterCommit(height, vote.Round)
+				if cs.config.SkipTimeoutCommit && randoms.HasAll() {
+					cs.enterNewRound(cs.Height, 0)
+				}
+			} else {
+				cs.enterRandomWait(height, vote.Round)
+			}
+		} else if cs.Round <= vote.Round && randoms.HasTwoThirdsAny() {
+			cs.enterNewRound(height, vote.Round)
+			cs.enterRandomWait(height, vote.Round)
+		}
 	default:
 		panic(fmt.Sprintf("Unexpected vote type %X", vote.Type)) // go-wire should prevent this.
 	}
@@ -1670,7 +1668,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 	return
 }
 
-func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) (*types.Vote, error) {
+func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.Vote, error) {
 	addr := cs.privValidator.GetAddress()
 	valIndex, _ := cs.Validators.GetByAddress(addr)
 
@@ -1681,7 +1679,8 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 		Round:            cs.Round,
 		Timestamp:        cs.voteTime(),
 		Type:             type_,
-		BlockID:          types.BlockID{hash, header},
+		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
+		Data:             data,
 	}
 	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
 	return vote, err
@@ -1705,12 +1704,12 @@ func (cs *ConsensusState) voteTime() time.Time {
 }
 
 // sign the vote and publish on internalMsgQueue
-func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.Vote {
+func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) *types.Vote {
 	// if we don't have a key or we're not in the validator set, do nothing
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetAddress()) {
 		return nil
 	}
-	vote, err := cs.signVote(type_, hash, header)
+	vote, err := cs.signVote(type_, hash, header, data)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
@@ -1720,22 +1719,6 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
 	return nil
-}
-
-func (cs *ConsensusState) doRandomShare() *types.RandomShare {
-	// if we don't have a key or we're not in the validator set, do nothing
-	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetAddress()) {
-		return nil
-	}
-
-	randomShare := &types.RandomShare{
-		Data: []byte(fmt.Sprintf("RandomShare from %s", cs.privValidator.GetPubKey().Address().String())),
-	}
-
-	cs.sendInternalMessage(msgInfo{&RandomShareMessage{randomShare}, ""})
-	cs.Logger.Info("Pushed random share", "height", cs.Height, "round", cs.Round, "share", randomShare)
-
-	return randomShare
 }
 
 //---------------------------------------------------------

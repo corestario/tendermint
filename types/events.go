@@ -26,7 +26,6 @@ const (
 	EventValidBlock          = "ValidBlock"
 	EventValidatorSetUpdates = "ValidatorSetUpdates"
 	EventVote                = "Vote"
-	EventRandomShare         = "RandomShare"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -49,7 +48,6 @@ func RegisterEventDatas(cdc *amino.Codec) {
 	cdc.RegisterConcrete(EventDataVote{}, "tendermint/event/Vote", nil)
 	cdc.RegisterConcrete(EventDataValidatorSetUpdates{}, "tendermint/event/ValidatorSetUpdates", nil)
 	cdc.RegisterConcrete(EventDataString(""), "tendermint/event/ProposalString", nil)
-	cdc.RegisterConcrete(EventDataRandomShare{}, "tendermint/event/RandomShare", nil)
 }
 
 // Most event messages are basic types (a block, a transaction)
@@ -114,10 +112,6 @@ type EventDataString string
 
 type EventDataValidatorSetUpdates struct {
 	ValidatorUpdates []*Validator `json:"validator_updates"`
-}
-
-type EventDataRandomShare struct {
-	Share *RandomShare `json:"share"`
 }
 
 ///////////////////////////////////////////////////////////////////////////////

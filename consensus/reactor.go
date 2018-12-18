@@ -1371,7 +1371,6 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&RandomShareMessage{}, "tendermint/RandomShare", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1547,23 +1546,6 @@ func (m *VoteMessage) ValidateBasic() error {
 // String returns a string representation.
 func (m *VoteMessage) String() string {
 	return fmt.Sprintf("[Vote %v]", m.Vote)
-}
-
-//-------------------------------------
-
-// VoteMessage is sent when voting for a proposal (or lack thereof).
-type RandomShareMessage struct {
-	Share *types.RandomShare
-}
-
-// ValidateBasic performs basic validation.
-func (m *RandomShareMessage) ValidateBasic() error {
-	return m.Share.ValidateBasic()
-}
-
-// String returns a string representation.
-func (m *RandomShareMessage) String() string {
-	return fmt.Sprintf("[Vote %v]", m.Share)
 }
 
 // HasVoteMessage is sent to indicate that a particular vote has been received.

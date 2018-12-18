@@ -14,6 +14,7 @@ import (
 type RoundVoteSet struct {
 	Prevotes   *types.VoteSet
 	Precommits *types.VoteSet
+	Randoms    *types.VoteSet
 }
 
 var (
@@ -101,9 +102,11 @@ func (hvs *HeightVoteSet) addRound(round int) {
 	// log.Debug("addRound(round)", "round", round)
 	prevotes := types.NewVoteSet(hvs.chainID, hvs.height, round, types.PrevoteType, hvs.valSet)
 	precommits := types.NewVoteSet(hvs.chainID, hvs.height, round, types.PrecommitType, hvs.valSet)
+	randoms := types.NewVoteSet(hvs.chainID, hvs.height, round, types.RandomType, hvs.valSet)
 	hvs.roundVoteSets[round] = RoundVoteSet{
 		Prevotes:   prevotes,
 		Precommits: precommits,
+		Randoms:    randoms,
 	}
 }
 
@@ -143,6 +146,12 @@ func (hvs *HeightVoteSet) Precommits(round int) *types.VoteSet {
 	return hvs.getVoteSet(round, types.PrecommitType)
 }
 
+func (hvs *HeightVoteSet) Randoms(round int) *types.VoteSet {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+	return hvs.getVoteSet(round, types.RandomType)
+}
+
 // Last round and blockID that has +2/3 prevotes for a particular block or nil.
 // Returns -1 if no such round exists.
 func (hvs *HeightVoteSet) POLInfo() (polRound int, polBlockID types.BlockID) {
@@ -168,6 +177,8 @@ func (hvs *HeightVoteSet) getVoteSet(round int, type_ types.SignedMsgType) *type
 		return rvs.Prevotes
 	case types.PrecommitType:
 		return rvs.Precommits
+	case types.RandomType:
+		return rvs.Randoms
 	default:
 		cmn.PanicSanity(fmt.Sprintf("Unexpected vote type %X", type_))
 		return nil

@@ -57,6 +57,7 @@ type Vote struct {
 	ValidatorAddress Address       `json:"validator_address"`
 	ValidatorIndex   int           `json:"validator_index"`
 	Signature        []byte        `json:"signature"`
+	Data             []byte        `json:"data"`
 }
 
 func (vote *Vote) SignBytes(chainID string) []byte {
@@ -82,11 +83,13 @@ func (vote *Vote) String() string {
 		typeString = "Prevote"
 	case PrecommitType:
 		typeString = "Precommit"
+	case RandomType:
+		typeString = "RandomShare"
 	default:
 		cmn.PanicSanity("Unknown vote type")
 	}
 
-	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s}",
+	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s Data: %v}",
 		vote.ValidatorIndex,
 		cmn.Fingerprint(vote.ValidatorAddress),
 		vote.Height,
@@ -96,6 +99,7 @@ func (vote *Vote) String() string {
 		cmn.Fingerprint(vote.BlockID.Hash),
 		cmn.Fingerprint(vote.Signature),
 		CanonicalTime(vote.Timestamp),
+		vote.Data,
 	)
 }
 
