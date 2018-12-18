@@ -145,10 +145,5 @@ func (vote *Vote) ValidateBasic() error {
 		return fmt.Errorf("Signature is too big (max: %d)", MaxSignatureSize)
 	}
 
-	// Check for non-nil Precommit votes with no (random) data.
-	if vote.Type == PrecommitType && vote.BlockID.Hash != nil && len(vote.RandData) == 0 {
-		return errors.New("No data provided in a Precommit vote, ")
-	}
-
 	return nil
 }

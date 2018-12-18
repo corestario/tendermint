@@ -473,6 +473,10 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.Hash())
 }
 
+func (h *Header) SetRandomNumber(randomNumber int64) {
+	// Pass
+}
+
 //-------------------------------------
 
 // Commit contains the evidence that a block was committed by a set of validators.

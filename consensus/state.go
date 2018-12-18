@@ -1080,10 +1080,10 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 
 	// At this point, +2/3 prevoted for a particular block.
 
-	// Generate some random value.
-	randomChunk := make([]byte, 8)
-	binary.LittleEndian.PutUint64(randomChunk, uint64(rand.Int63()))
-	logger.Info("enterPrecommit: generated random chunk", "chunk", randomChunk)
+	randomData, err := cs.generateRandomData()
+	if err != nil {
+		cmn.PanicSanity(fmt.Sprintf("Failed to generate random data: %v", err))
+	}
 
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
@@ -1091,7 +1091,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedRound = round
 		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
 
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomChunk)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomData)
 		return
 	}
 
@@ -1106,7 +1106,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
 		cs.eventBus.PublishEventLock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomChunk)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomData)
 		return
 	}
 
@@ -1122,7 +1122,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
 	cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
-	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, randomChunk)
+	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, randomData)
 }
 
 // Enter: any +2/3 precommits for next round.
@@ -1175,9 +1175,18 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.tryFinalizeCommit(height)
 	}()
 
-	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
+	precommits := cs.Votes.Precommits(commitRound)
+	blockID, ok := precommits.TwoThirdsMajority()
 	if !ok {
 		cmn.PanicSanity("RunActionCommit() expects +2/3 precommits")
+	}
+
+	randNumber, err := cs.collectRandomData(precommits)
+	if err != nil {
+		cmn.PanicSanity(fmt.Sprintf("Failed to collectRandomData(): %v", err))
+	}
+	if cs.LockedBlock != nil {
+		cs.LockedBlock.Header.SetRandomNumber(randNumber)
 	}
 
 	// The Locked* fields no longer matter.
@@ -1203,6 +1212,23 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 			// We just need to keep waiting.
 		}
 	}
+}
+
+func (cs *ConsensusState) generateRandomData() ([]byte, error) {
+	// Generate some random value.
+	data := make([]byte, 8)
+	binary.LittleEndian.PutUint64(data, uint64(rand.Int63()))
+	cs.Logger.Info("generated random data", "data", data)
+
+	return data, nil
+}
+
+func (cs *ConsensusState) collectRandomData(precommits *types.VoteSet) (int64, error) {
+	for _, precommit := range precommits.VoteStrings() {
+		cs.Logger.Info("Collecting random data from", "precommit", precommit, "precommits", precommits.StringShort())
+	}
+
+	return 42, nil
 }
 
 // If we have the block AND +2/3 commits for it, finalize.
@@ -1623,9 +1649,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 
 		blockID, ok := precommits.TwoThirdsMajority()
 		if ok {
-			if err := cs.RestoreRandom(precommits); err != nil {
-				cmn.PanicSanity(fmt.Sprintf("Failed to RestoreRandom: %v", err))
-			}
 			// Executed as TwoThirdsMajority could be from a higher round
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommit(height, vote.Round)
