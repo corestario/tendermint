@@ -130,16 +130,16 @@ max_num_inbound_peers = 100
 max_num_outbound_peers = 100
 
 # Time to wait before flushing messages out on the connection, in ms
-flush_throttle_timeout = "100ms"
+flush_throttle_timeout = "1000ms"
 
 # Maximum size of a message packet payload, in bytes
-max_packet_msg_payload_size = 1024
+max_packet_msg_payload_size = 10240
 
 # Rate at which packets can be sent, in bytes/second
-send_rate = 5120000
+send_rate = 51200000
 
 # Rate at which packets can be received, in bytes/second
-recv_rate = 5120000
+recv_rate = 51200000
 
 # Set true to enable the peer-exchange reactor
 pex = true
@@ -158,7 +158,7 @@ allow_duplicate_ip = true
 
 # Peer connection configuration.
 handshake_timeout = "20s"
-dial_timeout = "3s"
+dial_timeout = "6s"
 
 ##### mempool configuration options #####
 [mempool]
@@ -168,7 +168,7 @@ broadcast = true
 wal_dir = "data/mempool.wal"
 
 # size of the mempool
-size = 100000
+size = 1000000
 
 # size of the cache (used to filter transactions we saw earlier)
 cache_size = 500000
