@@ -919,8 +919,8 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 		return
 	}
 
-	maxBytes := cs.state.ConsensusParams.BlockSize.MaxBytes
-	maxGas := cs.state.ConsensusParams.BlockSize.MaxGas
+	maxBytes := cs.state.ConsensusParams.Block.MaxBytes
+	maxGas := cs.state.ConsensusParams.Block.MaxGas
 	// bound evidence to 1/10th of the block
 	evidence := cs.evpool.PendingEvidence(types.MaxEvidenceBytesPerBlock(maxBytes))
 	// Mempool validated transactions
@@ -1422,7 +1422,7 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		_, err = cdc.UnmarshalBinaryLengthPrefixedReader(
 			cs.ProposalBlockParts.GetReader(),
 			&cs.ProposalBlock,
-			int64(cs.state.ConsensusParams.BlockSize.MaxBytes),
+			int64(cs.state.ConsensusParams.Block.MaxBytes),
 		)
 		if err != nil {
 			return added, err
@@ -1661,9 +1661,10 @@ func (cs *ConsensusState) voteTime() time.Time {
 	// TODO: We should remove next line in case we don't vote for v in case cs.ProposalBlock == nil,
 	// even if cs.LockedBlock != nil. See https://github.com/tendermint/spec.
 	if cs.LockedBlock != nil {
-		minVoteTime = cs.config.MinValidVoteTime(cs.LockedBlock.Time)
+		// See the BFT time spec https://tendermint.com/docs/spec/consensus/bft-time.html
+		minVoteTime = cs.LockedBlock.Time.Add(cs.state.ConsensusParams.Block.TimeIota.Duration)
 	} else if cs.ProposalBlock != nil {
-		minVoteTime = cs.config.MinValidVoteTime(cs.ProposalBlock.Time)
+		minVoteTime = cs.ProposalBlock.Time.Add(cs.state.ConsensusParams.Block.TimeIota.Duration)
 	}
 
 	if now.After(minVoteTime) {

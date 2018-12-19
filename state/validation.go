@@ -133,7 +133,7 @@ func validateBlock(stateDB dbm.DB, state State, block *types.Block) error {
 	}
 
 	// Limit the amount of evidence
-	maxEvidenceBytes := types.MaxEvidenceBytesPerBlock(state.ConsensusParams.BlockSize.MaxBytes)
+	maxEvidenceBytes := types.MaxEvidenceBytesPerBlock(state.ConsensusParams.Block.MaxBytes)
 	evidenceBytes := int64(len(block.Evidence.Evidence)) * types.MaxEvidenceBytes
 	if evidenceBytes > maxEvidenceBytes {
 		return types.NewErrEvidenceOverflow(maxEvidenceBytes, evidenceBytes)

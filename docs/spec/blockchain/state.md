@@ -81,22 +81,19 @@ Like validator sets, they are set during genesis and can be updated by the appli
 
 ```go
 type ConsensusParams struct {
-	BlockSize
+	Block
 	Evidence
 	Validator
 }
 
-type BlockSize struct {
+type BlockParams struct {
 	MaxBytes        int64
 	MaxGas          int64
+  TimeIota        time.Duration
 }
 
-type Evidence struct {
+type EvidenceParams struct {
 	MaxAge int64
-}
-
-type Validator struct {
-	PubKeyTypes []string
 }
 
 type ValidatorParams struct {
@@ -104,14 +101,17 @@ type ValidatorParams struct {
 }
 ```
 
-#### BlockSize
+#### Block
 
-The total size of a block is limited in bytes by the `ConsensusParams.BlockSize.MaxBytes`.
+The total size of a block is limited in bytes by the `ConsensusParams.Block.MaxBytes`.
 Proposed blocks must be less than this size, and will be considered invalid
 otherwise.
 
 Blocks should additionally be limited by the amount of "gas" consumed by the
 transactions in the block, though this is not yet implemented.
+
+The minimal time between consecutive blocks is controlled by the
+`ConsensusParams.Block.TimeIota`.
 
 #### Evidence
 
