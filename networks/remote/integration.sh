@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd $GOPATH/src/github.com/tendermint/tendermint/networks/remote/terraform
+terraform init
 terraform apply -var DO_API_TOKEN="$DO_API_TOKEN" -var SSH_KEY_FILE="$SSH_KEY_FILE" -auto-approve
 
 # let the droplets boot
@@ -28,7 +30,7 @@ ip3=$(strip $ip3)
 cd $GOPATH/src/github.com/tendermint/tendermint/networks/remote/ansible
 
 ansible-playbook -i inventory/digital_ocean.py -l sentrynet install.yml
-ansible-playbook -i inventory/digital_ocean.py -l sentrynet config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/docs/examples
+ansible-playbook -i inventory/digital_ocean.py -l sentrynet config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/networks/remote/examples
 
 sleep 10
 
