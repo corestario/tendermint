@@ -9,7 +9,7 @@ terraform init
 terraform apply -var DO_API_TOKEN="$DO_API_TOKEN" -var SSH_KEY_FILE="$SSH_KEY_FILE" -var TESTNET_NAME="testnet" -auto-approve
 
 # let the droplets boot
-sleep 10
+sleep 60
 
 # get the IPs
 ip0=`terraform output -json public_ips | jq '.value[0]'`
