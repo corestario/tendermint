@@ -1181,6 +1181,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	}
 
 	randNumber, err := cs.getRandomNumber(precommits)
+	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
 	}
