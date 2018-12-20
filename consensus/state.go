@@ -1180,9 +1180,9 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cmn.PanicSanity("RunActionCommit() expects +2/3 precommits")
 	}
 
-	randNumber, err := cs.collectRandomData(precommits)
+	randNumber, err := cs.getRandomNumber(precommits)
 	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to collectRandomData(): %v", err))
+		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
 	}
 	if cs.LockedBlock != nil {
 		cs.LockedBlock.Header.SetRandomNumber(randNumber)
@@ -1223,12 +1223,20 @@ func (cs *ConsensusState) generateRandomData() ([]byte, error) {
 	return data, nil
 }
 
-func (cs *ConsensusState) collectRandomData(precommits *types.VoteSet) (int64, error) {
-	for _, precommit := range precommits.VoteStrings() {
-		cs.Logger.Info("Collecting random data from", "precommit", precommit, "precommits", precommits.StringShort())
+func (cs *ConsensusState) getRandomNumber(precommits *types.VoteSet) (int64, error) {
+	var out int64
+	for _, precommit := range precommits.GetVotes() {
+		// Nil votes do exist, keep that in mind.
+		if precommit == nil {
+			continue
+		}
+		cs.Logger.Info("Collecting random data", "from", precommit.ValidatorAddress, "data", precommit.RandData)
+		for _, b := range precommit.RandData {
+			out += int64(b)
+		}
 	}
 
-	return 42, nil
+	return out, nil
 }
 
 // If we have the block AND +2/3 commits for it, finalize.
