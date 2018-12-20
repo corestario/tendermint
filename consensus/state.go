@@ -1090,7 +1090,6 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
 		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
-
 		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomData)
 		return
 	}
@@ -1215,6 +1214,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 }
 
 func (cs *ConsensusState) generateRandomData() ([]byte, error) {
+	rand.Seed(int64(time.Now().Second()))
 	// Generate some random value.
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, uint64(rand.Int63()))
