@@ -484,10 +484,10 @@ func (h *Header) StringIndented(indent string) string {
 
 func (h *Header) SetRandomNumber(randomNumber int64) {
 	h.RandomNumber = randomNumber
-	h.RandomHash = h.genRandomHash()
+	h.RandomHash = h.getRandomHash()
 }
 
-func (h *Header) genRandomHash() cmn.HexBytes {
+func (h *Header) getRandomHash() cmn.HexBytes {
 	return merkle.SimpleHashFromByteSlices([][]byte{
 		cdcEncode(h.RandomNumber),
 		h.Hash(),
