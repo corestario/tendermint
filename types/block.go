@@ -172,6 +172,10 @@ func (b *Block) ValidateBasic() error {
 			crypto.AddressSize, len(b.ProposerAddress))
 	}
 
+	if err := ValidateHash(b.RandomHash); err != nil {
+		return fmt.Errorf("Wrong Header.RandomHash: %v", err)
+	}
+
 	return nil
 }
 
@@ -377,6 +381,9 @@ type Header struct {
 	// consensus info
 	EvidenceHash    cmn.HexBytes `json:"evidence_hash"`    // evidence included in the block
 	ProposerAddress Address      `json:"proposer_address"` // original proposer of the block
+
+	RandomNumber int64        `json:"random_number"`
+	RandomHash   cmn.HexBytes `json:"final_hash"`
 }
 
 // Populate the Header with state-derived data.
@@ -453,6 +460,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Results:        %v
 %s  Evidence:       %v
 %s  Proposer:       %v
+%s  RandomNumber:   %v
 %s}#%v`,
 		indent, h.Version,
 		indent, h.ChainID,
@@ -470,7 +478,20 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.LastResultsHash,
 		indent, h.EvidenceHash,
 		indent, h.ProposerAddress,
+		indent, h.RandomNumber,
 		indent, h.Hash())
+}
+
+func (h *Header) SetRandomNumber(randomNumber int64) {
+	h.RandomNumber = randomNumber
+	h.RandomHash = h.getRandomHash()
+}
+
+func (h *Header) getRandomHash() cmn.HexBytes {
+	return merkle.SimpleHashFromByteSlices([][]byte{
+		cdcEncode(h.RandomNumber),
+		h.Hash(),
+	})
 }
 
 //-------------------------------------
