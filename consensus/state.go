@@ -1185,6 +1185,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
 	}
+	// TODO @oopcode: check if this is a possible situation.
 	if cs.LockedBlock != nil {
 		cs.LockedBlock.Header.SetRandomNumber(randNumber)
 	}
