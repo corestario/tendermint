@@ -118,6 +118,8 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
+
+	verifier types.Verifier
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -179,6 +181,10 @@ func (cs *ConsensusState) SetLogger(l log.Logger) {
 func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.eventBus = b
 	cs.blockExec.SetEventBus(b)
+}
+
+func WithVerifier(verifier types.Verifier) StateOption {
+	return func(cs *ConsensusState) { cs.verifier = verifier }
 }
 
 // StateMetrics sets the metrics.
@@ -1180,16 +1186,6 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cmn.PanicSanity("RunActionCommit() expects +2/3 precommits")
 	}
 
-	randNumber, err := cs.getRandomNumber(precommits)
-	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
-	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
-	}
-	// TODO @oopcode: check if this is a possible situation.
-	if cs.LockedBlock != nil {
-		cs.LockedBlock.Header.SetRandomNumber(randNumber)
-	}
-
 	// The Locked* fields no longer matter.
 	// Move them over to ProposalBlock if they match the commit hash,
 	// otherwise they'll be cleared in updateToState.
@@ -1197,6 +1193,16 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		logger.Info("Commit is for locked block. Set ProposalBlock=LockedBlock", "blockHash", blockID.Hash)
 		cs.ProposalBlock = cs.LockedBlock
 		cs.ProposalBlockParts = cs.LockedBlockParts
+	}
+
+	randNumber, err := cs.getRandomNumber(precommits)
+	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
+	if err != nil {
+		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
+	}
+	// TODO @oopcode: check if this is a possible situation.
+	if cs.ProposalBlock != nil {
+		cs.ProposalBlock.Header.SetRandomNumber(randNumber)
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -1286,6 +1292,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 	if err := cs.blockExec.ValidateBlock(cs.state, block); err != nil {
 		cmn.PanicConsensus(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
+	}
+
+	if err := cs.verifier.VerifySignature(block.Header.RandomNumber); err != nil {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has corrupted random value"))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),

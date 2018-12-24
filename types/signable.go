@@ -21,3 +21,17 @@ var (
 type Signable interface {
 	SignBytes(chainID string) []byte
 }
+
+type Verifier interface {
+	VerifySignature(interface{}) error
+}
+
+type BlsVerifier struct{}
+
+func NewBlsVerifier() *BlsVerifier {
+	return &BlsVerifier{}
+}
+
+func (m *BlsVerifier) VerifySignature(interface{}) error {
+	return nil
+}

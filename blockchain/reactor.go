@@ -67,12 +67,13 @@ type BlockchainReactor struct {
 
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
+
+	verifier types.Verifier
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *BlockStore,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *BlockStore, verifier types.Verifier,
 	fastSync bool) *BlockchainReactor {
-
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
 			store.Height()))
@@ -97,6 +98,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *Bl
 		fastSync:     fastSync,
 		requestsCh:   requestsCh,
 		errorsCh:     errorsCh,
+		verifier:     verifier,
 	}
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
@@ -300,6 +302,16 @@ FOR_LOOP:
 				didProcessCh <- struct{}{}
 			}
 
+			if err := bcR.verifier.VerifySignature(first.RandomNumber); err != nil {
+				bcR.poolRoutineHandleErr(err, first, second)
+				continue FOR_LOOP
+			}
+
+			if err := bcR.verifier.VerifySignature(second.RandomNumber); err != nil {
+				bcR.poolRoutineHandleErr(err, first, second)
+				continue FOR_LOOP
+			}
+
 			firstParts := first.MakePartSet(types.BlockPartSizeBytes)
 			firstPartsHeader := firstParts.Header()
 			firstID := types.BlockID{first.Hash(), firstPartsHeader}
@@ -310,21 +322,7 @@ FOR_LOOP:
 			err := state.Validators.VerifyCommit(
 				chainID, firstID, first.Height, second.LastCommit)
 			if err != nil {
-				bcR.Logger.Error("Error in validation", "err", err)
-				peerID := bcR.pool.RedoRequest(first.Height)
-				peer := bcR.Switch.Peers().Get(peerID)
-				if peer != nil {
-					// NOTE: we've already removed the peer's request, but we
-					// still need to clean up the rest.
-					bcR.Switch.StopPeerForError(peer, fmt.Errorf("BlockchainReactor validation error: %v", err))
-				}
-				peerID2 := bcR.pool.RedoRequest(second.Height)
-				peer2 := bcR.Switch.Peers().Get(peerID2)
-				if peer2 != nil && peer2 != peer {
-					// NOTE: we've already removed the peer's request, but we
-					// still need to clean up the rest.
-					bcR.Switch.StopPeerForError(peer2, fmt.Errorf("BlockchainReactor validation error: %v", err))
-				}
+				bcR.poolRoutineHandleErr(err, first, second)
 				continue FOR_LOOP
 			} else {
 				bcR.pool.PopRequest()
@@ -355,6 +353,24 @@ FOR_LOOP:
 		case <-bcR.Quit():
 			break FOR_LOOP
 		}
+	}
+}
+
+func (bcR *BlockchainReactor) poolRoutineHandleErr(err error, first, second *types.Block) {
+	bcR.Logger.Error("Error in validation", "err", err)
+	peerID := bcR.pool.RedoRequest(first.Height)
+	peer := bcR.Switch.Peers().Get(peerID)
+	if peer != nil {
+		// NOTE: we've already removed the peer's request, but we
+		// still need to clean up the rest.
+		bcR.Switch.StopPeerForError(peer, fmt.Errorf("BlockchainReactor validation error: %v", err))
+	}
+	peerID2 := bcR.pool.RedoRequest(second.Height)
+	peer2 := bcR.Switch.Peers().Get(peerID2)
+	if peer2 != nil && peer2 != peer {
+		// NOTE: we've already removed the peer's request, but we
+		// still need to clean up the rest.
+		bcR.Switch.StopPeerForError(peer2, fmt.Errorf("BlockchainReactor validation error: %v", err))
 	}
 }
 
