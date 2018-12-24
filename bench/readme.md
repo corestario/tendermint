@@ -11,7 +11,7 @@ Test config file /tendermint/bench/config.toml The setup is configured to have a
 `make build-docker-localnode`
 `sudo rm -Rdf build/node*`
 `make localnet-start`
-`go run ./bench/rpc/bench.go`
+`go run ./bench/bench.go -server="http://142.93.184.168:26657" -writetxs=80 &> bench.txt`
 
 ## Issues
 Tendermint definitely has a few memory leaks. OOM killer takes a node after 1-6 hours.
