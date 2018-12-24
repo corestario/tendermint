@@ -3,19 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/json-iterator/go"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/json-iterator/go"
 )
 
 type txType uint
@@ -26,6 +26,7 @@ const (
 	commitTx
 
 	unconfirmedTxs = "num_unconfirmed_txs"
+	getTx          = "tx"
 )
 
 func newTxType(t string) txType {
@@ -68,24 +69,20 @@ var (
 
 	rps       = flag.Int("rps", 500, "syncTx|asyncTx|commitTx")
 	blockTime = flag.Int("blocktime", 6, "block time in seconds")
-	txSize    = flag.Int("txsize", 500, "transaction size in bytes")
+	txSize    = flag.Int("txsize", 100, "transaction size in bytes")
 	duration  = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
 	threads   = flag.Int("threads", 20*runtime.NumCPU(), "how many threads to run")
+	writeTxs  = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
 
 	expectedBlockSize int
 	txTime            time.Duration
-	unconfirmedTXsNum string
+	unconfirmedTxsNum string
 	postTxURL         string
+	getTxURL          string
 )
 
 func main() {
-	flag.Parse()
-
-	unconfirmedTXsNum = *server + unconfirmedTxs
-	postTxURL = *server + newTxType(*postType).String() + "?tx="
-
-	expectedBlockSize = (*rps) * (*txSize) * (*blockTime)
-	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
+	initParams()
 
 	deadlineTimer := time.NewTimer(*duration)
 	defer deadlineTimer.Stop()
@@ -102,7 +99,7 @@ func main() {
 	var totalTime time.Duration
 	startTime := time.Now()
 
-	senders := newSenderGroup(*threads, startTime, *rps, logFreq, currentTx)
+	senders := newSenderGroup(*threads, startTime, *rps, logFreq, currentTx, int32(*writeTxs))
 	senders.run()
 
 mainLoop:
@@ -123,6 +120,34 @@ mainLoop:
 	fmt.Println("Total time", totalTime)
 }
 
+func initParams() {
+	flag.Parse()
+
+	serverURL, err := url.Parse(*server)
+	if err != nil {
+		panic("can't parse url: " + *server)
+	}
+
+	getURL := URL(serverURL.Scheme, serverURL.Host)
+
+	unconfirmedTxsNum = getURL(unconfirmedTxs, "")
+	postTxURL = getURL(newTxType(*postType).String(), "tx=")
+	getTxURL = getURL(getTx, "hash=0x")
+
+	expectedBlockSize = (*rps) * (*txSize) * (*blockTime)
+	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
+
+	if *writeTxs < 0 || *writeTxs > 100 {
+		panic("a fraction of write transactions. a non-negative number between o and 100")
+	}
+}
+
+func URL(scheme, host string) func(path, query string) string {
+	return func(path, query string) string {
+		return (&url.URL{Scheme: scheme, Host: host, Path: path, RawQuery: query}).String()
+	}
+}
+
 func waitUnconfirmedTxs() {
 	time.Sleep(50 * time.Millisecond)
 	for !hasUnconfirmedTxs(false) {
@@ -135,11 +160,12 @@ type senderGroup struct {
 	cancels []chan struct{}
 }
 
-func newSenderGroup(n int, startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64) senderGroup {
+func newSenderGroup(n int, startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32) senderGroup {
 	senders := make([]*sender, n)
+	storage := new(hashStorage)
 
 	for i := 0; i < n; i++ {
-		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx)
+		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx, writeTxProbability, storage)
 	}
 
 	return senderGroup{senders: senders}
@@ -163,20 +189,24 @@ func (group senderGroup) stop() {
 }
 
 type sender struct {
-	startTime    time.Time
-	estimatedRPS int
-	logFreq      int
-	currentTx    *uint64
+	startTime          time.Time
+	estimatedRPS       int
+	logFreq            int
+	currentTx          *uint64
+	writeTxProbability int32
+	storage            *hashStorage
 
 	cancel chan struct{}
 }
 
-func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64) *sender {
+func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32, storage *hashStorage) *sender {
 	return &sender{
-		startTime:    startTime,
-		estimatedRPS: estimatedRPS,
-		logFreq:      logFreq,
-		currentTx:    currentTx,
+		startTime:          startTime,
+		estimatedRPS:       estimatedRPS,
+		logFreq:            logFreq,
+		currentTx:          currentTx,
+		writeTxProbability: writeTxProbability,
+		storage:            storage,
 	}
 }
 
@@ -196,14 +226,14 @@ func (s *sender) run() chan struct{} {
 				// nothing to do
 			}
 
-			s.postTx()
+			s.runTx()
 		}
 	}()
 
 	return s.cancel
 }
 
-func (s *sender) postTx() {
+func (s *sender) runTx() {
 	for {
 		txIndex := atomic.AddUint64(currentTx, 1)
 
@@ -213,19 +243,35 @@ func (s *sender) postTx() {
 		currentRPS := float64(txIndex) / float64(roundTime) * float64(time.Second)
 
 		if int(currentRPS) > s.estimatedRPS {
-			// we did't run any postTx so decrease Tx count
+			// we did't run any runTx so decrease Tx count
 			atomic.AddUint64(currentTx, ^uint64(0))
 			time.Sleep(10 * time.Millisecond)
 
 			continue
 		}
 
-		postTx(txIndex, s.startTime, s.logFreq)
+		if s.isPostTxTurn(txIndex) {
+			hash := postTx(txIndex)
+			s.storage.storeTx(hash)
+		} else {
+			getTxByHash(s.storage.getAnyTxHash())
+		}
+
+		log(s.startTime, txIndex, uint64(s.logFreq))
+
 		break
 	}
 }
 
-func postTx(n uint64, mainTime time.Time, logFreq int) {
+func (s *sender) isPostTxTurn(txIndex uint64) bool {
+	if !s.storage.hasAny() {
+		return true
+	}
+
+	return rand.Int31n(100) < s.writeTxProbability
+}
+
+func postTx(n uint64) string {
 	tx := strconv.Itoa(time.Now().Nanosecond()) + strconv.FormatUint(n, 10)
 
 	if len(txPrefix) == 0 {
@@ -239,9 +285,64 @@ func postTx(n uint64, mainTime time.Time, logFreq int) {
 		txPrefixLock.Unlock()
 	}
 
-	doRequest(postTxURL + "\"" + txPrefix + tx + "\"")
+	res := new(PostAsyncResponse)
+	resRaw := doRequest(postTxURL + "\"" + txPrefix + tx + "\"")
+	decode(resRaw, res)
 
-	log(mainTime, n, uint64(logFreq))
+	return res.Res.Hash
+}
+
+func getTxByHash(hash string) {
+	doRequest(getTxURL + hash)
+}
+
+const hashStorageSize = 1000
+
+type hashStorage struct {
+	hashes   [hashStorageSize]string
+	index    uint64
+	isFilled bool
+	sync.RWMutex
+}
+
+func (s *hashStorage) storeTx(hash string) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.index++
+
+	// rewrite only some indexes if storage is full
+	if !s.isFilled || (s.isFilled && rand.Intn(101) < 10) {
+		s.hashes[s.currentIndex()] = hash
+	}
+
+	if !s.isFilled && s.index >= hashStorageSize {
+		s.isFilled = true
+	}
+}
+
+func (s *hashStorage) getAnyTxHash() string {
+	s.RLock()
+	defer s.RUnlock()
+
+	maxIndex := len(s.hashes)
+	if !s.isFilled {
+		maxIndex = s.currentIndex()
+	}
+
+	txIndex := rand.Intn(maxIndex)
+	return s.hashes[txIndex]
+}
+
+func (s *hashStorage) currentIndex() int {
+	return int(s.index % hashStorageSize)
+}
+
+func (s *hashStorage) hasAny() bool {
+	s.RLock()
+	res := s.isFilled || (!s.isFilled && s.index > 0)
+	s.RUnlock()
+	return res
 }
 
 var (
@@ -278,10 +379,10 @@ func log(mainTime time.Time, i uint64, logFreq uint64) time.Duration {
 }
 
 func hasUnconfirmedTxs(withLog bool) bool {
-	res := doRequest(unconfirmedTXsNum)
+	res := doRequest(unconfirmedTxsNum)
 
-	resp := new(RPCResponse)
-	resp.Decode(res)
+	resp := new(UnconfirmedTxsResponse)
+	decode(res, resp)
 
 	if withLog {
 		fmt.Println("Has Unconfirmed Txs", string(res))
@@ -333,15 +434,31 @@ func doRequest(url string) []byte {
 type RPCResponse struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      string `json:"id"`
-	Res     Result `json:"result"`
 }
 
-type Result struct {
+type UnconfirmedTxsResponse struct {
+	RPCResponse
+	Res UnconfirmedTxsResult `json:"result"`
+}
+
+type UnconfirmedTxsResult struct {
 	N   string `json:"n_txs"`
 	Txs *uint  `json:"txs"`
 }
 
-func (r *RPCResponse) Decode(input []byte) {
+type PostAsyncResponse struct {
+	RPCResponse
+	Res PostAsyncResponseResult `json:"result"`
+}
+
+type PostAsyncResponseResult struct {
+	Code string `json:"code"`
+	Data string `json:"data"`
+	Log  string `json:"log"`
+	Hash string `json:"hash"`
+}
+
+func decode(input []byte, res interface{}) {
 	var json = jsoniter.ConfigFastest
-	json.Unmarshal(input, r)
+	json.Unmarshal(input, res)
 }
