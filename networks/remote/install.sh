@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 
+
+echo "export DO_API_TOKEN=\"71a4a2b5c95e85fbae11a2afc37d61aa639d120ac284396ca8b098a93ff22b92\"" >> ~/.profile
+echo "export SSH_KEY_FILE=\"\$HOME/.ssh/id_rsa.pub\"" >> ~/.profile
+
 # NOTE: you must set this manually now
 source ~/.profile
 
 
 cd $GOPATH/src/github.com/tendermint/tendermint/networks/remote/terraform
 terraform init
-terraform apply -var DO_API_TOKEN="$DO_API_TOKEN" -var SSH_KEY_FILE="$SSH_KEY_FILE" -var TESTNET_NAME="testnet" -auto-approve
+terraform apply -var DO_API_TOKEN="$DO_API_TOKEN" -var SSH_KEY_FILE="$SSH_KEY_FILE" -var TESTNET_NAME="benchnet" -auto-approve
 
 # let the droplets boot
-sleep 10
+sleep 60
 
 # get the IPs
 ip0=`terraform output -json public_ips | jq '.value[0]'`
@@ -33,8 +37,8 @@ ip3=$(strip $ip3)
 # all the ansible commands are also directory specific
 cd $GOPATH/src/github.com/tendermint/tendermint/networks/remote/ansible
 
-ansible-playbook -i inventory/digital_ocean.py -l testnet install.yml
-ansible-playbook -i inventory/digital_ocean.py -l testnet config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/docs/examples
+ansible-playbook -i inventory/digital_ocean.py -l benchnet install.yml
+ansible-playbook -i inventory/digital_ocean.py -l benchnet config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/docs/examples
 
 sleep 10
 
@@ -73,9 +77,9 @@ WantedBy=multi-user.target
 " >> $old_ansible_file
 
 # now, we can re-run the install command
-ansible-playbook -i inventory/digital_ocean.py -l testnet install.yml
+ansible-playbook -i inventory/digital_ocean.py -l benchnet install.yml
 
 # and finally restart it all
-ansible-playbook -i inventory/digital_ocean.py -l testnet restart.yml
+ansible-playbook -i inventory/digital_ocean.py -l benchnet restart.yml
 
 echo "congratulations, your testnet is now running :)"
