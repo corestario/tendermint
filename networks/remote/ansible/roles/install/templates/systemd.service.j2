@@ -8,7 +8,7 @@ Restart=on-failure
 User={{service}}
 Group={{service}}
 PermissionsStartOnly=true
-ExecStart=/usr/bin/tendermint node --proxy_app=kvstore --p2p.persistent_peers=fcd0a74869da94f0ba4fbc73ac0de1591afcda64@68.183.61.156:26656,ba2bd6f181ce8f70e5cc7637be12a22d209ecb18@45.55.61.130:26656,5a1008ed527eeff0a58402ec364d0940bf3c0020@138.197.64.78:26656,31f3c5497da72b0e409535387e8507db93f4629c@142.93.185.228:26656
+ExecStart=/usr/bin/tendermint node --proxy_app=kvstore --p2p.persistent_peers=@159.65.247.197:26656,@159.65.247.10:26656,@159.65.247.8:26656,@159.65.251.151:26656
 ExecReload=/bin/kill -HUP $MAINPID
 KillSignal=SIGTERM
 
