@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	abcicli "github.com/tendermint/tendermint/abci/client"
+	"github.com/tendermint/tendermint/abci/example/flipcoin"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	"github.com/tendermint/tendermint/abci/types"
 )
@@ -74,6 +75,8 @@ func DefaultClientCreator(addr, transport, dbDir string) ClientCreator {
 		return NewLocalClientCreator(kvstore.NewPersistentKVStoreApplication(dbDir))
 	case "nilapp":
 		return NewLocalClientCreator(types.NewBaseApplication())
+	case "flipcoin":
+		return NewLocalClientCreator(flipcoin.NewFlipCoinApplication())
 	default:
 		mustConnect := false // loop retrying
 		return NewRemoteClientCreator(addr, transport, mustConnect)
