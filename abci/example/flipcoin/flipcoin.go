@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"runtime/debug"
 	"strconv"
 
 	"github.com/tendermint/tendermint/abci/example/code"
@@ -24,7 +23,7 @@ var (
 
 type State struct {
 	db           dbm.DB
-	randomNumber *int64
+	randomNumber int64
 
 	TxCount int64  `json:"txs"`
 	Height  int64  `json:"height"`
@@ -102,7 +101,6 @@ func NewFlipCoinApplication(dbDir string) *Application {
 }
 
 func (app *Application) Info(req types.RequestInfo) (resInfo types.ResponseInfo) {
-	debug.PrintStack()
 	return types.ResponseInfo{
 		Data:             fmt.Sprintf("{\"height\":%v,\"txs\":%v}", app.state.Height, app.state.TxCount),
 		Version:          version.ABCIVersion,
@@ -133,7 +131,7 @@ func (app *Application) parseFlipCoinTransaction(tx []byte) ([]byte, []byte, err
 }
 
 func (app *Application) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
-	app.state.randomNumber = &req.Header.RandomNumber
+	app.state.randomNumber = req.Header.RandomNumber
 
 	return types.ResponseBeginBlock{}
 }
@@ -180,26 +178,17 @@ func (app *Application) DeliverTx(tx []byte) types.ResponseDeliverTx {
 
 	return types.ResponseDeliverTx{
 		Code: code.CodeTypeOK,
-		Log:  fmt.Sprintf("Game status: %s, Random: %d", string(status), *app.state.randomNumber),
+		Log:  fmt.Sprintf("Game status: %s, Random: %d", string(status), app.state.randomNumber),
 		Tags: tags,
 	}
 }
 
 func (app *Application) flipCoin() (Side, error) {
-	if app.state.randomNumber == nil {
-		return Side{}, fmt.Errorf("random number is not available")
-	}
-
-	if *app.state.randomNumber%2 == 0 {
+	if app.state.randomNumber%2 == 0 {
 		return Head, nil
 	}
 
 	return Tail, nil
-}
-
-func (app *Application) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
-	app.state.randomNumber = nil
-	return types.ResponseEndBlock{}
 }
 
 func (app *Application) Commit() types.ResponseCommit {
@@ -231,7 +220,7 @@ func (app *Application) Query(reqQuery types.RequestQuery) (resQuery types.Respo
 	if statusBytes == nil {
 		resQuery.Log = "No game found"
 	} else if bytes.Equal(statusBytes, Win) {
-		resQuery.Log = "You have won"
+		resQuery.Log = "You won"
 	} else {
 		resQuery.Log = "You lost"
 	}
