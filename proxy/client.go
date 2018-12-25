@@ -76,7 +76,7 @@ func DefaultClientCreator(addr, transport, dbDir string) ClientCreator {
 	case "nilapp":
 		return NewLocalClientCreator(types.NewBaseApplication())
 	case "flipcoin":
-		return NewLocalClientCreator(flipcoin.NewFlipCoinApplication())
+		return NewLocalClientCreator(flipcoin.NewFlipCoinApplication(dbDir))
 	default:
 		mustConnect := false // loop retrying
 		return NewRemoteClientCreator(addr, transport, mustConnect)

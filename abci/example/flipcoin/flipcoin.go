@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/tendermint/tendermint/abci/example/code"
@@ -16,7 +17,7 @@ import (
 
 var (
 	stateKey        = []byte("stateKey")
-	statusPrefixKey = []byte("status=")
+	statusPrefixKey = []byte("S=")
 
 	ProtocolVersion version.Protocol = 0x1
 )
@@ -24,11 +25,10 @@ var (
 type State struct {
 	db           dbm.DB
 	randomNumber *int64
-	blockHeight  int64
 
-	TxCount   int64  `json:"txs"`
-	HashCount int64  `json:"hashes"`
-	AppHash   []byte `json:"app_hash"`
+	TxCount int64  `json:"txs"`
+	Height  int64  `json:"height"`
+	AppHash []byte `json:"app_hash"`
 }
 
 type Status []byte
@@ -80,15 +80,7 @@ func prefixKey(userID []byte, blockHeight int64) []byte {
 	height := make([]byte, 8)
 	binary.LittleEndian.PutUint64(height, uint64(blockHeight))
 
-	var buf []byte
-	b := bytes.NewBuffer(buf)
-	b.Write(statusPrefixKey)
-	b.Write([]byte("user:"))
-	b.Write(userID)
-	b.Write([]byte(":height:"))
-	b.Write(height)
-
-	return b.Bytes()
+	return []byte(fmt.Sprintf("%v%v:%v", statusPrefixKey, userID, height))
 }
 
 //---------------------------------------------------
@@ -99,16 +91,24 @@ type Application struct {
 	state State
 }
 
-func NewFlipCoinApplication() *Application {
-	state := loadState(dbm.NewMemDB())
+func NewFlipCoinApplication(dbDir string) *Application {
+	db, err := dbm.NewGoLevelDB("flipcoin", dbDir)
+	if err != nil {
+		panic(err)
+	}
+	//db := dbm.NewMemDB()
+	state := loadState(db)
 	return &Application{state: state}
 }
 
 func (app *Application) Info(req types.RequestInfo) (resInfo types.ResponseInfo) {
+	debug.PrintStack()
 	return types.ResponseInfo{
-		Data:       fmt.Sprintf("{\"hashes\":%v,\"txs\":%v}", app.state.HashCount, app.state.TxCount),
-		Version:    version.ABCIVersion,
-		AppVersion: ProtocolVersion.Uint64(),
+		Data:             fmt.Sprintf("{\"height\":%v,\"txs\":%v}", app.state.Height, app.state.TxCount),
+		Version:          version.ABCIVersion,
+		AppVersion:       ProtocolVersion.Uint64(),
+		LastBlockAppHash: app.state.AppHash,
+		LastBlockHeight:  app.state.Height,
 	}
 }
 
@@ -134,7 +134,6 @@ func (app *Application) parseFlipCoinTransaction(tx []byte) ([]byte, []byte, err
 
 func (app *Application) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	app.state.randomNumber = &req.Header.RandomNumber
-	app.state.blockHeight = req.Header.Height
 
 	return types.ResponseBeginBlock{}
 }
@@ -169,7 +168,7 @@ func (app *Application) DeliverTx(tx []byte) types.ResponseDeliverTx {
 		status = Win
 	}
 
-	key := prefixKey(userID, app.state.blockHeight)
+	key := prefixKey(userID, app.state.Height+1)
 
 	app.state.db.Set(key, status)
 	app.state.TxCount += 1
@@ -204,7 +203,8 @@ func (app *Application) EndBlock(req types.RequestEndBlock) types.ResponseEndBlo
 }
 
 func (app *Application) Commit() types.ResponseCommit {
-	app.state.HashCount++
+	app.state.Height++
+
 	if app.state.TxCount == 0 {
 		return types.ResponseCommit{}
 	}
