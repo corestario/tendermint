@@ -1,21 +1,26 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"github.com/json-iterator/go"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
+
+	"github.com/json-iterator/go"
 )
 
 type txType uint
@@ -67,11 +72,11 @@ var (
 	server   = flag.String("server", "http://localhost:26657/", "server address to fire to")
 	postType = flag.String("tx", "asyncTx", "syncTx|asyncTx|commitTx")
 
-	rps       = flag.Int("rps", 500, "syncTx|asyncTx|commitTx")
+	rps       = flag.Int("rps", 300, "syncTx|asyncTx|commitTx")
 	blockTime = flag.Int("blocktime", 6, "block time in seconds")
 	txSize    = flag.Int("txsize", 100, "transaction size in bytes")
 	duration  = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
-	threads   = flag.Int("threads", 20*runtime.NumCPU(), "how many threads to run")
+	threads   = flag.Int("threads", 50*runtime.NumCPU(), "how many threads to run")
 	writeTxs  = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
 
 	expectedBlockSize int
@@ -82,6 +87,9 @@ var (
 )
 
 func main() {
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+
 	initParams()
 
 	deadlineTimer := time.NewTimer(*duration)
@@ -94,12 +102,16 @@ func main() {
 
 	fmt.Println("going to fire at rps rate", *rps)
 	fmt.Println("tx size in bytes", *txSize)
+	fmt.Println("fraction of write txs", *writeTxs)
+	fmt.Println("txs are going to be sent by", *postType)
+	fmt.Println("tx size in bytes", *txSize)
 	fmt.Println("a block size is expected to be", expectedBlockSize)
+	fmt.Println()
 
-	var totalTime time.Duration
 	startTime := time.Now()
+	errorCount := new(uint64)
 
-	senders := newSenderGroup(*threads, startTime, *rps, logFreq, currentTx, int32(*writeTxs))
+	senders := newSenderGroup(*threads, startTime, *rps, logFreq, currentTx, errorCount, int32(*writeTxs))
 	senders.run()
 
 mainLoop:
@@ -108,16 +120,28 @@ mainLoop:
 		case <-deadlineTimer.C:
 			senders.stop()
 			break mainLoop
+		case <-shutdown:
+			fmt.Println("\nstopping benchmarks...\n")
+			senders.stop()
+			break mainLoop
 		default:
-			//nothing
+			//nothing to do
 		}
 	}
 
 	// wait until all txs passed
 	waitUnconfirmedTxs()
 
+	totalDuration := time.Now().Sub(startTime)
+	txIndex := int64(atomic.LoadUint64(currentTx))
+	freq := big.NewRat(txIndex, int64(totalDuration))
+	rps, _ := freq.Mul(freq, big.NewRat(int64(time.Second), 1)).Float64()
+
+	fmt.Println()
+	fmt.Println("RPS", int(rps))
 	fmt.Println("Done", atomic.LoadUint64(currentTx))
-	fmt.Println("Total time", totalTime)
+	fmt.Println("Errors", atomic.LoadUint64(errorCount))
+	fmt.Println("Total time", time.Now().Sub(startTime))
 }
 
 func initParams() {
@@ -158,34 +182,60 @@ func waitUnconfirmedTxs() {
 type senderGroup struct {
 	senders []*sender
 	cancels []chan struct{}
+	state   *int32
+	sync.Mutex
 }
 
-func newSenderGroup(n int, startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32) senderGroup {
+const (
+	notStarted = int32(iota)
+	started
+	stopped
+)
+
+func newSenderGroup(n int, startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, errorCount *uint64, writeTxProbability int32) *senderGroup {
 	senders := make([]*sender, n)
 	storage := new(hashStorage)
 
 	for i := 0; i < n; i++ {
-		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx, writeTxProbability, storage)
+		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx, writeTxProbability, storage, errorCount)
 	}
 
-	return senderGroup{senders: senders}
+	return &senderGroup{senders: senders, state: new(int32)}
 }
 
-func (group senderGroup) run() {
-	n := len(group.senders)
-	cancels := make([]chan struct{}, n)
+func (group *senderGroup) run() {
+	group.Lock()
+	defer group.Unlock()
 
-	for i := 0; i < n; i++ {
-		cancels[i] = group.senders[i].run()
+	state := atomic.LoadInt32(group.state)
+	if state != notStarted {
+		return
 	}
-}
 
-func (group senderGroup) stop() {
 	n := len(group.senders)
+	group.cancels = make([]chan struct{}, n)
 
 	for i := 0; i < n; i++ {
+		group.cancels[i] = group.senders[i].run()
+	}
+
+	atomic.StoreInt32(group.state, started)
+}
+
+func (group *senderGroup) stop() {
+	group.Lock()
+	defer group.Unlock()
+
+	state := atomic.LoadInt32(group.state)
+	if state != started {
+		return
+	}
+
+	for i := 0; i < len(group.cancels); i++ {
 		close(group.cancels[i])
 	}
+
+	atomic.StoreInt32(group.state, stopped)
 }
 
 type sender struct {
@@ -193,13 +243,14 @@ type sender struct {
 	estimatedRPS       int
 	logFreq            int
 	currentTx          *uint64
+	errorCount         *uint64
 	writeTxProbability int32
 	storage            *hashStorage
 
 	cancel chan struct{}
 }
 
-func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32, storage *hashStorage) *sender {
+func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32, storage *hashStorage, errorCount *uint64) *sender {
 	return &sender{
 		startTime:          startTime,
 		estimatedRPS:       estimatedRPS,
@@ -207,6 +258,7 @@ func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *ui
 		currentTx:          currentTx,
 		writeTxProbability: writeTxProbability,
 		storage:            storage,
+		errorCount:         errorCount,
 	}
 }
 
@@ -245,22 +297,36 @@ func (s *sender) runTx() {
 		if int(currentRPS) > s.estimatedRPS {
 			// we did't run any runTx so decrease Tx count
 			atomic.AddUint64(currentTx, ^uint64(0))
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			continue
 		}
 
 		if s.isPostTxTurn(txIndex) {
-			hash := postTx(txIndex)
+			hash, err := postTx(txIndex)
+			if err != nil {
+				s.onError()
+				break
+			}
 			s.storage.storeTx(hash)
 		} else {
-			getTxByHash(s.storage.getAnyTxHash())
+			err := getTxByHash(s.storage.getAnyTxHash())
+			if err != nil {
+				s.onError()
+				break
+			}
 		}
 
-		log(s.startTime, txIndex, uint64(s.logFreq))
+		log(s.startTime, txIndex, uint64(s.logFreq), s.getErrorCount())
 
 		break
 	}
+}
+
+func (s *sender) onError() {
+	atomic.AddUint64(currentTx, ^uint64(0))
+	s.increaseErrorCount()
+	time.Sleep(100 * time.Millisecond)
 }
 
 func (s *sender) isPostTxTurn(txIndex uint64) bool {
@@ -271,7 +337,15 @@ func (s *sender) isPostTxTurn(txIndex uint64) bool {
 	return rand.Int31n(100) < s.writeTxProbability
 }
 
-func postTx(n uint64) string {
+func (s *sender) increaseErrorCount() {
+	atomic.AddUint64(s.errorCount, 1)
+}
+
+func (s *sender) getErrorCount() uint64 {
+	return atomic.LoadUint64(s.errorCount)
+}
+
+func postTx(n uint64) (string, error) {
 	tx := strconv.Itoa(time.Now().Nanosecond()) + strconv.FormatUint(n, 10)
 
 	if len(txPrefix) == 0 {
@@ -286,14 +360,19 @@ func postTx(n uint64) string {
 	}
 
 	res := new(PostAsyncResponse)
-	resRaw := doRequest(postTxURL + "\"" + txPrefix + tx + "\"")
+	resRaw, err := doRequest(postTxURL + "\"" + txPrefix + tx + "\"")
+	if err != nil {
+		return "", err
+	}
+
 	decode(resRaw, res)
 
-	return res.Res.Hash
+	return res.Res.Hash, nil
 }
 
-func getTxByHash(hash string) {
-	doRequest(getTxURL + hash)
+func getTxByHash(hash string) error {
+	_, err := doRequest(getTxURL + hash)
+	return err
 }
 
 const hashStorageSize = 1000
@@ -359,7 +438,7 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func log(mainTime time.Time, i uint64, logFreq uint64) time.Duration {
+func log(mainTime time.Time, i uint64, logFreq uint64, errorCount uint64) time.Duration {
 	endTime := time.Now()
 	roundTime := endTime.Sub(mainTime)
 
@@ -370,8 +449,8 @@ func log(mainTime time.Time, i uint64, logFreq uint64) time.Duration {
 		return roundTime
 	}
 
-	fmt.Printf("Total time till Tx %d: %v. Total test duration %v. rps: %v\n",
-		i, roundTime, roundTime, rps)
+	fmt.Printf("\nTotal time till Tx %d: %v. Total test duration %v. rps: %v. Errors count: %d\n",
+		i, roundTime, roundTime, rps, errorCount)
 
 	hasUnconfirmedTxs(true)
 
@@ -379,7 +458,10 @@ func log(mainTime time.Time, i uint64, logFreq uint64) time.Duration {
 }
 
 func hasUnconfirmedTxs(withLog bool) bool {
-	res := doRequest(unconfirmedTxsNum)
+	res, err := doRequest(unconfirmedTxsNum)
+	if err != nil {
+		return true
+	}
 
 	resp := new(UnconfirmedTxsResponse)
 	decode(res, resp)
@@ -390,7 +472,6 @@ func hasUnconfirmedTxs(withLog bool) bool {
 
 	n, err := strconv.Atoi(resp.Res.N)
 	if err != nil {
-		fmt.Printf("error while getting unconfirmed TXs: %v, %q\n", err, string(res))
 		return true
 	}
 
@@ -414,21 +495,19 @@ var httpTransport = &http.Transport{
 
 var httpClient = &http.Client{Transport: httpTransport}
 
-func doRequest(url string) []byte {
+func doRequest(url string) ([]byte, error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		fmt.Println("error while http.get", err)
-		return nil
+		return nil, errors.New("error while http.get:" + err.Error())
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("error while reading response body", err)
-		return nil
+		return nil, errors.New("error while reading response body" + err.Error())
 	}
 
-	return body
+	return body, nil
 }
 
 type RPCResponse struct {
