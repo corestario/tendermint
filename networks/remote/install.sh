@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 NUM_NODES=15
-TESTNET_NAME="benchnet"
+TESTNET_NAME="sentrynet"
 
 # NOTE: you must set this manually now
 source ~/.profile
