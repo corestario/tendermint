@@ -8,6 +8,7 @@ There're 2 benchmarks: max and rps. They are made in `quick and dirty` way just 
 Test config file /tendermint/bench/config.toml The setup is configured to have a block per ~2sec.
 
 ## Run tests
+`make build`
 `make build-docker-localnode`
 `sudo rm -Rdf build/node*`
 `make localnet-start`

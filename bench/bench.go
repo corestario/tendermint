@@ -121,7 +121,7 @@ mainLoop:
 			senders.stop()
 			break mainLoop
 		case <-shutdown:
-			fmt.Println("\nstopping benchmarks...\n")
+			fmt.Println("\nstopping benchmarks...")
 			senders.stop()
 			break mainLoop
 		default:
