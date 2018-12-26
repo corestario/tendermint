@@ -302,12 +302,12 @@ FOR_LOOP:
 				didProcessCh <- struct{}{}
 			}
 
-			if err := bcR.verifier.VerifySignature(first.RandomNumber); err != nil {
+			if err := bcR.verifier.VerifyValue(first.RandomNumber); err != nil {
 				bcR.poolRoutineHandleErr(err, first, second)
 				continue FOR_LOOP
 			}
 
-			if err := bcR.verifier.VerifySignature(second.RandomNumber); err != nil {
+			if err := bcR.verifier.VerifyValue(second.RandomNumber); err != nil {
 				bcR.poolRoutineHandleErr(err, first, second)
 				continue FOR_LOOP
 			}

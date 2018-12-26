@@ -23,7 +23,7 @@ type Signable interface {
 }
 
 type Verifier interface {
-	VerifySignature(interface{}) error
+	VerifyValue(interface{}) error
 }
 
 type BlsVerifier struct{}
@@ -32,6 +32,6 @@ func NewBlsVerifier() *BlsVerifier {
 	return &BlsVerifier{}
 }
 
-func (m *BlsVerifier) VerifySignature(interface{}) error {
+func (m *BlsVerifier) VerifyValue(interface{}) error {
 	return nil
 }

@@ -1294,7 +1294,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		cmn.PanicConsensus(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
 
-	if err := cs.verifier.VerifySignature(block.Header.RandomNumber); err != nil {
+	if err := cs.verifier.VerifyValue(block.Header.RandomNumber); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has corrupted random value"))
 	}
 
