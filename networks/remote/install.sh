@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-
-echo "export DO_API_TOKEN=\"71a4a2b5c95e85fbae11a2afc37d61aa639d120ac284396ca8b098a93ff22b92\"" >> ~/.profile
-echo "export SSH_KEY_FILE=\"\$HOME/.ssh/id_rsa.pub\"" >> ~/.profile
 NUM_NODES=15
 TESTNET_NAME="benchnet"
 
@@ -25,8 +22,7 @@ sleep 60
 cd $GOPATH/src/github.com/tendermint/tendermint/networks/remote/ansible
 
 ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME install.yml
-ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/networks/remote/nodes/list
-#-e N="$NUM_NODES"
+ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME config.yml -e BINARY=$GOPATH/src/github.com/tendermint/tendermint/build/tendermint -e CONFIGDIR=$GOPATH/src/github.com/tendermint/tendermint/networks/remote/nodes/list -e N="$NUM_NODES"
 
 sleep 30
 #Update ansble. Add persistent node connections
