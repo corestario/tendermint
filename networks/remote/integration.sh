@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+``#!/usr/bin/env bash
 
 # XXX: this script is intended to be run from a fresh Digital Ocean droplet
 
