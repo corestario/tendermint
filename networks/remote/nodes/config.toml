@@ -4,7 +4,7 @@
 # TCP or UNIX socket address of the ABCI application,
 # or the name of an ABCI application compiled in with the Tendermint binary
 proxy_app = "tcp://127.0.0.1:26658"
-
+# A custom human readable name for this node
 # If this node is many blocks behind the tip of the chain, FastSync
 # allows them to catchup quickly by downloading blocks in parallel
 # and verifying their commits
@@ -92,13 +92,13 @@ max_num_inbound_peers = 100
 # Maximum number of outbound peers to connect to, excluding persistent peers
 max_num_outbound_peers = 100
 # Time to wait before flushing messages out on the connection, in ms
-flush_throttle_timeout = "100ms"
+flush_throttle_timeout = "1000ms"
 # Maximum size of a message packet payload, in bytes
-max_packet_msg_payload_size = 1024
+max_packet_msg_payload_size = 10240
 # Rate at which packets can be sent, in bytes/second
-send_rate = 5120000
+send_rate = 51200000
 # Rate at which packets can be received, in bytes/second
-recv_rate = 5120000
+recv_rate = 51200000
 # Set true to enable the peer-exchange reactor
 pex = true
 # Seed mode, in which node constantly crawls the network and looks for
@@ -112,14 +112,14 @@ private_peer_ids = ""
 allow_duplicate_ip = true
 # Peer connection configuration.
 handshake_timeout = "20s"
-dial_timeout = "3s"
+dial_timeout = "6s"
 ##### mempool configuration options #####
 [mempool]
 recheck = true
 broadcast = true
 wal_dir = "data/mempool.wal"
 # size of the mempool
-size = 100000
+size = 1000000
 # size of the cache (used to filter transactions we saw earlier)
 cache_size = 500000
 ##### consensus configuration options #####
@@ -145,8 +145,8 @@ peer_query_maj23_sleep_duration = "2s"
 # What indexer to use for transactions
 #
 # Options:
-#   1) "null" (default)
-#   2) "kv" - the simplest possible indexer, backed by key-value storage (defaults to levelDB; see DBBackend).
+#  1) "null" (default)
+#  2) "kv" - the simplest possible indexer, backed by key-value storage (defaults to levelDB; see DBBackend).
 indexer = "kv"
 # Comma-separated list of tags to index (by default the only tag is "tx.hash")
 #
@@ -168,7 +168,7 @@ index_all_tags = false
 # When true, Prometheus metrics are served under /metrics on
 # PrometheusListenAddr.
 # Check out the documentation for the list of available metrics.
-prometheus = false
+prometheus = true
 # Address to listen for Prometheus collector(s) connections
 prometheus_listen_addr = ":26660"
 # Maximum number of simultaneous connections.

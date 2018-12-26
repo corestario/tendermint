@@ -22,7 +22,7 @@ func main() {
 	n := flag.Int("N", 4, "num of nodes")
 	flag.Parse()
 	arr:=make([]node,*n)
-	path := "/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/nodes/test/"
+	path := "/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/nodes/list/"
 
 	if *n < 4 {
 		fmt.Println("N should be more 4")
@@ -31,10 +31,19 @@ func main() {
 	for i := 0; i < *n; i++ {
 		cfgPath := path + "node" + strconv.Itoa(i) + "/"
 		err := os.Mkdir(cfgPath, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+
+		cfgPath=cfgPath+"config/"
+		err= os.Mkdir(cfgPath, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+
 		key, err := p2p.LoadOrGenNodeKey(cfgPath + "node_key.json")
 		if err != nil {
 			panic(err)
-
 		}
 		_ = key
 
@@ -65,30 +74,15 @@ func main() {
 	}
 
 
-	genesisPath:=path+"node0/genesis.json"
+	genesisPath:=path+"node0/config/genesis.json"
 	if err := genDoc.SaveAs(genesisPath); err != nil {
 		fmt.Println("Can't save Genesis", err)
 	}
 
-	for i:=1; i<*n; i++ {
-		nodeGenesisPath := path + "node" + strconv.Itoa(i) + "/genesis.json"
-		os.Link(genesisPath, nodeGenesisPath)
+	for i:=0; i<*n; i++ {
+		genesisPath:=path + "node" + strconv.Itoa(i) + "/config/genesis.json"
+		if err := genDoc.SaveAs(genesisPath); err != nil {
+			fmt.Println("Can't save Genesis", err)
+		}
 	}
-
-	/*
-	"genesis_time": "2018-01-01T00:00:00Z",
-  "chain_id": "test-chain-A2i3OZ",
-  "validators":
-
-	    {
-      "pub_key": {
-        "type": "tendermint/PubKeyEd25519",
-        "value": "KGAZfxZvIZ7abbeIQ85U1ECG6+I62KSdaH8ulc0+OiU="
-      },
-      "power": "10",
-      "name": ""
-    }
-  ],
-  "app_hash": ""
-	 */
 }

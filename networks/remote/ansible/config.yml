@@ -9,7 +9,7 @@
   gather_facts: yes
   vars:
     - service: tendermint
-    - N: 4
+    - N: 15
   roles:
     - stop
     - config

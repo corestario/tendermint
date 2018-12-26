@@ -8,10 +8,9 @@ Restart=on-failure
 User={{service}}
 Group={{service}}
 PermissionsStartOnly=true
-ExecStart=/usr/bin/tendermint node --proxy_app=kvstore --p2p.persistent_peers=@159.65.247.197:26656,@159.65.247.10:26656,@159.65.247.8:26656,@159.65.251.151:26656
+ExecStart=/usr/bin/tendermint node --proxy_app=kvstore --p2p.persistent_peers 
 ExecReload=/bin/kill -HUP $MAINPID
 KillSignal=SIGTERM
 
 [Install]
 WantedBy=multi-user.target
-
