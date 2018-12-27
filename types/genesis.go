@@ -39,6 +39,7 @@ type GenesisDoc struct {
 	Validators      []GenesisValidator `json:"validators,omitempty"`
 	AppHash         cmn.HexBytes       `json:"app_hash"`
 	AppState        json.RawMessage    `json:"app_state,omitempty"`
+	Verifier        crypto.PubKey      `json:"verifier"`
 }
 
 // SaveAs is a utility method for saving GenensisDoc as a JSON file.
