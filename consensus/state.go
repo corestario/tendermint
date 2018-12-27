@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tendermint/tendermint/crypto"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/fail"
 	"github.com/tendermint/tendermint/libs/log"
@@ -119,7 +121,7 @@ type ConsensusState struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	verifier types.Verifier
+	verifier crypto.PubKey
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -183,7 +185,7 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.blockExec.SetEventBus(b)
 }
 
-func WithVerifier(verifier types.Verifier) StateOption {
+func WithVerifier(verifier crypto.PubKey) StateOption {
 	return func(cs *ConsensusState) { cs.verifier = verifier }
 }
 
@@ -1294,8 +1296,18 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		cmn.PanicConsensus(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
 
-	if err := cs.verifier.VerifyValue(block.Header.RandomNumber); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has corrupted random value"))
+	var prevBlock *types.Block
+	if cs.Height == 1 {
+		// TODO @oopcode: extract initial number from genesis block gracefully?
+		prevBlock = &types.Block{Header: types.Header{RandomNumber: 42}}
+	} else {
+		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
+	}
+	var currBlockRandBytes, prevBlockRandBytes = make([]byte, 8), make([]byte, 8)
+	binary.BigEndian.PutUint64(currBlockRandBytes, uint64(block.Header.RandomNumber))
+	binary.BigEndian.PutUint64(prevBlockRandBytes, uint64(prevBlock.Header.RandomNumber))
+	if !cs.verifier.VerifyBytes(prevBlockRandBytes, currBlockRandBytes) {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value"))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),

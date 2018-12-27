@@ -1,10 +1,13 @@
 package blockchain
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"reflect"
 	"time"
+
+	"github.com/tendermint/tendermint/crypto"
 
 	amino "github.com/tendermint/go-amino"
 
@@ -68,11 +71,11 @@ type BlockchainReactor struct {
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
 
-	verifier types.Verifier
+	verifier crypto.PubKey
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *BlockStore, verifier types.Verifier,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *BlockStore, verifier crypto.PubKey,
 	fastSync bool) *BlockchainReactor {
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
@@ -302,13 +305,11 @@ FOR_LOOP:
 				didProcessCh <- struct{}{}
 			}
 
-			if err := bcR.verifier.VerifyValue(first.RandomNumber); err != nil {
-				bcR.poolRoutineHandleErr(err, first, second)
-				continue FOR_LOOP
-			}
-
-			if err := bcR.verifier.VerifyValue(second.RandomNumber); err != nil {
-				bcR.poolRoutineHandleErr(err, first, second)
+			var currBlockRandBytes, prevBlockRandBytes = make([]byte, 8), make([]byte, 8)
+			binary.BigEndian.PutUint64(currBlockRandBytes, uint64(first.Header.RandomNumber))
+			binary.BigEndian.PutUint64(prevBlockRandBytes, uint64(second.Header.RandomNumber))
+			if !bcR.verifier.VerifyBytes(prevBlockRandBytes, currBlockRandBytes) {
+				bcR.poolRoutineHandleErr(errors.New("Invalid random number"), first, second)
 				continue FOR_LOOP
 			}
 
