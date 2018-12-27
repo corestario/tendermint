@@ -95,7 +95,6 @@ func NewFlipCoinApplication(dbDir string) *Application {
 	if err != nil {
 		panic(err)
 	}
-	//db := dbm.NewMemDB()
 	state := loadState(db)
 	return &Application{state: state}
 }
@@ -132,7 +131,6 @@ func (app *Application) parseFlipCoinTransaction(tx []byte) ([]byte, []byte, err
 
 func (app *Application) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	app.state.randomNumber = req.Header.RandomNumber
-
 	return types.ResponseBeginBlock{}
 }
 
@@ -148,18 +146,12 @@ func (app *Application) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	playerSide, err := sideFromBytes(sideBytes)
 	if err != nil {
 		return types.ResponseDeliverTx{
-			Code: code.CodeTypeUnknownError,
+			Code: code.CodeTypeUnknownSide,
 			Log:  fmt.Sprintf("Unknown side given %s", string(sideBytes)),
 		}
 	}
 
-	randSide, err := app.flipCoin()
-	if err != nil {
-		return types.ResponseDeliverTx{
-			Code: code.CodeRandomUnavailableError,
-			Log:  fmt.Sprintf("Random number is not available"),
-		}
-	}
+	randSide := app.flipCoin()
 
 	status := Lost
 	if bytes.Equal(playerSide, randSide) {
@@ -183,12 +175,12 @@ func (app *Application) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	}
 }
 
-func (app *Application) flipCoin() (Side, error) {
+func (app *Application) flipCoin() Side {
 	if app.state.randomNumber%2 == 0 {
-		return Head, nil
+		return Head
 	}
 
-	return Tail, nil
+	return Tail
 }
 
 func (app *Application) Commit() types.ResponseCommit {
