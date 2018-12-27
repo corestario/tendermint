@@ -25,7 +25,7 @@ type Signable interface {
 
 type BlsVerifier struct{}
 
-func NewBlsVerifier() *BlsVerifier {
+func NewBLSVerifier() *BlsVerifier {
 	return &BlsVerifier{}
 }
 

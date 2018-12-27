@@ -116,7 +116,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		blockStore.SaveBlock(thisBlock, thisParts, lastCommit)
 	}
 
-	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, types.NewBlsVerifier(), fastSync)
+	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, types.NewBLSVerifier(), fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	return BlockchainReactorPair{bcReactor, proxyApp}
