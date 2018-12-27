@@ -13,6 +13,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/tendermint/tendermint/crypto"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/fail"
 	"github.com/tendermint/tendermint/libs/log"
@@ -137,6 +139,8 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
+
+	verifier crypto.PubKey
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -198,6 +202,10 @@ func (cs *ConsensusState) SetLogger(l log.Logger) {
 func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.eventBus = b
 	cs.blockExec.SetEventBus(b)
+}
+
+func WithVerifier(verifier crypto.PubKey) StateOption {
+	return func(cs *ConsensusState) { cs.verifier = verifier }
 }
 
 // StateMetrics sets the metrics.
@@ -1188,16 +1196,6 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cmn.PanicSanity("RunActionCommit() expects +2/3 precommits")
 	}
 
-	randNumber, err := cs.getRandomNumber(precommits)
-	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
-	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
-	}
-	// TODO @oopcode: check if this is a possible situation.
-	if cs.LockedBlock != nil {
-		cs.LockedBlock.Header.SetRandomNumber(randNumber)
-	}
-
 	// The Locked* fields no longer matter.
 	// Move them over to ProposalBlock if they match the commit hash,
 	// otherwise they'll be cleared in updateToState.
@@ -1205,6 +1203,16 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		logger.Info("Commit is for locked block. Set ProposalBlock=LockedBlock", "blockHash", blockID.Hash)
 		cs.ProposalBlock = cs.LockedBlock
 		cs.ProposalBlockParts = cs.LockedBlockParts
+	}
+
+	randNumber, err := cs.getRandomNumber(precommits)
+	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
+	if err != nil {
+		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
+	}
+	// TODO @oopcode: check if this is a possible situation.
+	if cs.ProposalBlock != nil {
+		cs.ProposalBlock.Header.SetRandomNumber(randNumber)
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -1294,6 +1302,20 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 	if err := cs.blockExec.ValidateBlock(cs.state, block); err != nil {
 		cmn.PanicConsensus(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
+	}
+
+	var prevBlock *types.Block
+	if cs.Height == 1 {
+		// TODO @oopcode: extract initial number from genesis block gracefully?
+		prevBlock = &types.Block{Header: types.Header{RandomNumber: 42}}
+	} else {
+		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
+	}
+	var currBlockRandBytes, prevBlockRandBytes = make([]byte, 8), make([]byte, 8)
+	binary.BigEndian.PutUint64(currBlockRandBytes, uint64(block.Header.RandomNumber))
+	binary.BigEndian.PutUint64(prevBlockRandBytes, uint64(prevBlock.Header.RandomNumber))
+	if !cs.verifier.VerifyBytes(prevBlockRandBytes, currBlockRandBytes) {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value"))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),

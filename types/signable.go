@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
@@ -20,4 +21,26 @@ var (
 // NOTE: Expected to panic if there is an error marshalling.
 type Signable interface {
 	SignBytes(chainID string) []byte
+}
+
+type BlsVerifier struct{}
+
+func NewBLSVerifier() *BlsVerifier {
+	return &BlsVerifier{}
+}
+
+func (m *BlsVerifier) Address() crypto.Address {
+	return crypto.Address{}
+}
+
+func (m *BlsVerifier) Bytes() []byte {
+	return []byte{42}
+}
+
+func (m *BlsVerifier) Equals(crypto.PubKey) bool {
+	return true
+}
+
+func (m *BlsVerifier) VerifyBytes(mag, sig []byte) bool {
+	return true
 }
