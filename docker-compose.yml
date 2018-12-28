@@ -8,7 +8,7 @@ services:
       - "26656-26657:26656-26657"
     environment:
       - ID=0
-      - LOG=$${LOG:-tendermint.log}
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -19,10 +19,10 @@ services:
     container_name: node1
     image: "tendermint/localnode"
     ports:
-      - "26659-26660:26656-26657"
+      - "26658-26659:26656-26657"
     environment:
       - ID=1
-      - LOG=$${LOG:-tendermint.log}
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -32,11 +32,11 @@ services:
   node2:
     container_name: node2
     image: "tendermint/localnode"
+    ports:
+      - "26660-26661:26656-26657"
     environment:
       - ID=2
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26661-26662:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -46,11 +46,11 @@ services:
   node3:
     container_name: node3
     image: "tendermint/localnode"
+    ports:
+      - "26662-26663:26656-26657"
     environment:
       - ID=3
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26663-26664:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -60,11 +60,11 @@ services:
   node4:
     container_name: node4
     image: "tendermint/localnode"
+    ports:
+      - "26664-26665:26656-26657"
     environment:
       - ID=4
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26665-26666:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -74,11 +74,11 @@ services:
   node5:
     container_name: node5
     image: "tendermint/localnode"
+    ports:
+      - "26666-26667:26656-26657"
     environment:
       - ID=5
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26667-26668:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -88,11 +88,11 @@ services:
   node6:
     container_name: node6
     image: "tendermint/localnode"
+    ports:
+      - "26668-26669:26656-26657"
     environment:
       - ID=6
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26669-26670:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -102,11 +102,11 @@ services:
   node7:
     container_name: node7
     image: "tendermint/localnode"
+    ports:
+      - "26670-26671:26656-26657"
     environment:
       - ID=7
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26671-26672:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -116,11 +116,11 @@ services:
   node8:
     container_name: node8
     image: "tendermint/localnode"
+    ports:
+      - "26672-26673:26656-26657"
     environment:
       - ID=8
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26673-26674:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:
@@ -130,11 +130,11 @@ services:
   node9:
     container_name: node9
     image: "tendermint/localnode"
+    ports:
+      - "26674-26675:26656-26657"
     environment:
       - ID=9
-      - LOG=$${LOG:-tendermint.log}
-    ports:
-      - "26675-26676:26656-26657"
+      - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
     networks:

@@ -138,6 +138,10 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			_ = os.RemoveAll(outputDir)
 			return err
 		}
+
+		if err := writeDockerCompose(nValidators, p2pPort); err != nil {
+			return err
+		}
 	}
 
 	// Overwrite default config.

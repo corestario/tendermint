@@ -9,9 +9,9 @@ Test config file /tendermint/bench/config.toml The setup is configured to have a
 
 ## Run tests
 `make build`
-`make build-docker-localnode`
+`make build-docker`
 `sudo rm -Rdf build/node*`
-`make localnet-start`
+`export TESTNET_NODES=10 && make localnet-start`
 `go run ./bench/bench.go -server="http://142.93.184.168:26657" -writetxs=80 &> bench.txt`
 
 ## Issues
