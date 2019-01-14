@@ -63,6 +63,20 @@ func initFilesWithConfig(config *cfg.Config) error {
 			Power:   10,
 		}}
 
+		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
+		genDoc.BLSMasterPubKey = types.SolitaireBLSVerifierMasterPubKey
+		genDoc.BLSKeypair = map[string]string{
+			"id":   types.SolitaireBLSVerifierID,
+			"pub":  types.SolitaireBLSVerifierPubKey,
+			"priv": types.SolitaireBLSVerifierPrivKey,
+		}
+		genDoc.Others = map[string]map[string]string{
+			pv.GetPubKey().Address().String(): {
+				"id":  types.SolitaireBLSVerifierID,
+				"pub": types.SolitaireBLSVerifierPubKey,
+			},
+		}
+
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
 		}

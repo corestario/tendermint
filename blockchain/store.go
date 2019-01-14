@@ -78,7 +78,7 @@ func (bs *BlockStore) LoadBlock(height int64) *types.Block {
 	// so here the block's random is filled with block's meta random
 	//
 	// holy cow, I'm not sure if it's actually ok to do so
-	block.RandomNumber = blockMeta.Header.RandomNumber
+	block.RandomData = blockMeta.Header.RandomData
 	block.RandomHash = blockMeta.Header.RandomHash
 
 	return block

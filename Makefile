@@ -20,8 +20,11 @@ check: check_tools get_vendor_deps
 ########################################
 ### Build Tendermint
 
+COMMON_LIB_PATH="$(PWD)/dgaming-crypto/go/bls/bls/lib:$(PWD)/dgaming-crypto/go/bls/mcl/lib"
+PATH_VAL=$$PATH:$(COMMON_LIB_PATH) LD_LIBRARY_PATH=$(COMMON_LIB_PATH) DYLD_LIBRARY_PATH=$(COMMON_LIB_PATH) CGO_LDFLAGS="-L$(PWD)/dgaming-crypto/go/bls/bls/lib -L$(PWD)/dgaming-crypto/go/bls/mcl/lib" CGO_CFLAGS="-I$(PWD)/dgaming-crypto/go/bls/bls/include -I$(PWD)/dgaming-crypto/go/bls/mcl/include"
+
 build:
-	CGO_ENABLED=0 go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/
+	env PATH=$(PATH_VAL) go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/
 
 build_c:
 	CGO_ENABLED=1 go build $(BUILD_FLAGS) -tags "$(BUILD_TAGS) gcc" -o build/tendermint ./cmd/tendermint/
@@ -220,7 +223,11 @@ vagrant_test:
 ### go tests
 test:
 	@echo "--> Running go test"
-	@GOCACHE=off go test -p 1 $(PACKAGES)
+	env PATH=$(PATH_VAL) @GOCACHE=off go test -p 1 $(PACKAGES)
+
+test_verbose:
+	@echo "--> Running go test (verbose)"
+	env PATH=$(PATH_VAL) @GOCACHE=off go test -v -p 1 $(PACKAGES)
 
 test_race:
 	@echo "--> Running go test --race"
@@ -332,7 +339,11 @@ sentry-stop:
 build-slate:
 	bash scripts/slate.sh
 
+install_bls:
+	cd dgaming-crypto/go/bls && sudo cp {bls/lib/libbls384.dylib,mcl/lib/libmclbn384.dylib,mcl/lib/libmcl.dylib} /usr/local/lib/ && cd -
+
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
 # https://www.gnu.org/software/make/manual/html_node/Phony-Targets.html
 .PHONY: check build build_race build_abci dist install install_abci check_dep check_tools get_tools get_dev_tools update_tools get_vendor_deps draw_deps get_protoc protoc_abci protoc_libs gen_certs clean_certs grpc_dbserver test_cover test_apps test_persistence test_p2p test test_race test_integrations test_release test100 vagrant_test fmt rpc-docs build-linux localnet-start localnet-stop build-docker build-docker-localnode sentry-start sentry-config sentry-stop build-slate protoc_grpc protoc_all build_c install_c bench
+

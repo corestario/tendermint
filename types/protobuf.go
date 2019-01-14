@@ -64,7 +64,7 @@ func (tm2pb) Header(header *Header) abci.Header {
 		EvidenceHash:    header.EvidenceHash,
 		ProposerAddress: header.ProposerAddress,
 
-		RandomNumber:     header.RandomNumber,
+		RandomNumber:     header.RandomData,
 		RandomNumberHash: header.RandomHash,
 	}
 }

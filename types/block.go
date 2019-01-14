@@ -29,6 +29,10 @@ const (
 	// Uvarint length of Data.Txs:          4 bytes
 	// Data.Txs field:                      1 byte
 	MaxAminoOverheadForBlock int64 = 11
+
+	// InitialRandomData is the (non-)random data that will be used as the starting point
+	// by BLS-based random data generation.
+	InitialRandomData = "dgaming-random-source"
 )
 
 // Block defines the atomic unit of a Tendermint blockchain.
@@ -382,8 +386,8 @@ type Header struct {
 	EvidenceHash    cmn.HexBytes `json:"evidence_hash"`    // evidence included in the block
 	ProposerAddress Address      `json:"proposer_address"` // original proposer of the block
 
-	RandomNumber int64        `json:"random_number"`
-	RandomHash   cmn.HexBytes `json:"final_hash"`
+	RandomData []byte       `json:"random_number"`
+	RandomHash cmn.HexBytes `json:"final_hash"`
 }
 
 // Populate the Header with state-derived data.
@@ -460,7 +464,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Results:        %v
 %s  Evidence:       %v
 %s  Proposer:       %v
-%s  RandomNumber:   %v
+%s  RandomData:   %v
 %s}#%v`,
 		indent, h.Version,
 		indent, h.ChainID,
@@ -478,18 +482,18 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.LastResultsHash,
 		indent, h.EvidenceHash,
 		indent, h.ProposerAddress,
-		indent, h.RandomNumber,
+		indent, h.RandomData,
 		indent, h.Hash())
 }
 
-func (h *Header) SetRandomNumber(randomNumber int64) {
-	h.RandomNumber = randomNumber
+func (h *Header) SetRandomData(randomData []byte) {
+	h.RandomData = randomData
 	h.RandomHash = h.getRandomHash()
 }
 
 func (h *Header) getRandomHash() cmn.HexBytes {
 	return merkle.SimpleHashFromByteSlices([][]byte{
-		cdcEncode(h.RandomNumber),
+		cdcEncode(h.RandomData),
 		h.Hash(),
 	})
 }
