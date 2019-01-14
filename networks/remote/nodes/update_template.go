@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"encoding/json"
 	"net/http"
+	"runtime"
+	"path"
 )
 
 type terraformOutput struct {
@@ -23,8 +25,11 @@ type nodeInfo struct {
 }
 
 func main() {
+	_,fl,_,_:=runtime.Caller(0)
+	remoteDir:=path.Dir(fl)+"/.."
+	fmt.Println(remoteDir)
 	cmd := exec.Command("terraform", "output", "-json", "public_ips")
-	cmd.Dir = "/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/terraform/"
+	cmd.Dir = remoteDir+"/terraform/"
 
 	cmdOutput := &bytes.Buffer{}
 	cmd.Stdout = cmdOutput
@@ -67,9 +72,9 @@ func main() {
 	pp = pp[0 : len(pp)-1]
 	fmt.Println("Persistent peers:", pp)
 
-	f, err := os.Create("/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/ansible/roles/install/templates/systemd.service.j2")
+	f, err := os.Create(remoteDir+"/ansible/roles/install/templates/systemd.service.j2")
 
-	a := `[Unit]
+	config := `[Unit]
 Description={{service}}
 Requires=network-online.target
 After=network-online.target
@@ -88,6 +93,6 @@ KillSignal=SIGTERM
 WantedBy=multi-user.target
 `
 
-	f.WriteString(a)
+	f.WriteString(config)
 
 }
