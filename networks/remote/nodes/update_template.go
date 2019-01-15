@@ -2,13 +2,13 @@ package main
 
 import (
 	"bytes"
-	"os"
-	"fmt"
-	"os/exec"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"runtime"
+	"os"
+	"os/exec"
 	"path"
+	"runtime"
 )
 
 type terraformOutput struct {
@@ -25,11 +25,11 @@ type nodeInfo struct {
 }
 
 func main() {
-	_,fl,_,_:=runtime.Caller(0)
-	remoteDir:=path.Dir(fl)+"/.."
-	fmt.Println(remoteDir)
+	_, fl, _, _ := runtime.Caller(0)
+	remoteDir := path.Dir(fl) + "/.."
+
 	cmd := exec.Command("terraform", "output", "-json", "public_ips")
-	cmd.Dir = remoteDir+"/terraform/"
+	cmd.Dir = remoteDir + "/terraform/"
 
 	cmdOutput := &bytes.Buffer{}
 	cmd.Stdout = cmdOutput
@@ -72,7 +72,7 @@ func main() {
 	pp = pp[0 : len(pp)-1]
 	fmt.Println("Persistent peers:", pp)
 
-	f, err := os.Create(remoteDir+"/ansible/roles/install/templates/systemd.service.j2")
+	f, err := os.Create(remoteDir + "/ansible/roles/install/templates/systemd.service.j2")
 
 	config := `[Unit]
 Description={{service}}

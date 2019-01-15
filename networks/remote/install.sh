@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-NUM_NODES=10
+NUM_NODES=5
 TESTNET_NAME="sentrynet"
-SSH_KEY_FILE="/Users/boris/.ssh/id_rsa.pub"
-DO_API_TOKEN="ec9752e039c170c5d062d4c192501ceda1f14df021d2d211bab72a513c06df4c"
+SSH_KEY_FILE="path to ssh key"
+DO_API_TOKEN="DO API token"
 
 
+# Generate configs for nodes
 rm -rf $GOPATH/src/github.com/tendermint/tendermint/networks/remote/nodes/list/*
 go run $GOPATH/src/github.com/tendermint/tendermint/networks/remote/nodes/node.go -N=$NUM_NODES
 
@@ -15,7 +16,7 @@ terraform init
 terraform apply -var DO_API_TOKEN="$DO_API_TOKEN" -var SSH_KEY_FILE="$SSH_KEY_FILE" -var TESTNET_NAME="$TESTNET_NAME" -var SERVERS="$NUM_NODES" -auto-approve
 
 # let the droplets boot
-sleep 100
+sleep 120
 
 
 # all the ansible commands are also directory specific
