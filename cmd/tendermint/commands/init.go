@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"html/template"
+	"os"
 
 	"github.com/spf13/cobra"
 	cfg "github.com/tendermint/tendermint/config"
@@ -74,3 +76,63 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 	return nil
 }
+
+type Nodes struct {
+	Nodes []Node
+}
+
+type Node struct {
+	StartPort int
+	EndPort   int
+	IP        int
+}
+
+func writeDockerCompose(nValidators int, p2pPort int) error {
+	startIP := 2
+
+	nodes := make([]Node, nValidators)
+	for i := range nodes {
+		nodes[i] = Node{
+			StartPort: p2pPort + 2*i,
+			EndPort:   p2pPort + 2*i + 1,
+			IP:        startIP + i,
+		}
+	}
+
+	composeTmpl := template.Must(template.New("docker-compose").Parse(templ))
+
+	f, err := os.Create("docker-compose.yml")
+	if err != nil {
+		return err
+	}
+
+	return composeTmpl.Execute(f, Nodes{nodes})
+}
+
+const templ = `version: '3'
+
+services:{{range $i, $e := .Nodes}}
+  node{{$i}}:
+    container_name: node{{$i}}
+    image: "tendermint/localnode"
+    ports:
+      - "{{.StartPort}}-{{.EndPort}}:26656-26657"
+    environment:
+      - ID={{$i}}
+      - LOG=tendermint.log
+    volumes:
+      - ./build:/tendermint:Z
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.{{.IP}}
+{{end}}
+networks:
+  localnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      -
+        subnet: 192.167.10.0/16
+
+`
