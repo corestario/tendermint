@@ -301,13 +301,17 @@ build-docker-localnode:
 
 # Run a $TESTNET_NODES-node testnet locally
 localnet-start:
-	@if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --v $(TESTNET_NODES) --o . --populate-persistent-peers --starting-ip-address 192.167.10.2 ; mv $(CURDIR)/build/docker-compose.yml $(CURDIR) ; fi
+	@if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --v $(TESTNET_NODES) --d $(TESTNET_DEAD_NODES) --o . --populate-persistent-peers --starting-ip-address 192.167.10.2 ; mv $(CURDIR)/build/docker-compose.yml $(CURDIR) ; fi
 	make localnet-stop
 	docker-compose up
 
 # Stop testnet
 localnet-stop:
 	docker-compose down
+
+# Remove testnet and related configs
+localnet-rm: localnet-stop
+	rm -Rdf ./build/node*
 
 ###########################################################
 ### Remote full-nodes (sentry) using terraform and ansible
