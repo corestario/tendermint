@@ -72,16 +72,18 @@ var (
 	server   = flag.String("server", "http://localhost:26657/", "server address to fire to")
 	postType = flag.String("tx", "asyncTx", "syncTx|asyncTx|commitTx")
 
-	rps       = flag.Int("rps", 300, "syncTx|asyncTx|commitTx")
-	blockTime = flag.Int("blocktime", 6, "block time in seconds")
-	deadline  = flag.Int("deadline", 2, "deadline occurs in given number of blocks if only errors are present for each block")
-	txSize    = flag.Int("txsize", 100, "transaction size in bytes")
-	duration  = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
-	threads   = flag.Int("threads", 50*runtime.NumCPU(), "how many threads to run")
-	writeTxs  = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
+	rps        = flag.Int("rps", 300, "syncTx|asyncTx|commitTx")
+	stresstest = flag.Bool("stress", false, "increase RPC until server fails")
+	blockTime  = flag.Int("blocktime", 6, "block time in seconds")
+	deadline   = flag.Int("deadline", 2, "deadline occurs in given number of blocks if only errors are present for each block")
+	txSize     = flag.Int("txsize", 100, "transaction size in bytes")
+	duration   = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
+	threads    = flag.Int("threads", 50*runtime.NumCPU(), "how many threads to run")
+	writeTxs   = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
 
 	expectedBlockSize int
 	txTime            time.Duration
+	txTimeLock        sync.Mutex
 	unconfirmedTxsNum string
 	postTxURL         string
 	getTxURL          string
@@ -164,11 +166,15 @@ func initParams() {
 	getTxURL = getURL(getTx, "hash=0x")
 
 	expectedBlockSize = (*rps) * (*txSize) * (*blockTime)
-	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
+	setTxTime()
 
 	if *writeTxs < 0 || *writeTxs > 100 {
 		panic("a fraction of write transactions. a non-negative number between o and 100")
 	}
+}
+
+func setTxTime() {
+	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
 }
 
 func URL(scheme, host string) func(path, query string) string {
@@ -343,6 +349,10 @@ func (s *sender) runTx() error {
 			// we did't run any runTx so decrease Tx count
 			atomic.AddUint64(currentTx, ^uint64(0))
 			time.Sleep(100 * time.Millisecond)
+
+			if *stresstest {
+				s.estimatedRPS += 10
+			}
 
 			continue
 		}
