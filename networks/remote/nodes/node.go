@@ -1,16 +1,18 @@
 package main
 
 import (
-	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/privval"
 	tmtime "github.com/tendermint/tendermint/types/time"
 
-	"fmt"
 	"flag"
-	"os"
-	"strconv"
+	"fmt"
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/types/time"
+	"os"
+	"path"
+	"runtime"
+	"strconv"
 )
 
 type node struct {
@@ -21,8 +23,12 @@ type node struct {
 func main() {
 	n := flag.Int("N", 4, "num of nodes")
 	flag.Parse()
+
+	_, fl, _, _ := runtime.Caller(0)
+	remoteDir := path.Dir(fl) + "/.."
+
 	arr := make([]node, *n)
-	path := "/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/nodes/list/"
+	path := remoteDir + "/nodes/list/"
 
 	if *n < 4 {
 		fmt.Println("N should be more 4")
@@ -53,7 +59,7 @@ func main() {
 			Key: key,
 			PV:  pv,
 		}
-		err = os.Link("/Users/boris/go/src/github.com/tendermint/tendermint/networks/remote/nodes/config.toml", cfgPath+"config.toml")
+		err = os.Link(remoteDir+"/nodes/config.toml", cfgPath+"config.toml")
 		if err != nil {
 			panic(err)
 		}
