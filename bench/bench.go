@@ -72,15 +72,18 @@ var (
 	server   = flag.String("server", "http://localhost:26657/", "server address to fire to")
 	postType = flag.String("tx", "asyncTx", "syncTx|asyncTx|commitTx")
 
-	rps       = flag.Int("rps", 300, "syncTx|asyncTx|commitTx")
-	blockTime = flag.Int("blocktime", 6, "block time in seconds")
-	txSize    = flag.Int("txsize", 100, "transaction size in bytes")
-	duration  = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
-	threads   = flag.Int("threads", 50*runtime.NumCPU(), "how many threads to run")
-	writeTxs  = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
+	rps        = flag.Int("rps", 300, "syncTx|asyncTx|commitTx")
+	stresstest = flag.Bool("stress", false, "increase RPC until server fails")
+	blockTime  = flag.Int("blocktime", 6, "block time in seconds")
+	deadline   = flag.Int("deadline", 2, "deadline occurs in given number of blocks if only errors are present for each block")
+	txSize     = flag.Int("txsize", 100, "transaction size in bytes")
+	duration   = flag.Duration("duration", 10*time.Minute, "test duration in format: [0-9]*[ms,s,m,h,d,y]")
+	threads    = flag.Int("threads", 50*runtime.NumCPU(), "how many threads to run")
+	writeTxs   = flag.Int("writetxs", 100, "a fraction of write transactions. a non-negative number between o and 100")
 
 	expectedBlockSize int
 	txTime            time.Duration
+	txTimeLock        sync.Mutex
 	unconfirmedTxsNum string
 	postTxURL         string
 	getTxURL          string
@@ -124,6 +127,10 @@ mainLoop:
 			fmt.Println("\nstopping benchmarks...")
 			senders.stop()
 			break mainLoop
+		case <-senders.deadline:
+			fmt.Println("\nstopping benchmarks, too many errors...")
+			senders.stop()
+			break mainLoop
 		default:
 			//nothing to do
 		}
@@ -159,11 +166,15 @@ func initParams() {
 	getTxURL = getURL(getTx, "hash=0x")
 
 	expectedBlockSize = (*rps) * (*txSize) * (*blockTime)
-	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
+	setTxTime()
 
 	if *writeTxs < 0 || *writeTxs > 100 {
 		panic("a fraction of write transactions. a non-negative number between o and 100")
 	}
+}
+
+func setTxTime() {
+	txTime = time.Duration(big.NewInt(0).Div(big.NewInt(int64(time.Second)), big.NewInt(int64(*rps))).Int64()) // ns
 }
 
 func URL(scheme, host string) func(path, query string) string {
@@ -180,9 +191,10 @@ func waitUnconfirmedTxs() {
 }
 
 type senderGroup struct {
-	senders []*sender
-	cancels []chan struct{}
-	state   *int32
+	senders  []*sender
+	cancels  []chan struct{}
+	deadline chan struct{}
+	state    *int32
 	sync.Mutex
 }
 
@@ -195,12 +207,13 @@ const (
 func newSenderGroup(n int, startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, errorCount *uint64, writeTxProbability int32) *senderGroup {
 	senders := make([]*sender, n)
 	storage := new(hashStorage)
+	deadline := make(chan struct{}, 1)
 
 	for i := 0; i < n; i++ {
-		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx, writeTxProbability, storage, errorCount)
+		senders[i] = newSender(startTime, estimatedRPS, logFreq, currentTx, writeTxProbability, storage, errorCount, deadline)
 	}
 
-	return &senderGroup{senders: senders, state: new(int32)}
+	return &senderGroup{senders: senders, state: new(int32), deadline: deadline}
 }
 
 func (group *senderGroup) run() {
@@ -247,10 +260,11 @@ type sender struct {
 	writeTxProbability int32
 	storage            *hashStorage
 
-	cancel chan struct{}
+	cancel   chan struct{}
+	deadline chan struct{}
 }
 
-func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32, storage *hashStorage, errorCount *uint64) *sender {
+func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *uint64, writeTxProbability int32, storage *hashStorage, errorCount *uint64, deadline chan struct{}) *sender {
 	return &sender{
 		startTime:          startTime,
 		estimatedRPS:       estimatedRPS,
@@ -259,6 +273,7 @@ func newSender(startTime time.Time, estimatedRPS int, logFreq int, currentTx *ui
 		writeTxProbability: writeTxProbability,
 		storage:            storage,
 		errorCount:         errorCount,
+		deadline:           deadline,
 	}
 }
 
@@ -278,14 +293,50 @@ func (s *sender) run() chan struct{} {
 				// nothing to do
 			}
 
-			s.runTx()
+			err := s.runTx()
+			isDeadline := checkDeadlineTimer(err)
+			if isDeadline {
+				s.deadline <- struct{}{}
+			}
 		}
 	}()
 
 	return s.cancel
 }
 
-func (s *sender) runTx() {
+var deadlineTimer *time.Timer
+var deadlineTimerLock = new(sync.Mutex)
+
+func checkDeadlineTimer(err error) bool {
+	deadlineTimerLock.Lock()
+	defer deadlineTimerLock.Unlock()
+
+	deadlineDuration := time.Duration((*blockTime)*(*deadline)) * time.Second
+	if deadlineTimer == nil {
+		deadlineTimer = time.NewTimer(deadlineDuration)
+	}
+
+	if err == nil {
+		deadlineTimer.Reset(deadlineDuration)
+		return false
+	}
+
+	select {
+	case <-deadlineTimer.C:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *sender) runTx() error {
+	var err error
+	defer func(err *error) {
+		if *err != nil {
+			s.onError()
+		}
+	}(&err)
+
 	for {
 		txIndex := atomic.AddUint64(currentTx, 1)
 
@@ -299,21 +350,24 @@ func (s *sender) runTx() {
 			atomic.AddUint64(currentTx, ^uint64(0))
 			time.Sleep(100 * time.Millisecond)
 
+			if *stresstest {
+				s.estimatedRPS += 10
+			}
+
 			continue
 		}
 
 		if s.isPostTxTurn(txIndex) {
-			hash, err := postTx(txIndex)
+			var hash string
+			hash, err = postTx(txIndex)
 			if err != nil {
-				s.onError()
-				break
+				return err
 			}
 			s.storage.storeTx(hash)
 		} else {
-			err := getTxByHash(s.storage.getAnyTxHash())
+			err = getTxByHash(s.storage.getAnyTxHash())
 			if err != nil {
-				s.onError()
-				break
+				return err
 			}
 		}
 
@@ -321,6 +375,8 @@ func (s *sender) runTx() {
 
 		break
 	}
+
+	return nil
 }
 
 func (s *sender) onError() {

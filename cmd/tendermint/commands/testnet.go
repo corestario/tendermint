@@ -18,10 +18,11 @@ import (
 )
 
 var (
-	nValidators    int
-	nNonValidators int
-	outputDir      string
-	nodeDirPrefix  string
+	nValidators     int
+	nDeadValidators int
+	nNonValidators  int
+	outputDir       string
+	nodeDirPrefix   string
 
 	populatePersistentPeers bool
 	hostnamePrefix          string
@@ -36,6 +37,8 @@ const (
 func init() {
 	TestnetFilesCmd.Flags().IntVar(&nValidators, "v", 4,
 		"Number of validators to initialize the testnet with")
+	TestnetFilesCmd.Flags().IntVar(&nDeadValidators, "d", 0,
+		"Number of 'dead' validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().IntVar(&nNonValidators, "n", 0,
 		"Number of non-validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().StringVar(&outputDir, "o", "./mytestnet",
@@ -73,9 +76,9 @@ Example:
 
 func testnetFiles(cmd *cobra.Command, args []string) error {
 	config := cfg.DefaultConfig()
-	genVals := make([]types.GenesisValidator, nValidators)
+	genVals := make([]types.GenesisValidator, nValidators+nDeadValidators)
 
-	for i := 0; i < nValidators; i++ {
+	for i := 0; i < nValidators+nDeadValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", nodeDirPrefix, i)
 		nodeDir := filepath.Join(outputDir, nodeDirName)
 		config.SetRoot(nodeDir)
@@ -99,7 +102,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < nNonValidators; i++ {
-		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators))
+		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators+nDeadValidators))
 		config.SetRoot(nodeDir)
 
 		err := os.MkdirAll(filepath.Join(nodeDir, "config"), nodeDirPerm)
@@ -119,7 +122,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	// Write genesis file.
-	for i := 0; i < nValidators+nNonValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		if err := genDoc.SaveAs(filepath.Join(nodeDir, config.BaseConfig.Genesis)); err != nil {
 			_ = os.RemoveAll(outputDir)
@@ -145,7 +148,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	// Overwrite default config.
-	for i := 0; i < nValidators+nNonValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		config.P2P.AddrBookStrict = false
@@ -156,7 +159,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		cfg.WriteConfigFile(filepath.Join(nodeDir, "config", "config.toml"), config)
 	}
 
-	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators)
+	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators+nDeadValidators)
 	return nil
 }
 
@@ -179,8 +182,8 @@ func hostnameOrIP(i int) string {
 }
 
 func persistentPeersString(config *cfg.Config) (string, error) {
-	persistentPeers := make([]string, nValidators+nNonValidators)
-	for i := 0; i < nValidators+nNonValidators; i++ {
+	persistentPeers := make([]string, nValidators+nNonValidators+nDeadValidators)
+	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		nodeKey, err := p2p.LoadNodeKey(config.NodeKeyFile())

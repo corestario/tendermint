@@ -7,12 +7,23 @@ There're 2 benchmarks: max and rps. They are made in `quick and dirty` way just 
 
 Test config file /tendermint/bench/config.toml The setup is configured to have a block per ~2sec.
 
+## Configuration
+Environment variables `TESTNET_NODES` and `TESTNET_DEAD_NODES` can be user to set up number of `live` and `dead` validator corresponding.
+
+### Defaults
+```
+TESTNET_NODES=4
+TESTNET_DEAD_NODES=0
+```
+
 ## Run tests
-`make build`
-`make build-docker`
-`sudo rm -Rdf build/node*`
-`export TESTNET_NODES=10 && make localnet-start`
-`go run ./bench/bench.go -server="http://142.93.184.168:26657" -writetxs=80 &> bench.txt`
+```
+make build
+make build-docker
+sudo make localnet-rm
+export TESTNET_NODES=10 && export TESTNET_DEAD_NODES=3 && make localnet-start
+go run ./bench/bench.go -server="http://142.93.184.168:26657" -writetxs=80 &> bench.txt
+```
 
 ## Issues
 Tendermint definitely has a few memory leaks. OOM killer takes a node after 1-6 hours.
