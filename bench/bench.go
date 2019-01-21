@@ -32,6 +32,7 @@ const (
 
 	unconfirmedTxs = "num_unconfirmed_txs"
 	getTx          = "tx"
+	getBlock       = "block"
 )
 
 func newTxType(t string) txType {
@@ -87,6 +88,9 @@ var (
 	unconfirmedTxsNum string
 	postTxURL         string
 	getTxURL          string
+	getBlockURL       string
+
+	getURL func(path, query string) string
 )
 
 func main() {
@@ -117,6 +121,10 @@ func main() {
 	senders := newSenderGroup(*threads, startTime, *rps, logFreq, currentTx, errorCount, int32(*writeTxs))
 	senders.run()
 
+	blocks := new(blocks)
+	updateBlocks := time.NewTicker(time.Second)
+	var latest time.Duration
+
 mainLoop:
 	for {
 		select {
@@ -131,6 +139,14 @@ mainLoop:
 			fmt.Println("\nstopping benchmarks, too many errors...")
 			senders.stop()
 			break mainLoop
+		case <-updateBlocks.C:
+			blocks.update()
+			latest = blocks.latest()
+			if blocks.latest().Seconds()-float64(*blockTime) < 0.5 {
+				fmt.Println("latest block duration", latest)
+				break mainLoop
+			}
+
 		default:
 			//nothing to do
 		}
@@ -149,6 +165,9 @@ mainLoop:
 	fmt.Println("Done", atomic.LoadUint64(currentTx))
 	fmt.Println("Errors", atomic.LoadUint64(errorCount))
 	fmt.Println("Total time", time.Now().Sub(startTime))
+	fmt.Println("Latest block number", blocks.index)
+	fmt.Println("Latest block duration", latest)
+	fmt.Println("Last 100 block duration", blocks.blocksTime)
 }
 
 func initParams() {
@@ -159,11 +178,12 @@ func initParams() {
 		panic("can't parse url: " + *server)
 	}
 
-	getURL := URL(serverURL.Scheme, serverURL.Host)
+	getURL = URL(serverURL.Scheme, serverURL.Host)
 
 	unconfirmedTxsNum = getURL(unconfirmedTxs, "")
 	postTxURL = getURL(newTxType(*postType).String(), "tx=")
 	getTxURL = getURL(getTx, "hash=0x")
+	getBlockURL = getURL(getTx, "height=")
 
 	expectedBlockSize = (*rps) * (*txSize) * (*blockTime)
 	setTxTime()
@@ -415,12 +435,12 @@ func postTx(n uint64) (string, error) {
 		txPrefixLock.Unlock()
 	}
 
-	res := new(PostAsyncResponse)
 	resRaw, err := doRequest(postTxURL + "\"" + txPrefix + tx + "\"")
 	if err != nil {
 		return "", err
 	}
 
+	res := new(PostAsyncResponse)
 	decode(resRaw, res)
 
 	return res.Res.Hash, nil
@@ -429,6 +449,42 @@ func postTx(n uint64) (string, error) {
 func getTxByHash(hash string) error {
 	_, err := doRequest(getTxURL + hash)
 	return err
+}
+
+const blockStorageSize = 100
+
+type blocks struct {
+	blocksTime [blockStorageSize]time.Duration
+	latestTime time.Time
+	index      int
+}
+
+func (b *blocks) update() {
+	nextBlock := b.index + 1
+
+	resRaw, err := doRequest(getBlock + strconv.Itoa(nextBlock))
+	if err != nil {
+		return
+	}
+
+	res := new(BlockResponse)
+	decode(resRaw, res)
+
+	if res.Error != "" {
+		return
+	}
+
+	if res.Res.Meta.Header.Height != nextBlock {
+		return
+	}
+
+	b.blocksTime[nextBlock%blockStorageSize] = res.Res.Meta.Header.Time.Sub(b.latestTime)
+
+	b.index++
+}
+
+func (b *blocks) latest() time.Duration {
+	return b.blocksTime[b.index%blockStorageSize]
 }
 
 const hashStorageSize = 1000
@@ -591,6 +647,26 @@ type PostAsyncResponseResult struct {
 	Data string `json:"data"`
 	Log  string `json:"log"`
 	Hash string `json:"hash"`
+}
+
+type BlockResponse struct {
+	RPCResponse
+	Error string      `json:"error"`
+	Res   BlockResult `json:"result"`
+}
+
+type BlockResult struct {
+	Meta BlockMeta "block_meta"
+}
+
+type BlockMeta struct {
+	Header BlockHeader "header"
+}
+
+type BlockHeader struct {
+	Height int       `json:"height"`
+	Time   time.Time `json:"time"`
+	NumTx  int       `json:"num_txs"`
 }
 
 func decode(input []byte, res interface{}) {
