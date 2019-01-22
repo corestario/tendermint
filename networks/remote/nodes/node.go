@@ -1,18 +1,19 @@
 package main
 
 import (
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/privval"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	"flag"
 	"fmt"
-	"github.com/tendermint/tendermint/types"
-	"github.com/tendermint/tendermint/types/time"
 	"os"
 	"path"
 	"runtime"
 	"strconv"
+
+	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/privval"
+	"github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/types/time"
+	tmtime "github.com/tendermint/tendermint/types/time"
 )
 
 type node struct {
@@ -21,19 +22,21 @@ type node struct {
 }
 
 func main() {
-	n := flag.Int("N", 4, "num of nodes")
+	n := flag.Int("N", 4, "number of live nodes")
+	deadN := flag.Int("d", 0, "number of dead nodes")
 	flag.Parse()
 
 	_, fl, _, _ := runtime.Caller(0)
 	remoteDir := path.Dir(fl) + "/.."
 
-	arr := make([]node, *n)
+	nodes := make([]node, *n)
 	path := remoteDir + "/nodes/list/"
 
 	if *n < 4 {
-		fmt.Println("N should be more 4")
+		fmt.Println("N should be more or equal 4")
 		os.Exit(0)
 	}
+
 	for i := 0; i < *n; i++ {
 		cfgPath := path + "node" + strconv.Itoa(i) + "/"
 		err := os.Mkdir(cfgPath, os.ModePerm)
@@ -51,11 +54,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		_ = key
 
 		pv := privval.GenFilePV(cfgPath + "priv_validator.json")
 		pv.Save()
-		arr[i] = node{
+		nodes[i] = node{
 			Key: key,
 			PV:  pv,
 		}
@@ -73,8 +75,18 @@ func main() {
 
 	for i := 0; i < *n; i++ {
 		genDoc.Validators[i] = types.GenesisValidator{
-			Address: arr[i].PV.GetPubKey().Address(),
-			PubKey:  arr[i].PV.GetPubKey(),
+			Address: nodes[i].PV.GetPubKey().Address(),
+			PubKey:  nodes[i].PV.GetPubKey(),
+			Power:   10,
+		}
+	}
+
+	for i := *n; i < *n+*deadN; i++ {
+		pv := ed25519.GenPrivKey()
+
+		genDoc.Validators[i] = types.GenesisValidator{
+			Address: pv.PubKey().Address(),
+			PubKey:  pv.PubKey(),
 			Power:   10,
 		}
 	}
