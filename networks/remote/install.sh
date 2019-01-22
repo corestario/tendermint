@@ -35,5 +35,7 @@ ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME install.yml
 
 # and finally restart it all
 ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME restart.yml
+# install node exporter
+ansible-playbook -i inventory/digital_ocean.py -l $TESTNET_NAME node_exporter.yml
 
 echo "congratulations, your testnet is now running :)"
