@@ -1,4 +1,12 @@
-### Installation and usage guide for DGAMING FOUNDATION updates.
+### Overview of DGAMING FOUNDATION BLS updates
+
+Random is implemented as follows. We provide each validator with her own t-of-n BLS keypair share. We also provide each validator with information about other validator's public keys and ID, and this information is structured as a mapping from their normal tendermint `crypto.Address` to respective public keys. The last piece of information that we give to each validator is the master public key that is used to recover aggregate signatures.
+
+Keys must be generated beforehand.
+
+Each validator signs the random data from a previous block (for block height = 1 the value is constant) with her own private key and attaches this signature to her precommit vote. Then she waits for 2/3+1 votes from other validators and tries to recover aggregate signature using the partial signatures received. In case of success, this signature is written to current block header as random data.
+
+### Installation and usage guide
 
 BLS library is included as a git submodule. You have to initialize this submodule before trying to build code.
 
