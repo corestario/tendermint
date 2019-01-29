@@ -35,6 +35,7 @@ type Signable interface {
 
 type Verifier interface {
 	Sign(data []byte) []byte
+	VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error
 	VerifyRandomData(prevRandomData, currRandomData []byte) error
 	Recover(precommits []*Vote) ([]byte, error)
 }
@@ -55,6 +56,24 @@ func NewBLSVerifier(masterPubKey *bls.PublicKey, keypair *bls.Keypair, others ma
 
 func (m *BLSVerifier) Sign(data []byte) []byte {
 	return m.Keypair.Priv.Sign(string(data)).Serialize()
+}
+
+func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
+	keypair, ok := m.Others[addr]
+	if !ok {
+		return fmt.Errorf("found no keypair for address %s", addr)
+	}
+
+	sign := new(bls.Sign)
+	if err := sign.Deserialize(currRandomData); err != nil {
+		return fmt.Errorf("failed to deserialize current random data: %v", err)
+	}
+
+	if !sign.Verify(keypair.Pub, string(prevRandomData)) {
+		return errors.New("current signature is corrupt")
+	}
+
+	return nil
 }
 
 func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) error {
@@ -125,6 +144,9 @@ type MockVerifier struct{}
 
 func (m *MockVerifier) Sign(data []byte) []byte {
 	return data
+}
+func (m *MockVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
+	return nil
 }
 func (m *MockVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) error {
 	return nil

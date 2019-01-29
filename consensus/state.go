@@ -654,6 +654,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
+
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err := cs.tryAddVote(msg.Vote, peerID)
@@ -1554,6 +1555,16 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		err = ErrVoteHeightMismatch
 		cs.Logger.Info("Vote ignored and not added", "voteHeight", vote.Height, "csHeight", cs.Height, "err", err)
 		return
+	}
+
+	if vote.Type == types.PrecommitType {
+		var (
+			prevBlockData = cs.getPreviousBlock().RandomData
+			validatorAddr = vote.ValidatorAddress.String()
+		)
+		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+			return false, fmt.Errorf("random share authenticy check failed: %v", err)
+		}
 	}
 
 	height := cs.Height
