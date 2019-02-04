@@ -122,7 +122,7 @@ func (m *BLSVerifier) Recover(precommits []*Vote) ([]byte, error) {
 func NewTestBLSVerifier(addr string) *BLSVerifier {
 	var (
 		id      = new(bls.ID)
-		_       = SolitaireBLSVerifierID
+		_       = id.SetHexString(SolitaireBLSVerifierID)
 		pub     = new(bls.PublicKey)
 		_       = pub.SetHexString(SolitaireBLSVerifierPubKey)
 		priv    = new(bls.SecretKey)
