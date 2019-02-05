@@ -85,6 +85,9 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		panic(cmn.ErrorWrap(err, "error constructing state from genesis file"))
 	}
 
+	// A BLSVerifier with a 1-of-2 key set that doesn't require any other signatures but his own.
+	testVerifier := types.NewTestBLSVerifier(state.Validators.Validators[0].Address.String())
+
 	// Make the BlockchainReactor itself.
 	// NOTE we have to create and commit the blocks first because
 	// pool.height is determined from the store.
@@ -93,6 +96,10 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		sm.MockMempool{}, sm.MockEvidencePool{})
 
 	// let's add some blocks in
+	// This is the only place in all project tests where the verifier is actually tested
+	// against some valid data (types.MockVerifier is used in all other tests).
+	// Here we augment blocks with random data produced by the verifier.
+	var prevBlock *types.Block
 	for blockHeight := int64(1); blockHeight <= maxBlockHeight; blockHeight++ {
 		lastCommit := &types.Commit{}
 		if blockHeight > 1 {
@@ -104,6 +111,21 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		}
 
 		thisBlock := makeBlock(blockHeight, state, lastCommit)
+		if blockHeight == 1 {
+			thisBlock.RandomData = []byte(types.InitialRandomData)
+		} else {
+			aggrSign, err := testVerifier.Recover([]*types.Vote{
+				{
+					ValidatorAddress: state.Validators.Validators[0].Address,
+					BLSSignature:     testVerifier.Sign(prevBlock.RandomData),
+				},
+			})
+			if err != nil {
+				panic(cmn.ErrorWrap(err, "failed to recover aggregate signature"))
+			}
+			thisBlock.RandomData = aggrSign
+		}
+		prevBlock = thisBlock
 
 		thisParts := thisBlock.MakePartSet(types.BlockPartSizeBytes)
 		blockID := types.BlockID{thisBlock.Hash(), thisParts.Header()}
@@ -116,7 +138,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		blockStore.SaveBlock(thisBlock, thisParts, lastCommit)
 	}
 
-	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, types.NewBLSVerifier(), fastSync)
+	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, testVerifier, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	return BlockchainReactorPair{bcReactor, proxyApp}

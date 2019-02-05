@@ -24,7 +24,7 @@ func NewPubKeyMultisigThreshold(k int, pubkeys []crypto.PubKey) crypto.PubKey {
 	return PubKeyMultisigThreshold{uint(k), pubkeys}
 }
 
-// VerifyBytes expects sig to be an amino encoded version of a MultiSignature.
+// VerifyRandomData expects sig to be an amino encoded version of a MultiSignature.
 // Returns true iff the multisignature contains k or more signatures
 // for the correct corresponding keys,
 // and all signatures are valid. (Not just k of the signatures)

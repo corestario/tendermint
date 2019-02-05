@@ -137,7 +137,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.cs.Wait()
 
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
-		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithVerifier(types.NewBLSVerifier()))
+		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithVerifier(&types.MockVerifier{}))
 	newCS.SetEventBus(pb.cs.eventBus)
 	newCS.startForReplay()
 
@@ -341,7 +341,7 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
-		blockStore, mempool, evpool, WithVerifier(types.NewBLSVerifier()))
+		blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
 
 	consensusState.SetEventBus(eventBus)
 	return consensusState
