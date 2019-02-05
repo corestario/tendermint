@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 
+	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
+
 	"github.com/spf13/cobra"
 
 	cfg "github.com/tendermint/tendermint/config"
@@ -65,15 +67,15 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
 		genDoc.BLSMasterPubKey = types.SolitaireBLSVerifierMasterPubKey
-		genDoc.BLSKeypair = map[string]string{
-			"id":   types.SolitaireBLSVerifierID,
-			"pub":  types.SolitaireBLSVerifierPubKey,
-			"priv": types.SolitaireBLSVerifierPrivKey,
+		genDoc.BLSKeypair = &bls.SerializedKeypair{
+			Id:   types.SolitaireBLSVerifierID,
+			Pub:  types.SolitaireBLSVerifierPubKey,
+			Priv: types.SolitaireBLSVerifierPrivKey,
 		}
-		genDoc.Others = map[string]map[string]string{
+		genDoc.Others = map[string]*bls.SerializedKeypair{
 			pv.GetPubKey().Address().String(): {
-				"id":  types.SolitaireBLSVerifierID,
-				"pub": types.SolitaireBLSVerifierPubKey,
+				Id:  types.SolitaireBLSVerifierID,
+				Pub: types.SolitaireBLSVerifierPubKey,
 			},
 		}
 
