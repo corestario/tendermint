@@ -16,7 +16,7 @@ import (
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-
+	node.ConsensusState().SetVerifier(&types.MockVerifier{})
 	code := m.Run()
 
 	node.Stop()

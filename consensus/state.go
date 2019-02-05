@@ -2,28 +2,23 @@ package consensus
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
 
-	"github.com/tendermint/tendermint/crypto"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/fail"
-	"github.com/tendermint/tendermint/libs/log"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
+	"github.com/tendermint/tendermint/libs/fail"
+	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	tmtime "github.com/tendermint/tendermint/types/time"
 )
 
 //-----------------------------------------------------------------------------
@@ -121,7 +116,7 @@ type ConsensusState struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	verifier crypto.PubKey
+	verifier types.Verifier
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -185,7 +180,7 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.blockExec.SetEventBus(b)
 }
 
-func WithVerifier(verifier crypto.PubKey) StateOption {
+func WithVerifier(verifier types.Verifier) StateOption {
 	return func(cs *ConsensusState) { cs.verifier = verifier }
 }
 
@@ -256,6 +251,10 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()
 	cs.timeoutTicker = timeoutTicker
 	cs.mtx.Unlock()
+}
+
+func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
+	cs.verifier = verifier
 }
 
 // LoadCommit loads the commit for a given height.
@@ -655,6 +654,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
+
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err := cs.tryAddVote(msg.Vote, peerID)
@@ -1087,12 +1087,8 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	}
 
 	// At this point, +2/3 prevoted for a particular block.
-
-	randomData, err := cs.generateRandomData()
-	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to generate random data: %v", err))
-	}
-
+	prevBlock := cs.getPreviousBlock()
+	randomData := cs.verifier.Sign(prevBlock.Header.RandomData)
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
@@ -1197,14 +1193,14 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
-	randNumber, err := cs.getRandomNumber(precommits)
-	cs.Logger.Info("RandomNumber generated", "rand_number", randNumber)
+	randomData, err := cs.verifier.Recover(precommits.GetVotes())
 	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to getRandomNumber(): %v", err))
+		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
+	cs.Logger.Info("Generated random data", "rand_data", randomData)
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
-		cs.ProposalBlock.Header.SetRandomNumber(randNumber)
+		cs.ProposalBlock.Header.SetRandomData(randomData)
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -1221,32 +1217,6 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 			// We just need to keep waiting.
 		}
 	}
-}
-
-func (cs *ConsensusState) generateRandomData() ([]byte, error) {
-	rand.Seed(int64(time.Now().Second()))
-	// Generate some random value.
-	data := make([]byte, 8)
-	binary.LittleEndian.PutUint64(data, uint64(rand.Int63()))
-	cs.Logger.Info("generated random data", "data", data)
-
-	return data, nil
-}
-
-func (cs *ConsensusState) getRandomNumber(precommits *types.VoteSet) (int64, error) {
-	var out int64
-	for _, precommit := range precommits.GetVotes() {
-		// Nil votes do exist, keep that in mind.
-		if precommit == nil {
-			continue
-		}
-		cs.Logger.Info("Collecting random data", "from", precommit.ValidatorAddress, "data", precommit.RandData)
-		for _, b := range precommit.RandData {
-			out += int64(b)
-		}
-	}
-
-	return out, nil
 }
 
 // If we have the block AND +2/3 commits for it, finalize.
@@ -1296,17 +1266,8 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		cmn.PanicConsensus(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
 
-	var prevBlock *types.Block
-	if cs.Height == 1 {
-		// TODO @oopcode: extract initial number from genesis block gracefully?
-		prevBlock = &types.Block{Header: types.Header{RandomNumber: 42}}
-	} else {
-		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
-	}
-	var currBlockRandBytes, prevBlockRandBytes = make([]byte, 8), make([]byte, 8)
-	binary.BigEndian.PutUint64(currBlockRandBytes, uint64(block.Header.RandomNumber))
-	binary.BigEndian.PutUint64(prevBlockRandBytes, uint64(prevBlock.Header.RandomNumber))
-	if !cs.verifier.VerifyBytes(prevBlockRandBytes, currBlockRandBytes) {
+	prevBlock := cs.getPreviousBlock()
+	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value"))
 	}
 
@@ -1596,6 +1557,16 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
+	if vote.Type == types.PrecommitType {
+		var (
+			prevBlockData = cs.getPreviousBlock().RandomData
+			validatorAddr = vote.ValidatorAddress.String()
+		)
+		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+			return false, fmt.Errorf("random share authenticy check failed: %v", err)
+		}
+	}
+
 	height := cs.Height
 	added, err = cs.Votes.AddVote(vote, peerID)
 	if !added {
@@ -1716,7 +1687,7 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 		Timestamp:        cs.voteTime(),
 		Type:             type_,
 		BlockID:          types.BlockID{hash, header},
-		RandData:         data,
+		BLSSignature:     data,
 	}
 	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
 	return vote, err
@@ -1755,6 +1726,17 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
 	return nil
+}
+
+func (cs *ConsensusState) getPreviousBlock() *types.Block {
+	var prevBlock *types.Block
+	if cs.Height == 1 {
+		prevBlock = &types.Block{Header: types.Header{RandomData: []byte(types.InitialRandomData)}}
+	} else {
+		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
+	}
+
+	return prevBlock
 }
 
 //---------------------------------------------------------

@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"os"
 
+	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
+
 	"github.com/spf13/cobra"
 
 	cfg "github.com/tendermint/tendermint/config"
@@ -64,6 +66,20 @@ func initFilesWithConfig(config *cfg.Config) error {
 			PubKey:  pv.GetPubKey(),
 			Power:   10,
 		}}
+
+		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
+		genDoc.BLSMasterPubKey = types.SolitaireBLSVerifierMasterPubKey
+		genDoc.BLSKeypair = &bls.SerializedKeypair{
+			Id:   types.SolitaireBLSVerifierID,
+			Pub:  types.SolitaireBLSVerifierPubKey,
+			Priv: types.SolitaireBLSVerifierPrivKey,
+		}
+		genDoc.Others = map[string]*bls.SerializedKeypair{
+			pv.GetPubKey().Address().String(): {
+				Id:  types.SolitaireBLSVerifierID,
+				Pub: types.SolitaireBLSVerifierPubKey,
+			},
+		}
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err

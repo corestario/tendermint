@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
+
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -33,13 +35,15 @@ type GenesisValidator struct {
 
 // GenesisDoc defines the initial conditions for a tendermint blockchain, in particular its validator set.
 type GenesisDoc struct {
-	GenesisTime     time.Time          `json:"genesis_time"`
-	ChainID         string             `json:"chain_id"`
-	ConsensusParams *ConsensusParams   `json:"consensus_params,omitempty"`
-	Validators      []GenesisValidator `json:"validators,omitempty"`
-	AppHash         cmn.HexBytes       `json:"app_hash"`
-	AppState        json.RawMessage    `json:"app_state,omitempty"`
-	Verifier        crypto.PubKey      `json:"verifier"`
+	GenesisTime     time.Time                         `json:"genesis_time"`
+	ChainID         string                            `json:"chain_id"`
+	ConsensusParams *ConsensusParams                  `json:"consensus_params,omitempty"`
+	Validators      []GenesisValidator                `json:"validators,omitempty"`
+	AppHash         cmn.HexBytes                      `json:"app_hash"`
+	AppState        json.RawMessage                   `json:"app_state,omitempty"`
+	BLSMasterPubKey string                            `json:"bls_master_pub_key"`
+	BLSKeypair      *bls.SerializedKeypair            `json:"bls_keypair"`
+	Others          map[string]*bls.SerializedKeypair `json:"bls_others"` // string(crypto.Address) -> SerializedKeypair
 }
 
 // SaveAs is a utility method for saving GenensisDoc as a JSON file.
