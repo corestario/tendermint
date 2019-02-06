@@ -55,7 +55,7 @@ func main() {
 			panic(err)
 		}
 
-		pv := privval.GenFilePV(cfgPath + "priv_validator.json")
+		pv := privval.GenFilePV(cfgPath+"priv_validator.json", cfgPath+"state_file")
 		pv.Save()
 		nodes[i] = node{
 			Key: key,
