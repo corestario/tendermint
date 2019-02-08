@@ -88,11 +88,18 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			_ = os.RemoveAll(outputDir)
 			return err
 		}
+		err = os.MkdirAll(filepath.Join(nodeDir, "data"), nodeDirPerm)
+		if err != nil {
+			_ = os.RemoveAll(outputDir)
+			return err
+		}
 
 		initFilesWithConfig(config)
 
-		pvFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidator)
-		pv := privval.LoadFilePV(pvFile)
+		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
+		pvStateFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorState)
+
+		pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
 		genVals[i] = types.GenesisValidator{
 			Address: pv.GetPubKey().Address(),
 			PubKey:  pv.GetPubKey(),
@@ -152,6 +159,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		config.P2P.AddrBookStrict = false
+		config.P2P.AllowDuplicateIP = true
 		if populatePersistentPeers {
 			config.P2P.PersistentPeers = persistentPeers
 		}
