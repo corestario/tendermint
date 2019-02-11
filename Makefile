@@ -345,7 +345,7 @@ build-slate:
 	bash scripts/slate.sh
 
 install_bls:
-	cd dgaming-crypto/go/bls && sudo cp {bls/lib/libbls384.dylib,mcl/lib/libmclbn384.dylib,mcl/lib/libmcl.dylib} /usr/local/lib/ && cd -
+	cd dgaming-crypto/go/bls && cp -t /usr/local/lib/ bls/lib/libbls384.dylib mcl/lib/libmclbn384.dylib mcl/lib/libmcl.dylib
 
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
