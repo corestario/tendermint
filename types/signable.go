@@ -154,3 +154,13 @@ func (m *MockVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) e
 func (m *MockVerifier) Recover(precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
+
+type DKGShare struct {
+	UserID  int
+	RoundID int
+	Share   []byte
+}
+
+func (m *DKGShare) ValidateBasic() error {
+	return nil
+}

@@ -83,6 +83,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 				Pub: types.SolitaireBLSVerifierPubKey,
 			},
 		}
+		genDoc.DKGNumBlocks = 5
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err

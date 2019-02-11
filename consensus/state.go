@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
-	"github.com/pkg/errors"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
@@ -24,6 +24,8 @@ import (
 
 //-----------------------------------------------------------------------------
 // Errors
+
+const criticalValidatorsRatio = 0.7
 
 var (
 	ErrInvalidProposalSignature = errors.New("Error invalid proposal signature")
@@ -135,6 +137,17 @@ type ConsensusState struct {
 	metrics *Metrics
 
 	verifier types.Verifier
+
+	dkgMsgQueue            chan msgInfo
+	dkgLastValidators      *types.ValidatorSet
+	dkgRoundActive         bool
+	dkgShares              []*types.DKGShare
+	dkgID                  int
+	dkgNumBlocks           int64
+	dkgValidatorsThreshold float64
+	dkgRoundID             int
+	dkgStopTheWorld        bool
+	dkgStopTheWorldCh      chan struct{}
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -151,35 +164,43 @@ func NewConsensusState(
 	options ...StateOption,
 ) *ConsensusState {
 	cs := &ConsensusState{
-		config:           config,
-		blockExec:        blockExec,
-		blockStore:       blockStore,
-		txNotifier:       txNotifier,
-		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
-		internalMsgQueue: make(chan msgInfo, msgQueueSize),
-		timeoutTicker:    NewTimeoutTicker(),
-		statsMsgQueue:    make(chan msgInfo, msgQueueSize),
-		done:             make(chan struct{}),
-		doWALCatchup:     true,
-		wal:              nilWAL{},
-		evpool:           evpool,
-		evsw:             tmevents.NewEventSwitch(),
-		metrics:          NopMetrics(),
+		config:            config,
+		blockExec:         blockExec,
+		blockStore:        blockStore,
+		txNotifier:        txNotifier,
+		peerMsgQueue:      make(chan msgInfo, msgQueueSize),
+		internalMsgQueue:  make(chan msgInfo, msgQueueSize),
+		timeoutTicker:     NewTimeoutTicker(),
+		statsMsgQueue:     make(chan msgInfo, msgQueueSize),
+		done:              make(chan struct{}),
+		doWALCatchup:      true,
+		wal:               nilWAL{},
+		evpool:            evpool,
+		evsw:              tmevents.NewEventSwitch(),
+		metrics:           NopMetrics(),
+		dkgMsgQueue:       make(chan msgInfo, msgQueueSize),
+		dkgStopTheWorldCh: make(chan struct{}, 1),
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
 
+	for _, option := range options {
+		option(cs)
+	}
+	if cs.dkgNumBlocks == 0 {
+		cs.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
+	}
+
+	cs.dkgLastValidators = state.Validators
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
 	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
-	for _, option := range options {
-		option(cs)
-	}
+
 	return cs
 }
 
@@ -200,6 +221,10 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 
 func WithVerifier(verifier types.Verifier) StateOption {
 	return func(cs *ConsensusState) { cs.verifier = verifier }
+}
+
+func WithDKGNumBlocks(numBlocks int64) StateOption {
+	return func(cs *ConsensusState) { cs.dkgNumBlocks = numBlocks }
 }
 
 // StateMetrics sets the metrics.
@@ -437,6 +462,10 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
+
+	if height%cs.dkgNumBlocks == 0 {
+		cs.startDKGRound()
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -624,7 +653,24 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		rs := cs.RoundState
 		var mi msgInfo
 
+		// Only handle DKG-related messages.
+		if cs.dkgStopTheWorld {
+			func() {
+				for {
+					select {
+					case <-cs.dkgStopTheWorldCh:
+						// Go on with regular messages.
+						return
+					case msg := <-cs.dkgMsgQueue:
+						cs.handleDKGShare(msg)
+					}
+				}
+			}()
+		}
+
 		select {
+		case msg := <-cs.dkgMsgQueue:
+			cs.handleDKGShare(msg)
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -672,7 +718,6 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
-
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err := cs.tryAddVote(msg.Vote, peerID)
@@ -1333,6 +1378,16 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	fail.Fail() // XXX
 
+	validatorsRatio := cs.getValidatorsRatio(cs.dkgLastValidators, stateCopy.Validators)
+	if validatorsRatio < criticalValidatorsRatio {
+		// We haven't got enough validators to go on, stop the world, start DKG.
+		cs.dkgStopTheWorld = true
+		cs.startDKGRound()
+	} else if validatorsRatio < cs.dkgValidatorsThreshold {
+		// To many validators rotated, we must preemptively start DKG.
+		cs.startDKGRound()
+	}
+
 	// must be called before we update state
 	cs.recordMetrics(height, block)
 
@@ -1675,7 +1730,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommitWait(height, vote.Round)
 		}
-
 	default:
 		panic(fmt.Sprintf("Unexpected vote type %X", vote.Type)) // go-wire should prevent this.
 	}

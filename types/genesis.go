@@ -43,7 +43,8 @@ type GenesisDoc struct {
 	AppState        json.RawMessage                   `json:"app_state,omitempty"`
 	BLSMasterPubKey string                            `json:"bls_master_pub_key"`
 	BLSKeypair      *bls.SerializedKeypair            `json:"bls_keypair"`
-	Others          map[string]*bls.SerializedKeypair `json:"bls_others"` // string(crypto.Address) -> SerializedKeypair
+	Others          map[string]*bls.SerializedKeypair `json:"bls_others"`         // string(crypto.Address) -> SerializedKeypair
+	DKGNumBlocks    int64                             `json:"dkg_trigger_height"` // Trigger DKG after this number of blocks added
 }
 
 // SaveAs is a utility method for saving GenensisDoc as a JSON file.
