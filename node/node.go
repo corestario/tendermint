@@ -322,6 +322,10 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
+	if genDoc.BLSKeypair == nil {
+		return nil, errors.New("failed to load BLS keypair: the BLS data should be in the Genesis")
+	}
+
 	keypair, err := genDoc.BLSKeypair.Keypair()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
@@ -330,6 +334,7 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
+
 	others := map[string]*bls.Keypair{}
 	for addr, serializedKeypair := range genDoc.Others {
 		otherKeypair, err := serializedKeypair.KeypairNoPriv()
