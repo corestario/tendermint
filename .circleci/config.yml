@@ -20,6 +20,9 @@ jobs:
     steps:
       - run: mkdir -p /tmp/workspace/bin
       - run: mkdir -p /tmp/workspace/profiles
+      - add_ssh_keys:
+          fingerprints:
+            - "b9:c8:88:e3:6d:24:5a:6d:bd:8b:a1:2a:ce:30:24:78"      
       - checkout
       - run:
           name: submodules
