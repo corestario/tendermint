@@ -21,7 +21,7 @@ jobs:
       - run: mkdir -p /tmp/workspace/bin
       - run: mkdir -p /tmp/workspace/profiles
       - checkout
-      - run
+      - run:
           name: submodules
           command: |
               git submodule sync && git submodule update --init
