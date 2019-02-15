@@ -23,7 +23,7 @@ jobs:
       - checkout
       - run
         name: submodules
-        command: - run: |
+        command: |
           git submodule sync && git submodule update --init
       - restore_cache:
           keys:
