@@ -22,9 +22,9 @@ jobs:
       - run: mkdir -p /tmp/workspace/profiles
       - checkout
       - run
-        name: submodules
-        command: |
-          git submodule sync && git submodule update --init
+          name: submodules
+          command: |
+              git submodule sync && git submodule update --init
       - restore_cache:
           keys:
             - v3-pkg-cache
