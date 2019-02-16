@@ -22,7 +22,7 @@ jobs:
       - run: mkdir -p /tmp/workspace/profiles
       - add_ssh_keys:
           fingerprints:
-            - "cd:6d:b8:55:8b:14:fe:8b:d9:f5:15:12:2e:bc:4f:da"      
+            - "d0:ea:1f:49:b4:8b:27:63:48:92:d4:75:99:8b:79:ca"      
       - checkout
       - run:
           name: submodules
