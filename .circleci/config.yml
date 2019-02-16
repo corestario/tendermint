@@ -6,6 +6,7 @@ defaults: &defaults
     - image: circleci/golang:1.11.4
   environment:
     GOBIN: /tmp/workspace/bin
+    CGO_ENABLED: 1
 
 docs_update_config: &docs_update_config
   working_directory: ~/repo
