@@ -86,10 +86,6 @@ func (cs *ConsensusState) finishDKGRound() {
 }
 
 func (cs *ConsensusState) getValidatorsRatio(oldValidators, newValidators *types.ValidatorSet) float64 {
-	if cs.dkgRoundID > 0 && cs.dkgRoundID%2 == 0 {
-
-		return 0.5
-	}
 	set := make(map[string]struct{})
 	for _, validator := range oldValidators.Validators {
 		set[validator.Address.String()] = struct{}{}
