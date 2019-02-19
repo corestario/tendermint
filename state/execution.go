@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -213,6 +214,8 @@ func (blockExec *BlockExecutor) Commit(
 		"Committed state",
 		"height", block.Height,
 		"txs", block.NumTxs,
+		"rnd", big.NewInt(0).SetBytes(block.Header.RandomData),
+		"rndHash", block.Header.RandomHash.String(),
 		"appHash", fmt.Sprintf("%X", res.Data),
 	)
 
