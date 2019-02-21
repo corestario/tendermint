@@ -78,21 +78,4 @@ func (cs *ConsensusState) startDKGRound() bool {
 func (cs *ConsensusState) finishDKGRound() {
 	cs.dkgLastValidators = cs.Validators
 	cs.dkgRoundActive = false
-
-	if cs.dkgStopTheWorld {
-		cs.dkgStopTheWorld = false
-		cs.dkgStopTheWorldCh <- struct{}{}
-	}
-}
-
-func (cs *ConsensusState) getValidatorsRatio(oldValidators, newValidators *types.ValidatorSet) float64 {
-	set := make(map[string]struct{})
-	for _, validator := range oldValidators.Validators {
-		set[validator.Address.String()] = struct{}{}
-	}
-	for _, validator := range newValidators.Validators {
-		set[validator.Address.String()] = struct{}{}
-	}
-
-	return float64(len(set)) / float64(len(oldValidators.Validators))
 }

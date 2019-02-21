@@ -146,8 +146,6 @@ type ConsensusState struct {
 	dkgNumBlocks           int64
 	dkgValidatorsThreshold float64
 	dkgRoundID             int
-	dkgStopTheWorld        bool
-	dkgStopTheWorldCh      chan struct{}
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -164,22 +162,21 @@ func NewConsensusState(
 	options ...StateOption,
 ) *ConsensusState {
 	cs := &ConsensusState{
-		config:            config,
-		blockExec:         blockExec,
-		blockStore:        blockStore,
-		txNotifier:        txNotifier,
-		peerMsgQueue:      make(chan msgInfo, msgQueueSize),
-		internalMsgQueue:  make(chan msgInfo, msgQueueSize),
-		timeoutTicker:     NewTimeoutTicker(),
-		statsMsgQueue:     make(chan msgInfo, msgQueueSize),
-		done:              make(chan struct{}),
-		doWALCatchup:      true,
-		wal:               nilWAL{},
-		evpool:            evpool,
-		evsw:              tmevents.NewEventSwitch(),
-		metrics:           NopMetrics(),
-		dkgMsgQueue:       make(chan msgInfo, msgQueueSize),
-		dkgStopTheWorldCh: make(chan struct{}, 1),
+		config:           config,
+		blockExec:        blockExec,
+		blockStore:       blockStore,
+		txNotifier:       txNotifier,
+		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
+		internalMsgQueue: make(chan msgInfo, msgQueueSize),
+		timeoutTicker:    NewTimeoutTicker(),
+		statsMsgQueue:    make(chan msgInfo, msgQueueSize),
+		done:             make(chan struct{}),
+		doWALCatchup:     true,
+		wal:              nilWAL{},
+		evpool:           evpool,
+		evsw:             tmevents.NewEventSwitch(),
+		metrics:          NopMetrics(),
+		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -652,21 +649,6 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 		rs := cs.RoundState
 		var mi msgInfo
-
-		// Only handle DKG-related messages.
-		if cs.dkgStopTheWorld {
-			func() {
-				for {
-					select {
-					case <-cs.dkgStopTheWorldCh:
-						// Go on with regular messages.
-						return
-					case msg := <-cs.dkgMsgQueue:
-						cs.handleDKGShare(msg)
-					}
-				}
-			}()
-		}
 
 		select {
 		case msg := <-cs.dkgMsgQueue:
@@ -1377,16 +1359,6 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	fail.Fail() // XXX
-
-	validatorsRatio := cs.getValidatorsRatio(cs.dkgLastValidators, stateCopy.Validators)
-	if validatorsRatio < criticalValidatorsRatio {
-		// We haven't got enough validators to go on, stop the world, start DKG.
-		cs.dkgStopTheWorld = true
-		cs.startDKGRound()
-	} else if validatorsRatio < cs.dkgValidatorsThreshold {
-		// To many validators rotated, we must preemptively start DKG.
-		cs.startDKGRound()
-	}
 
 	// must be called before we update state
 	cs.recordMetrics(height, block)
