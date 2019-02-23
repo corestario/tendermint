@@ -202,6 +202,22 @@
   version = "v1.1.2"
 
 [[projects]]
+  digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
+  name = "github.com/modern-go/concurrent"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94"
+  version = "1.0.3"
+
+[[projects]]
+  digest = "1:e32bdbdb7c377a07a9a46378290059822efdce5c8d96fe71940d87cb4f918855"
+  name = "github.com/modern-go/reflect2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
+  version = "1.0.1"
+
+[[projects]]
   digest = "1:95741de3af260a92cc5c7f3f3061e85273f5a81b5db20d4bd68da74bd521675e"
   name = "github.com/pelletier/go-toml"
   packages = ["."]
@@ -384,10 +400,38 @@
   version = "v0.14.1"
 
 [[projects]]
-  digest = "1:00d2b3e64cdc3fa69aa250dfbe4cc38c4837d4f37e62279be2ae52107ffbbb44"
+  digest = "1:2cf5429a1fe81a02ccd2fbc6e94a4ac98e0f7c2e6bd24d6377d10edd4d1381ce"
+  name = "go.dedis.ch/fixbuf"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2753155a63fc1940412f88b734e68777189f3f92"
+  version = "v1.0.3"
+
+[[projects]]
+  digest = "1:1af470039aaee5182cf61fb541fda4687616d6411fb02e3e199fe87895d720f8"
+  name = "go.dedis.ch/kyber"
+  packages = [
+    ".",
+    "group/internal/marshalling",
+    "group/mod",
+    "pairing",
+    "pairing/bn256",
+    "share",
+    "sign/bls",
+    "sign/tbls",
+    "util/random",
+    "xof/blake2xb",
+  ]
+  pruneopts = "UT"
+  revision = "ffb71910365195c4510c86015eefc677010f7fdb"
+  version = "v3.0.0-pre1"
+
+[[projects]]
+  digest = "1:6f185ce68f6d58e337cf82c967553db900e16f074b4ffd38d92ada6d5f2a90ed"
   name = "golang.org/x/crypto"
   packages = [
     "bcrypt",
+    "blake2b",
     "blowfish",
     "chacha20poly1305",
     "curve25519",
@@ -545,6 +589,11 @@
     "github.com/syndtr/goleveldb/leveldb/opt",
     "github.com/tendermint/btcd/btcec",
     "github.com/tendermint/go-amino",
+    "go.dedis.ch/kyber",
+    "go.dedis.ch/kyber/pairing/bn256",
+    "go.dedis.ch/kyber/share",
+    "go.dedis.ch/kyber/sign/bls",
+    "go.dedis.ch/kyber/sign/tbls",
     "golang.org/x/crypto/bcrypt",
     "golang.org/x/crypto/chacha20poly1305",
     "golang.org/x/crypto/curve25519",
