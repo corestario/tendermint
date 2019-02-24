@@ -408,7 +408,7 @@ workflows:
       - localnet:
           requires:
             - setup_dependencies
-      - test_p2p
+      - test_p2p:
           requires:
             - setup_dependencies
       - upload_coverage:
