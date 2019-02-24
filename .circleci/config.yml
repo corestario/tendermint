@@ -40,12 +40,22 @@ jobs:
           name: dependencies
           command: |
             export PATH="$GOBIN:$PATH"
-            make get_vendor_deps
+            make get_vendor_deps 
+      - run:
+          name: install_bls
+          command: |
+            export PATH="$GOBIN:$PATH"
+            make install_bls            
+      - run:
+          name: build
+          command: |
+            export PATH="$GOBIN:$PATH"
+            make build
       - run:
           name: binaries
           command: |
             export PATH="$GOBIN:$PATH"
-            make install_c install_abci
+            make install install_abci            
       - persist_to_workspace:
           root: /tmp/workspace
           paths:
