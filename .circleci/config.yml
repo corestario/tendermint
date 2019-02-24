@@ -41,11 +41,11 @@ jobs:
           command: |
             export PATH="$GOBIN:$PATH"
             make get_vendor_deps 
-      - run:
-          name: install_bls
-          command: |
-            export PATH="$GOBIN:$PATH"
-            make install_bls            
+      #- run:
+      #    name: install_bls
+      #    command: |
+      #      export PATH="$GOBIN:$PATH"
+      #      make install_bls            
       - run:
           name: build
           command: |
