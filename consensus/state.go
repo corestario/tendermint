@@ -1750,6 +1750,10 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
 	}
+	// If we don't have a verifier, do nothing.
+	if cs.verifier == nil {
+		return nil
+	}
 	vote, err := cs.signVote(type_, hash, header, data)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})

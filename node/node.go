@@ -322,23 +322,27 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
-	keypair, err := genDoc.BLSKeypair.Keypair()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keypair: %v", err)
-	}
-	masterPubKey, err := bls.LoadPubKeyHex(genDoc.BLSMasterPubKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
-	others := map[string]*bls.Keypair{}
-	for addr, serializedKeypair := range genDoc.Others {
-		otherKeypair, err := serializedKeypair.KeypairNoPriv()
+	// Only try to load BLS-related things for yourself if you are a validator.
+	var verifier types.Verifier
+	if !(privValidator == nil || !state.Validators.HasAddress(privValidator.GetPubKey().Address())) {
+		keypair, err := genDoc.BLSKeypair.Keypair()
 		if err != nil {
-			return nil, fmt.Errorf("failed to load other's keypair: %v", err)
+			return nil, fmt.Errorf("failed to load keypair: %v", err)
 		}
-		others[addr] = otherKeypair
+		masterPubKey, err := bls.LoadPubKeyHex(genDoc.BLSMasterPubKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+		}
+		others := map[string]*bls.Keypair{}
+		for addr, serializedKeypair := range genDoc.Others {
+			otherKeypair, err := serializedKeypair.KeypairNoPriv()
+			if err != nil {
+				return nil, fmt.Errorf("failed to load other's keypair: %v", err)
+			}
+			others[addr] = otherKeypair
+		}
+		verifier = types.NewBLSVerifier(masterPubKey, keypair, others)
 	}
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, others)
 
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
