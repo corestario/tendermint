@@ -28,6 +28,10 @@ jobs:
           name: submodules
           command: |
               git submodule sync && git submodule update --init
+      - run: 
+          name: apt_deps
+          command: |
+              sudo apt-get update && sudo apt-get install -y libgmp3-dev
       - restore_cache:
           keys:
             - v3-pkg-cache
@@ -405,6 +409,8 @@ workflows:
           requires:
             - setup_dependencies
       - test_p2p
+          requires:
+            - setup_dependencies
       - upload_coverage:
           requires:
             - test_cover
