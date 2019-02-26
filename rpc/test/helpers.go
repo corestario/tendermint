@@ -130,10 +130,6 @@ func NewTendermint(app abci.Application) *nm.Node {
 	if err != nil {
 		panic(err)
 	}
-	blsKey, err := bls.LoadKeypairFromDisk(blsKeyFile)
-	if err != nil {
-		panic(err)
-	}
 
 	node, err := nm.NewNode(config, pv, nodeKey, blsKey, papp,
 		nm.DefaultGenesisDocProviderFunc(config),

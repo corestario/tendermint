@@ -90,11 +90,6 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 		return nil, err
 	}
 
-	blsKey, err := bls.LoadKeypairFromDisk(config.BLSKeyFile())
-	if err != nil {
-		return nil, err
-	}
-
 	// Convert old PrivValidator if it exists.
 	oldPrivVal := config.OldPrivValidatorFile()
 	newPrivValKey := config.PrivValidatorKeyFile()
@@ -115,7 +110,6 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 	return NewNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		blsKey,
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		DefaultGenesisDocProviderFunc(config),
 		DefaultDBProvider,
@@ -179,7 +173,6 @@ type Node struct {
 func NewNode(config *cfg.Config,
 	privValidator types.PrivValidator,
 	nodeKey *p2p.NodeKey,
-	keypair *bls.Keypair,
 	clientCreator proxy.ClientCreator,
 	genesisDocProvider GenesisDocProvider,
 	dbProvider DBProvider,
@@ -328,6 +321,11 @@ func NewNode(config *cfg.Config,
 		evidencePool,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
+
+	keypair, err := bls.LoadKeypairFromDisk(config.BLSKeyFile())
+	if err != nil {
+		return nil, err
+	}
 
 	masterPubKey, err := bls.LoadPubKeyHex(genDoc.BLSMasterPubKey)
 	if err != nil {
