@@ -42,7 +42,6 @@ type GenesisDoc struct {
 	AppHash         cmn.HexBytes                      `json:"app_hash"`
 	AppState        json.RawMessage                   `json:"app_state,omitempty"`
 	BLSMasterPubKey string                            `json:"bls_master_pub_key"`
-	BLSKeypair      *bls.SerializedKeypair            `json:"bls_keypair"`
 	Others          map[string]*bls.SerializedKeypair `json:"bls_others"` // string(crypto.Address) -> SerializedKeypair
 }
 
