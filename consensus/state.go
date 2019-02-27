@@ -1569,6 +1569,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 
 	// check BLS signatures only if non-nil vote
 	if vote.Type == types.PrecommitType && len(vote.BlockID.Hash) != 0 {
+
 		if len(vote.BLSSignature) == 0 {
 			err = ErrBLSSignatureMissing
 			cs.Logger.Info("Vote ignored and not added. BLS signature is missing", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID)

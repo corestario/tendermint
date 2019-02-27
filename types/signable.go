@@ -70,7 +70,7 @@ func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomD
 	}
 
 	if !sign.Verify(keypair.Pub, string(prevRandomData)) {
-		return errors.New("current signature is corrupt")
+		return fmt.Errorf("current signature is corrupt:\nsign %v\naddress %v\n pubKey %v\nprevRandomStr %q\nprevRandom %v", sign.GetHexString(), addr, keypair.Pub.GetHexString(), string(prevRandomData), prevRandomData)
 	}
 
 	return nil
