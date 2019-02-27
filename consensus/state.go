@@ -30,6 +30,8 @@ var (
 	ErrInvalidProposalPOLRound  = errors.New("Error invalid proposal POL round")
 	ErrAddingVote               = errors.New("Error adding vote")
 	ErrVoteHeightMismatch       = errors.New("Error vote height mismatch")
+	ErrBLSSignatureMissing      = errors.New("Error vote BLS signature is missing")
+	ErrBLSSignatureIncorrect    = errors.New("Error vote BLS signature incorrect")
 )
 
 //-----------------------------------------------------------------------------
@@ -1565,13 +1567,22 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
-	if vote.Type == types.PrecommitType {
-		var (
-			prevBlockData = cs.getPreviousBlock().RandomData
-			validatorAddr = vote.ValidatorAddress.String()
-		)
-		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
-			return false, fmt.Errorf("random share authenticy check failed: %v", err)
+	// check BLS signatures only if non-nil vote
+	if vote.Type == types.PrecommitType && len(vote.BlockID.Hash) != 0 {
+		if len(vote.BLSSignature) == 0 {
+			err = ErrBLSSignatureMissing
+			cs.Logger.Info("Vote ignored and not added. BLS signature is missing", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID)
+			return
+		}
+
+		prevBlockData := cs.getPreviousBlock().RandomData
+		validatorAddr := vote.ValidatorAddress.String()
+
+		err = cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature)
+		if err != nil {
+			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID, "err", err)
+			err = ErrBLSSignatureIncorrect
+			return
 		}
 	}
 
@@ -1664,6 +1675,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommit(height, vote.Round)
 			if len(blockID.Hash) != 0 {
+
 				cs.enterCommit(height, vote.Round)
 				if cs.config.SkipTimeoutCommit && precommits.HasAll() {
 					cs.enterNewRound(cs.Height, 0)
