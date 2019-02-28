@@ -1517,6 +1517,9 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, err
 			}
 			cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence)
 			return added, err
+		} else if err == ErrBLSSignatureIncorrect || err == ErrBLSSignatureMissing {
+			cs.Logger.Error("Error checking BLS signature or block random number", "err", err)
+			return added, err
 		} else {
 			// Probably an invalid signature / Bad peer.
 			// Seems this can also err sometimes with "Unexpected step" - perhaps not from a bad peer ?
@@ -1582,6 +1585,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		err = cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature)
 		if err != nil {
 			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID, "err", err)
+			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect",)
 			err = ErrBLSSignatureIncorrect
 			return
 		}
