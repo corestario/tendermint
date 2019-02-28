@@ -1585,7 +1585,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		err = cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature)
 		if err != nil {
 			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID, "err", err)
-			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect",)
 			err = ErrBLSSignatureIncorrect
 			return
 		}
