@@ -43,12 +43,12 @@ type Verifier interface {
 type BLSVerifier struct {
 	Others       map[string]*bls.Keypair // Other validators' keys.
 	Keypair      *bls.Keypair            // This verifier's Keypair.
-	masterPubKey *bls.PublicKey
+	MasterPubKey *bls.PublicKey          `json:"-"`
 }
 
 func NewBLSVerifier(masterPubKey *bls.PublicKey, keypair *bls.Keypair, others map[string]*bls.Keypair) *BLSVerifier {
 	return &BLSVerifier{
-		masterPubKey: masterPubKey,
+		MasterPubKey: masterPubKey,
 		Keypair:      keypair,
 		Others:       others,
 	}
@@ -82,7 +82,7 @@ func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) er
 		return fmt.Errorf("failed to deserialize current random data: %v", err)
 	}
 
-	if !sign.Verify(m.masterPubKey, string(prevRandomData)) {
+	if !sign.Verify(m.MasterPubKey, string(prevRandomData)) {
 		return errors.New("current signature is corrupt")
 	}
 
@@ -94,17 +94,19 @@ func (m *BLSVerifier) Recover(precommits []*Vote) ([]byte, error) {
 		signs []bls.Sign
 		ids   []bls.ID
 	)
+
 	for _, precommit := range precommits {
 		// Nil votes do exist, keep that in mind.
-		if precommit == nil {
+		if precommit == nil || len(precommit.BlockID.Hash) == 0 || len(precommit.BLSSignature) == 0 {
 			continue
 		}
 
-		addr, sign := string(precommit.ValidatorAddress.String()), new(bls.Sign)
+		addr, sign := precommit.ValidatorAddress.String(), new(bls.Sign)
 		if err := sign.Deserialize(precommit.BLSSignature); err != nil {
 			return nil, fmt.Errorf("failed to read signature %s from %s: %v",
-				string(precommit.BLSSignature), precommit.ValidatorAddress.String(), err)
+				string(precommit.BLSSignature), addr, err)
 		}
+
 		signs, ids = append(signs, *sign), append(ids, *m.Others[addr].Id)
 	}
 

@@ -20,6 +20,7 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
 )
 
 //-----------------------------------------------------------------------------
@@ -1204,10 +1205,29 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	}
 
 	randomData, err := cs.verifier.Recover(precommits.GetVotes())
+	cs.Logger.Debug("BSL recover", "votes", precommits.GetVotes(), "bls", randomData)
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
-	cs.Logger.Info("Generated random data", "rand_data", randomData)
+
+	cs.Logger.Debug("Generated random data", "rand_data", randomData)
+
+	//fixme: only for debug
+	aggrSign := new(bls.Sign)
+	if err := aggrSign.Deserialize(randomData); err != nil {
+		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Deserialize failture: %v", err))
+	}
+	if err := cs.verifier.VerifyRandomData(cs.getPreviousBlock().RandomData, randomData); err != nil {
+		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. VerifyRandomData failture: %v", err))
+	}
+	verifier, ok := cs.verifier.(*types.BLSVerifier)
+	if !ok {
+		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. BLSVerifier interface failture:: %v", err))
+	}
+	if !aggrSign.Verify(verifier.MasterPubKey, string(cs.getPreviousBlock().RandomData)) {
+		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Aggrigated signature virify failture: %v", err))
+	}
+
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
 		cs.ProposalBlock.Header.SetRandomData(randomData)
@@ -1279,8 +1299,8 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	prevBlock := cs.getPreviousBlock()
 	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value." +
-			"Error %q. Prev random %v; new random %v. Votes %v",
-			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.LastCommit.Precommits))
+			"Error %q. Prev random %v; new random %v. Height %v. Votes %v",
+			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit.Precommits))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
