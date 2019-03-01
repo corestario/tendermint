@@ -1297,10 +1297,20 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	prevBlock := cs.getPreviousBlock()
+	if len(prevBlock.Header.RandomData) == 0 {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value for previous block" +
+			"Prev random %v; new random %v. Height %v. Votes %v",
+			prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
+	}
+	if len(block.Header.RandomData) == 0 {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value for new block" +
+			"Prev random %v; new random %v. Height %v. Votes %v",
+			prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
+	}
 	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value." +
 			"Error %q. Prev random %v; new random %v. Height %v. Votes %v",
-			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit.Precommits))
+			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
