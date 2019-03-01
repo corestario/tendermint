@@ -1114,6 +1114,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		if err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock); err != nil {
 			cmn.PanicConsensus(fmt.Sprintf("enterPrecommit: +2/3 prevoted for an invalid block: %v", err))
 		}
+
 		cs.LockedRound = round
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
@@ -1277,7 +1278,9 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	prevBlock := cs.getPreviousBlock()
 	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value"))
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value." +
+			"Error %q. Prev random %v; new random %v. Votes %v",
+			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.LastCommit.Precommits))
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
