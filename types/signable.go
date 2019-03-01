@@ -43,12 +43,12 @@ type Verifier interface {
 type BLSVerifier struct {
 	Others       map[string]*bls.Keypair // Other validators' keys.
 	Keypair      *bls.Keypair            // This verifier's Keypair.
-	MasterPubKey *bls.PublicKey          `json:"-"`
+	masterPubKey *bls.PublicKey
 }
 
 func NewBLSVerifier(masterPubKey *bls.PublicKey, keypair *bls.Keypair, others map[string]*bls.Keypair) *BLSVerifier {
 	return &BLSVerifier{
-		MasterPubKey: masterPubKey,
+		masterPubKey: masterPubKey,
 		Keypair:      keypair,
 		Others:       others,
 	}
@@ -82,7 +82,7 @@ func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) er
 		return fmt.Errorf("failed to deserialize current random data: %v", err)
 	}
 
-	if !sign.Verify(m.MasterPubKey, string(prevRandomData)) {
+	if !sign.Verify(m.masterPubKey, string(prevRandomData)) {
 		return errors.New("current signature is corrupt")
 	}
 

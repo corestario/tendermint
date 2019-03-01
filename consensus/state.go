@@ -20,7 +20,6 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
 )
 
 //-----------------------------------------------------------------------------
@@ -1213,6 +1212,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	cs.Logger.Debug("Generated random data", "rand_data", randomData)
 
 	//fixme: only for debug
+	/*
 	aggrSign := new(bls.Sign)
 	if err := aggrSign.Deserialize(randomData); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Deserialize failture: %v", err))
@@ -1224,9 +1224,10 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	if !ok {
 		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. BLSVerifier interface failture:: %v", err))
 	}
-	if !aggrSign.Verify(verifier.MasterPubKey, string(cs.getPreviousBlock().RandomData)) {
+	if !aggrSign.Verify(verifier.masterPubKey, string(cs.getPreviousBlock().RandomData)) {
 		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Aggrigated signature virify failture: %v", err))
 	}
+	*/
 
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
