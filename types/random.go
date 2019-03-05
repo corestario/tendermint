@@ -195,7 +195,7 @@ type Verifier interface {
 }
 
 type BLSVerifier struct {
-	Others       map[string]int // Other validators' keys.
+	Others       map[string]int // string(crypto.Address) -> verifier's tbls ID.
 	Keypair      *BLSShare      // This verifier's BLSShare.
 	masterPubKey *share.PubPoly
 	suite        *bn256.Suite
