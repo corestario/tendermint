@@ -1114,7 +1114,6 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		if err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock); err != nil {
 			cmn.PanicConsensus(fmt.Sprintf("enterPrecommit: +2/3 prevoted for an invalid block: %v", err))
 		}
-
 		cs.LockedRound = round
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
@@ -1208,27 +1207,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
-
-	cs.Logger.Debug("Generated random data", "rand_data", randomData)
-
-	//fixme: only for debug
-	/*
-	aggrSign := new(bls.Sign)
-	if err := aggrSign.Deserialize(randomData); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Deserialize failture: %v", err))
-	}
-	if err := cs.verifier.VerifyRandomData(cs.getPreviousBlock().RandomData, randomData); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. VerifyRandomData failture: %v", err))
-	}
-	verifier, ok := cs.verifier.(*types.BLSVerifier)
-	if !ok {
-		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. BLSVerifier interface failture:: %v", err))
-	}
-	if !aggrSign.Verify(verifier.masterPubKey, string(cs.getPreviousBlock().RandomData)) {
-		cmn.PanicSanity(fmt.Sprintf("BLS rechecking. Aggrigated signature virify failture: %v", err))
-	}
-	*/
-
+	cs.Logger.Info("Generated random data", "rand_data", randomData)
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
 		cs.ProposalBlock.Header.SetRandomData(randomData)
@@ -1713,7 +1692,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommit(height, vote.Round)
 			if len(blockID.Hash) != 0 {
-
 				cs.enterCommit(height, vote.Round)
 				if cs.config.SkipTimeoutCommit && precommits.HasAll() {
 					cs.enterNewRound(cs.Height, 0)

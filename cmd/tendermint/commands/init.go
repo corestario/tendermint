@@ -53,7 +53,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
-	//todo what should we do if bls key not exsists
+	//todo what should we do if bls key does not exsist
 	blsKeyFile := config.BLSKeyFile()
 	if cmn.FileExists(blsKeyFile) {
 		logger.Info("Found node key", "path", blsKeyFile)
@@ -84,12 +84,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
 		genDoc.BLSMasterPubKey = types.SolitaireBLSVerifierMasterPubKey
-		//todo load from file
-		//genDoc.BLSKeypair = &bls.SerializedKeypair{
-		//	Id:   types.SolitaireBLSVerifierID,
-		//	Pub:  types.SolitaireBLSVerifierPubKey,
-		//	Priv: types.SolitaireBLSVerifierPrivKey,
-		//}
 		genDoc.Others = map[string]*bls.SerializedKeypair{
 			pv.GetPubKey().Address().String(): {
 				Id:  types.SolitaireBLSVerifierID,

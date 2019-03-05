@@ -3,7 +3,6 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"github.com/JekaMas/go-ethereum/log"
 	"strings"
 	"sync"
 
@@ -190,11 +189,6 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	if err := vote.Verify(voteSet.chainID, val.PubKey); err != nil {
 		return false, errors.Wrapf(err, "Failed to verify vote with ChainID %s and PubKey %s", voteSet.chainID, val.PubKey)
 	}
-
-	log.Debug("got vote", "voterAddress", val.PubKey.Address(), "voteBlockHash", vote.BlockID.Hash.String(), "setChainID", voteSet.chainID,
-		"BLS", vote.BLSSignature, "voteType", vote.Type,
-		"voteHeight", vote.Height, "voteRound", vote.Round,
-		"setHeight", voteSet.height, "setRound", voteSet.round)
 
 	// Add vote and get conflicting vote if any.
 	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
