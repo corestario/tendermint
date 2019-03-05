@@ -313,11 +313,3 @@ func (m *MockVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) e
 func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
-
-//type mockRandstream struct{}
-//
-//func (r *mockRandstream) XORKeyStream(dst, src []byte) {
-//	for idx := range dst {
-//		dst[idx] = byte(idx)
-//	}
-//}
