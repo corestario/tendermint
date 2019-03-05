@@ -9,13 +9,6 @@ import (
 	"testing"
 )
 
-func TestOMG(t *testing.T) {
-	keyring, _ := NewBLSKeyring(1, 4)
-	if err := DumpBLSKeyring(keyring, "/Users/andrei/tmp"); err != nil {
-		panic(err)
-	}
-}
-
 func TestDumpLoad(t *testing.T) {
 	var targetDir = filepath.Join(os.TempDir(), "go-bls-test")
 	defer func() {
