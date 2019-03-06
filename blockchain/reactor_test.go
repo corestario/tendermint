@@ -114,7 +114,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		if blockHeight == 1 {
 			thisBlock.RandomData = []byte(types.InitialRandomData)
 		} else {
-			aggrSign, err := testVerifier.Recover([]*types.Vote{
+			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []*types.Vote{
 				{
 					ValidatorAddress: state.Validators.Validators[0].Address,
 					BLSSignature:     testVerifier.Sign(prevBlock.RandomData),

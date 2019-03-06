@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
-
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -322,28 +320,20 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
-	if genDoc.BLSKeypair == nil {
+	if genDoc.BLSShare == nil {
 		return nil, errors.New("failed to load BLS keypair: the BLS data should be in the Genesis")
 	}
 
-	keypair, err := genDoc.BLSKeypair.Keypair()
+	keypair, err := genDoc.BLSShare.Deserialize()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}
-	masterPubKey, err := bls.LoadPubKeyHex(genDoc.BLSMasterPubKey)
+	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
 
-	others := map[string]*bls.Keypair{}
-	for addr, serializedKeypair := range genDoc.Others {
-		otherKeypair, err := serializedKeypair.KeypairNoPriv()
-		if err != nil {
-			return nil, fmt.Errorf("failed to load other's keypair: %v", err)
-		}
-		others[addr] = otherKeypair
-	}
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, others)
+	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.Others, genDoc.BLSThreshold, genDoc.BLSNumShares)
 
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
