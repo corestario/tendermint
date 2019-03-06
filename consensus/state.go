@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"go.dedis.ch/kyber/share"
+
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
@@ -1330,6 +1332,12 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
+	if !cs.state.Validators.Equals(stateCopy.Validators) {
+		if err := cs.loadNewVerifier(); err != nil {
+			cmn.PanicSanity(fmt.Sprintf("Could not loadNewVerifier: %v", err))
+		}
+	}
+
 	fail.Fail() // XXX
 
 	// must be called before we update state
@@ -1744,6 +1752,26 @@ func (cs *ConsensusState) getPreviousBlock() *types.Block {
 	}
 
 	return prevBlock
+}
+
+func (cs *ConsensusState) loadNewVerifier() error {
+	info, err := cs.loadBLSInfo()
+	if err != nil {
+		return fmt.Errorf("failed to loadBLSInfo(): %v", err)
+	}
+	cs.verifier = types.NewBLSVerifier(info.masterPubKey, info.share, info.others, info.t, info.n)
+}
+
+func (cs *ConsensusState) loadBLSInfo() (*blsInfo, error) {
+	return nil, nil // Mock!
+}
+
+type blsInfo struct {
+	t            int
+	n            int
+	masterPubKey *share.PubPoly
+	share        *types.BLSShare
+	others       map[string]int
 }
 
 //---------------------------------------------------------

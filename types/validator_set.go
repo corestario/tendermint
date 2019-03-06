@@ -488,6 +488,20 @@ func (vals *ValidatorSet) StringIndented(indent string) string {
 
 }
 
+func (vals *ValidatorSet) Equals(other *ValidatorSet) bool {
+	if len(vals.Validators) != len(other.Validators) {
+		return false
+	}
+
+	for _, validator := range vals.Validators {
+		if !other.HasAddress(validator.Address.Bytes()) {
+			return false
+		}
+	}
+
+	return true
+}
+
 //-------------------------------------
 // Implements sort for sorting validators by address.
 
