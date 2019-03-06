@@ -2,11 +2,14 @@ package consensus
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/db"
 
 	"go.dedis.ch/kyber/share"
 
@@ -38,6 +41,12 @@ var (
 
 var (
 	msgQueueSize = 1000
+)
+
+var (
+	masterPubKeyK = []byte("bls_master_pub_key")
+	shareK        = []byte("bls_share")
+	othersK       = []byte("bls_others")
 )
 
 // msgs from the reactor which may update the state
@@ -137,6 +146,8 @@ type ConsensusState struct {
 	metrics *Metrics
 
 	verifier types.Verifier
+
+	stateDB db.DB
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -202,6 +213,10 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 
 func WithVerifier(verifier types.Verifier) StateOption {
 	return func(cs *ConsensusState) { cs.verifier = verifier }
+}
+
+func WithStateDB(stateDB db.DB) {
+	return func(cs *ConsensusState) { cs.stateDB = stateDB }
 }
 
 // StateMetrics sets the metrics.
@@ -1763,7 +1778,30 @@ func (cs *ConsensusState) loadNewVerifier() error {
 }
 
 func (cs *ConsensusState) loadBLSInfo() (*blsInfo, error) {
-	return nil, nil // Mock!
+	if !cs.stateDB.Has(masterPubKeyK) {
+		return nil, errors.New("failed to find master public key in state DB")
+	}
+	if !cs.stateDB.Has(shareK) {
+		return nil, errors.New("failed to find share in state DB")
+	}
+	if !cs.stateDB.Has(masterPubKeyK) {
+		return nil, errors.New("failed to find others info in state DB")
+	}
+
+	var others = map[string]int{}
+	if err := json.Unmarshal(cs.stateDB.Get(othersK), others); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal others info: %v", err)
+	}
+
+	masterPubKey, err := types.LoadPubKey(string(cs.stateDB.Get(masterPubKeyK)), len(others))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load  master public key: %v", err)
+	}
+
+	return &blsInfo{
+		masterPubKey: masterPubKey,
+		others:       others,
+	}, nil
 }
 
 type blsInfo struct {
