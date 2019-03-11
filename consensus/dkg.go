@@ -69,7 +69,6 @@ func (cs *ConsensusState) startDKGRound() bool {
 
 	cs.dkgRoundID++
 	cs.dkgRoundActive = true
-
 	cs.sendDKGShare()
 
 	return true

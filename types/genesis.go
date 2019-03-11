@@ -43,7 +43,7 @@ type GenesisDoc struct {
 	BLSNumShares    int                `json:"bls_num_shares"`
 	BLSMasterPubKey string             `json:"bls_master_pub_key"`
 	BLSShare        *BLSShareJSON      `json:"bls_share"`
-	Others          map[string]int     `json:"bls_others"` // string(crypto.Address) -> verifier's tbls ID
+	Others          map[string]int     `json:"bls_others"`     // string(crypto.Address) -> verifier's tbls ID
 	DKGNumBlocks    int64              `json:"dkg_hum_blocks"` // Trigger DKG after this number of blocks added
 }
 
