@@ -16,7 +16,6 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	}
 
 	var share = msg.Share
-
 	if !cs.dkgRoundActive {
 		cs.Logger.Info("rejecting dkg share message (not inside DKG iteration): %v", share)
 		return
@@ -29,7 +28,6 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	}
 
 	cs.dkgShares = append(cs.dkgShares, share)
-
 	if len(cs.dkgShares) >= len(cs.Validators.Validators) {
 		if err := cs.buildNewVerifier(); err != nil {
 			cs.Logger.Info("failed to build new verifier: %v", err)
