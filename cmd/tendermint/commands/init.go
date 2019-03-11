@@ -5,8 +5,6 @@ import (
 	"html/template"
 	"os"
 
-	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
-
 	"github.com/spf13/cobra"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -71,18 +69,17 @@ func initFilesWithConfig(config *cfg.Config) error {
 		}}
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
-		genDoc.BLSMasterPubKey = types.SolitaireBLSVerifierMasterPubKey
-		genDoc.BLSKeypair = &bls.SerializedKeypair{
-			Id:   types.SolitaireBLSVerifierID,
-			Pub:  types.SolitaireBLSVerifierPubKey,
-			Priv: types.SolitaireBLSVerifierPrivKey,
+		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
+		genDoc.BLSShare = &types.BLSShareJSON{
+			ID:   types.DefaultBLSVerifierID,
+			Pub:  types.DefaultBLSVerifierPubKey,
+			Priv: types.DefaultBLSVerifierPrivKey,
 		}
-		genDoc.Others = map[string]*bls.SerializedKeypair{
-			pv.GetPubKey().Address().String(): {
-				Id:  types.SolitaireBLSVerifierID,
-				Pub: types.SolitaireBLSVerifierPubKey,
-			},
+		genDoc.Others = map[string]int{
+			pv.GetPubKey().Address().String(): types.DefaultBLSVerifierID,
 		}
+		genDoc.BLSThreshold = 1
+		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 5
 
 		if err := genDoc.SaveAs(genFile); err != nil {

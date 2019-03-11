@@ -107,3 +107,7 @@
 [prune]
   go-tests = true
   unused-packages = true
+
+[[constraint]]
+  name = "go.dedis.ch/kyber"
+  version = "3.0.0-pre1"
