@@ -324,12 +324,25 @@ func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
 
-type DKGShare struct {
-	UserID  int
-	RoundID int
-	Share   []byte
+type DKGInfoType byte
+
+const (
+	DKGDeal              DKGInfoType = 1
+	DKGResponse          DKGInfoType = 2
+	DKGJustification     DKGInfoType = 3
+	DKGCommit            DKGInfoType = 4
+	DKGComplaint         DKGInfoType = 5
+	DKGReconstructCommit DKGInfoType = 6
+)
+
+type DKGMessage struct {
+	Type          DKGInfoType
+	ParticipantID int
+	RoundID       int
+	Data          []byte
+	Meta          map[int][]byte
 }
 
-func (m *DKGShare) ValidateBasic() error {
+func (m *DKGMessage) ValidateBasic() error {
 	return nil
 }

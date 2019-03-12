@@ -3,46 +3,50 @@ package consensus
 import (
 	"reflect"
 
-	"github.com/tendermint/tendermint/libs/common"
-
 	"github.com/tendermint/tendermint/types"
 )
 
 func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
-	msg, ok := mi.Msg.(*DKGShareMessage)
-	if !ok {
-		cs.Logger.Info("rejecting dkg share message (unknown type): %v", reflect.TypeOf(msg).Name())
-		return
-	}
-
-	var share = msg.Share
 	if !cs.dkgRoundActive {
-		cs.Logger.Info("rejecting dkg share message (not inside DKG iteration): %v", share)
+		cs.Logger.Info("rejecting dkg message (not inside DKG iteration): %v", mi.Msg)
 		return
 	}
 
-	if share.RoundID != cs.dkgRoundID {
-		cs.Logger.Info("rejecting dkg share message (invalid DKG round id): %v (has %d, want %d)",
-			share, cs.dkgRoundID, share.RoundID)
+	dkgMsg, ok := mi.Msg.(*DKGMessageMessage)
+	if !ok {
+		cs.Logger.Info("rejecting dkg message (unknown type): %v", reflect.TypeOf(dkgMsg).Name())
 		return
 	}
 
-	cs.dkgShares = append(cs.dkgShares, share)
-	if len(cs.dkgShares) >= len(cs.Validators.Validators) {
-		if err := cs.buildNewVerifier(); err != nil {
-			cs.Logger.Info("failed to build new verifier: %v", err)
-			common.PanicSanity("failed to build new verifier")
-		}
+	var msg = dkgMsg.Share
+	if msg.RoundID != cs.dkgRoundID {
+		cs.Logger.Info("rejecting dkg message (invalid DKG round id): %v (has %d, want %d)",
+			msg, cs.dkgRoundID, msg.RoundID)
+		return
+	}
+
+	switch msg.Type {
+	case types.DKGDeal:
+		// pass
+	case types.DKGResponse:
+		// pass
+	case types.DKGJustification:
+		// pass
+	case types.DKGCommit:
+		// pass
+	case types.DKGComplaint:
+		// pass
+	case types.DKGReconstructCommit:
+		// pass
 		cs.finishDKGRound()
 	}
 }
 
-func (cs *ConsensusState) sendDKGShare() {
-	share := cs.produceDKGShare()
+func (cs *ConsensusState) sendDKGMessage(msg *types.DKGMessage) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
-	cs.evsw.FireEvent(types.EventDKGSHare, share)
-	mi := msgInfo{&DKGShareMessage{share}, ""}
+	cs.evsw.FireEvent(types.EventDKGMessage, msg)
+	mi := msgInfo{&DKGMessageMessage{msg}, ""}
 	select {
 	case cs.dkgMsgQueue <- mi:
 	default:
@@ -56,18 +60,22 @@ func (cs *ConsensusState) buildNewVerifier() error {
 	return nil
 }
 
-func (cs *ConsensusState) produceDKGShare() *types.DKGShare {
-	return &types.DKGShare{UserID: cs.dkgID, RoundID: cs.dkgRoundID}
-}
-
 func (cs *ConsensusState) startDKGRound() bool {
 	if cs.dkgRoundActive {
 		return false
 	}
 
+	cs.dkgParticipantID, _ = cs.Validators.GetByAddress(cs.privValidator.GetPubKey().Bytes())
+
 	cs.dkgRoundID++
 	cs.dkgRoundActive = true
-	cs.sendDKGShare()
+	// Deal will be produced by actual DKG implementation, mock for now.
+	var deal = &types.DKGMessage{
+		Type:          types.DKGDeal,
+		RoundID:       cs.dkgRoundID,
+		ParticipantID: cs.dkgParticipantID,
+	}
+	cs.sendDKGMessage(deal)
 
 	return true
 }

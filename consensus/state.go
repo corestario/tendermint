@@ -141,8 +141,8 @@ type ConsensusState struct {
 	dkgMsgQueue            chan msgInfo
 	dkgLastValidators      *types.ValidatorSet
 	dkgRoundActive         bool
-	dkgShares              []*types.DKGShare
-	dkgID                  int
+	dkgShares              []*types.DKGMessage
+	dkgParticipantID       int
 	dkgNumBlocks           int64
 	dkgValidatorsThreshold float64
 	dkgRoundID             int

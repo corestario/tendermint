@@ -26,7 +26,7 @@ const (
 	EventValidBlock          = "ValidBlock"
 	EventValidatorSetUpdates = "ValidatorSetUpdates"
 	EventVote                = "Vote"
-	EventDKGSHare            = "DKGShare"
+	EventDKGMessage          = "DKGMessage"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -436,7 +436,7 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastHasDKGShareMessage(share *types.DKGShare) {
+func (conR *ConsensusReactor) broadcastHasDKGShareMessage(share *types.DKGMessage) {
 	msg := &HasDKGShareMessage{
 		Share: share,
 	}
@@ -1378,7 +1378,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&DKGShareMessage{}, "tendermint/DKGShare", nil)
+	cdc.RegisterConcrete(&DKGMessageMessage{}, "tendermint/DKGMessage", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1468,11 +1468,11 @@ func (m *NewValidBlockMessage) String() string {
 
 //-------------------------------------
 
-type DKGShareMessage struct {
-	Share *types.DKGShare
+type DKGMessageMessage struct {
+	Share *types.DKGMessage
 }
 
-func (m *DKGShareMessage) ValidateBasic() error {
+func (m *DKGMessageMessage) ValidateBasic() error {
 	return nil
 }
 
@@ -1597,7 +1597,7 @@ func (m *HasVoteMessage) String() string {
 }
 
 type HasDKGShareMessage struct {
-	Share *types.DKGShare
+	Share *types.DKGMessage
 }
 
 // ValidateBasic performs basic validation.
@@ -1607,7 +1607,7 @@ func (m *HasDKGShareMessage) ValidateBasic() error {
 
 // String returns a string representation.
 func (m *HasDKGShareMessage) String() string {
-	return fmt.Sprintf("[DKGShare %v/%02d/%v]", m.Share.UserID, m.Share.RoundID, m.Share.Share)
+	return fmt.Sprintf("[DKGMessage %v/%02d/%v]", m.Share.ParticipantID, m.Share.RoundID, m.Share)
 }
 
 //-------------------------------------
