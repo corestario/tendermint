@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"os"
 
+	"encoding/json"
+
 	"github.com/spf13/cobra"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -12,7 +14,6 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-	"encoding/json"
 )
 
 // InitFilesCmd initialises a fresh Tendermint Core instance.
@@ -70,7 +71,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 		if err != nil {
 			return err
 		}
-
 
 		logger.Info("Generated node key", "path", blsKeyFile)
 	}

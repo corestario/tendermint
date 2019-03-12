@@ -321,8 +321,8 @@ func NewNode(config *cfg.Config,
 	)
 
 	fmt.Println("load bls from", config.BLSKeyFile())
-	blsShare,err:=types.LoadBLSShareJSON(config.BLSKeyFile())
-	if err!=nil {
+	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
+	if err != nil {
 		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
 	}
 

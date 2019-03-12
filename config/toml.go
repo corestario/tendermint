@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"text/template"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"encoding/json"
+
+	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -362,12 +363,12 @@ func ResetTestRoot(testName string) *Config {
 	cmn.MustWriteFile(privKeyFilePath, []byte(testPrivValidatorKey), 0644)
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
 
-	b,err:=json.Marshal(types.BLSShareJSON{
+	b, err := json.Marshal(types.BLSShareJSON{
 		ID:   types.DefaultBLSVerifierID,
 		Pub:  types.DefaultBLSVerifierPubKey,
 		Priv: types.DefaultBLSVerifierPrivKey,
 	})
-	if err!=nil {
+	if err != nil {
 		panic(err)
 	}
 	cmn.MustWriteFile(BLSShareFilePath, b, 0644)

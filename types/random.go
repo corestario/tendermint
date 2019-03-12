@@ -134,11 +134,11 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 
 func LoadBLSShareJSON(path string) (*BLSShareJSON, error) {
 	var share BLSShareJSON
-	f,err:=os.Open(path)
-	if err!=nil {
-		return nil,err
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	err=json.NewDecoder(f).Decode(&share)
+	err = json.NewDecoder(f).Decode(&share)
 	return &share, err
 }
 
