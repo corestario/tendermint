@@ -132,6 +132,16 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	}, nil
 }
 
+func LoadBLSShareJSON(path string) (*BLSShareJSON, error) {
+	var share BLSShareJSON
+	f,err:=os.Open(path)
+	if err!=nil {
+		return nil,err
+	}
+	err=json.NewDecoder(f).Decode(&share)
+	return &share, err
+}
+
 func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
 	if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 		return fmt.Errorf("failed to dump keyring, directory does not exist")

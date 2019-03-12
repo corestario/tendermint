@@ -14,7 +14,6 @@ import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 
 	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
 	nm "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
@@ -122,7 +121,6 @@ func NewTendermint(app abci.Application) *nm.Node {
 	logger = log.NewFilter(logger, log.AllowError())
 	pvKeyFile := config.PrivValidatorKeyFile()
 	pvKeyStateFile := config.PrivValidatorStateFile()
-	blsKeyFile := config.BLSKeyFile()
 	pv := privval.LoadOrGenFilePV(pvKeyFile, pvKeyStateFile)
 	papp := proxy.NewLocalClientCreator(app)
 
@@ -131,7 +129,7 @@ func NewTendermint(app abci.Application) *nm.Node {
 		panic(err)
 	}
 
-	node, err := nm.NewNode(config, pv, nodeKey, blsKey, papp,
+	node, err := nm.NewNode(config, pv, nodeKey, papp,
 		nm.DefaultGenesisDocProviderFunc(config),
 		nm.DefaultDBProvider,
 		nm.DefaultMetricsProvider(config.Instrumentation),

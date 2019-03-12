@@ -12,6 +12,7 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+	"encoding/json"
 )
 
 // InitFilesCmd initialises a fresh Tendermint Core instance.
@@ -56,10 +57,21 @@ func initFilesWithConfig(config *cfg.Config) error {
 	if cmn.FileExists(blsKeyFile) {
 		logger.Info("Found node key", "path", blsKeyFile)
 	} else {
-		_, err := bls.LoadKeypairFromDisk(blsKeyFile)
+		f, err := os.Create(blsKeyFile)
 		if err != nil {
 			return err
 		}
+		defer f.Close()
+		err = json.NewEncoder(f).Encode(types.BLSShareJSON{
+			ID:   types.DefaultBLSVerifierID,
+			Pub:  types.DefaultBLSVerifierPubKey,
+			Priv: types.DefaultBLSVerifierPrivKey,
+		})
+		if err != nil {
+			return err
+		}
+
+
 		logger.Info("Generated node key", "path", blsKeyFile)
 	}
 
@@ -82,12 +94,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
 		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
-		genDoc.BLSShare = &types.BLSShareJSON{
-			ID:   types.DefaultBLSVerifierID,
-			Pub:  types.DefaultBLSVerifierPubKey,
-			Priv: types.DefaultBLSVerifierPrivKey,
-		}
-		
 		genDoc.Others = map[string]int{
 			pv.GetPubKey().Address().String(): types.DefaultBLSVerifierID,
 		}

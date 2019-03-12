@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/tendermint/tendermint/dgaming-crypto/go/bls"
-
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmtime "github.com/tendermint/tendermint/types/time"
