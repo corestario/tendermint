@@ -123,10 +123,12 @@ func NewTendermint(app abci.Application) *nm.Node {
 	pvKeyStateFile := config.PrivValidatorStateFile()
 	pv := privval.LoadOrGenFilePV(pvKeyFile, pvKeyStateFile)
 	papp := proxy.NewLocalClientCreator(app)
+
 	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
 	if err != nil {
 		panic(err)
 	}
+
 	node, err := nm.NewNode(config, pv, nodeKey, papp,
 		nm.DefaultGenesisDocProviderFunc(config),
 		nm.DefaultDBProvider,
