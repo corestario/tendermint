@@ -441,7 +441,6 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 
 // Broadcasts HasVoteMessage to peers that care.
 func (conR *ConsensusReactor) broadcastHasDKGMessageMessage(msg *types.DKGMessage) {
-	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>")
 	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&HasDKGMessageMessage{
 		Message: msg,
 	}))

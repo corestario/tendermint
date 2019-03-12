@@ -38,8 +38,9 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		// pass
 	case types.DKGReconstructCommit:
 		// pass
-		cs.finishDKGRound()
 	}
+
+	cs.finishDKGRound()
 }
 
 func (cs *ConsensusState) sendDKGMessage(msg *types.DKGMessage) {
@@ -81,6 +82,5 @@ func (cs *ConsensusState) startDKGRound() bool {
 }
 
 func (cs *ConsensusState) finishDKGRound() {
-	cs.dkgLastValidators = cs.Validators
 	cs.dkgRoundActive = false
 }
