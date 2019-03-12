@@ -20,11 +20,8 @@ check: check_tools get_vendor_deps
 ########################################
 ### Build Tendermint
 
-COMMON_LIB_PATH="$(PWD)/dgaming-crypto/go/bls/bls/lib:$(PWD)/dgaming-crypto/go/bls/mcl/lib"
-PATH_VAL=$$PATH:$(COMMON_LIB_PATH) LD_LIBRARY_PATH=$(COMMON_LIB_PATH) DYLD_LIBRARY_PATH=$(COMMON_LIB_PATH) CGO_LDFLAGS="-L$(PWD)/dgaming-crypto/go/bls/bls/lib -L$(PWD)/dgaming-crypto/go/bls/mcl/lib" CGO_CFLAGS="-I$(PWD)/dgaming-crypto/go/bls/bls/include -I$(PWD)/dgaming-crypto/go/bls/mcl/include"
-
 build:
-	env PATH=$(PATH_VAL) go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/
+	CGO_ENABLED=0 go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/
 
 build_c:
 	CGO_ENABLED=1 go build $(BUILD_FLAGS) -tags "$(BUILD_TAGS) gcc" -o build/tendermint ./cmd/tendermint/
@@ -223,11 +220,11 @@ vagrant_test:
 ### go tests
 test:
 	@echo "--> Running go test"
-	env PATH=$(PATH_VAL) @GOCACHE=off go test -p 1 $(PACKAGES)
+	@GOCACHE=off go test -p 1 $(PACKAGES)
 
 test_verbose:
 	@echo "--> Running go test (verbose)"
-	env PATH=$(PATH_VAL) @GOCACHE=off go test -v -p 1 $(PACKAGES)
+	@GOCACHE=off go test -v -p 1 $(PACKAGES)
 
 test_race:
 	@echo "--> Running go test --race"
@@ -344,8 +341,6 @@ sentry-stop:
 build-slate:
 	bash scripts/slate.sh
 
-install_bls:
-	cd dgaming-crypto/go/bls && sudo cp {bls/lib/libbls384.dylib,mcl/lib/libmclbn384.dylib,mcl/lib/libmcl.dylib} /usr/local/lib/ && cd -
 
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
