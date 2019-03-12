@@ -369,19 +369,23 @@ func (conR *ConsensusReactor) FastSync() bool {
 // them to peers upon receiving.
 func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 	const subscriber = "consensus-reactor"
-	_ = conR.conS.evsw.AddListenerForEvent(subscriber, types.EventNewRoundStep,
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventNewRoundStep,
 		func(data tmevents.EventData) {
 			conR.broadcastNewRoundStepMessage(data.(*cstypes.RoundState))
 		})
 
-	_ = conR.conS.evsw.AddListenerForEvent(subscriber, types.EventValidBlock,
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventValidBlock,
 		func(data tmevents.EventData) {
 			conR.broadcastNewValidBlockMessage(data.(*cstypes.RoundState))
 		})
 
-	_ = conR.conS.evsw.AddListenerForEvent(subscriber, types.EventVote,
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventVote,
 		func(data tmevents.EventData) {
 			conR.broadcastHasVoteMessage(data.(*types.Vote))
+		})
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGMessage,
+		func(data tmevents.EventData) {
+			conR.broadcastHasDKGMessageMessage(data.(*types.DKGMessage))
 		})
 }
 
@@ -436,11 +440,11 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastHasDKGShareMessage(share *types.DKGMessage) {
-	msg := &HasDKGShareMessage{
-		Share: share,
-	}
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(msg))
+func (conR *ConsensusReactor) broadcastHasDKGMessageMessage(msg *types.DKGMessage) {
+	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>")
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&HasDKGMessageMessage{
+		Message: msg,
+	}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -1596,18 +1600,18 @@ func (m *HasVoteMessage) String() string {
 	return fmt.Sprintf("[HasVote VI:%v V:{%v/%02d/%v}]", m.Index, m.Height, m.Round, m.Type)
 }
 
-type HasDKGShareMessage struct {
-	Share *types.DKGMessage
+type HasDKGMessageMessage struct {
+	Message *types.DKGMessage
 }
 
 // ValidateBasic performs basic validation.
-func (m *HasDKGShareMessage) ValidateBasic() error {
+func (m *HasDKGMessageMessage) ValidateBasic() error {
 	return nil
 }
 
 // String returns a string representation.
-func (m *HasDKGShareMessage) String() string {
-	return fmt.Sprintf("[DKGMessage %v/%02d/%v]", m.Share.ParticipantID, m.Share.RoundID, m.Share)
+func (m *HasDKGMessageMessage) String() string {
+	return fmt.Sprintf("[DKGMessage %v/%02d/%v]", m.Message.ParticipantID, m.Message.RoundID, m.Message)
 }
 
 //-------------------------------------

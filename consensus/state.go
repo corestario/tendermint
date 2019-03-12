@@ -25,8 +25,6 @@ import (
 //-----------------------------------------------------------------------------
 // Errors
 
-const criticalValidatorsRatio = 0.7
-
 var (
 	ErrInvalidProposalSignature = errors.New("Error invalid proposal signature")
 	ErrInvalidProposalPOLRound  = errors.New("Error invalid proposal POL round")
@@ -138,14 +136,12 @@ type ConsensusState struct {
 
 	verifier types.Verifier
 
-	dkgMsgQueue            chan msgInfo
-	dkgLastValidators      *types.ValidatorSet
-	dkgRoundActive         bool
-	dkgShares              []*types.DKGMessage
-	dkgParticipantID       int
-	dkgNumBlocks           int64
-	dkgValidatorsThreshold float64
-	dkgRoundID             int
+	dkgMsgQueue      chan msgInfo
+	dkgRoundActive   bool
+	dkgShares        []*types.DKGMessage
+	dkgParticipantID int
+	dkgNumBlocks     int64
+	dkgRoundID       int
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -190,7 +186,6 @@ func NewConsensusState(
 		cs.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
 	}
 
-	cs.dkgLastValidators = state.Validators
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
