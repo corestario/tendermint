@@ -324,25 +324,25 @@ func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
 
-type DKGInfoType byte
+type DKGDataType byte
 
 const (
-	DKGDeal              DKGInfoType = 1
-	DKGResponse          DKGInfoType = 2
-	DKGJustification     DKGInfoType = 3
-	DKGCommit            DKGInfoType = 4
-	DKGComplaint         DKGInfoType = 5
-	DKGReconstructCommit DKGInfoType = 6
+	DKGDeal              DKGDataType = 1
+	DKGResponse          DKGDataType = 2
+	DKGJustification     DKGDataType = 3
+	DKGCommit            DKGDataType = 4
+	DKGComplaint         DKGDataType = 5
+	DKGReconstructCommit DKGDataType = 6
 )
 
-type DKGMessage struct {
-	Type          DKGInfoType
+type DKGData struct {
+	Type          DKGDataType
 	ParticipantID int
 	RoundID       int
 	Data          []byte
 	Meta          map[int][]byte
 }
 
-func (m *DKGMessage) ValidateBasic() error {
+func (m *DKGData) ValidateBasic() error {
 	return nil
 }

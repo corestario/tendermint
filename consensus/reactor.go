@@ -385,7 +385,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		})
 	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGMessage,
 		func(data tmevents.EventData) {
-			conR.broadcastHasDKGMessageMessage(data.(*types.DKGMessage))
+			conR.broadcastHasDKGDataMessage(data.(*types.DKGData))
 		})
 }
 
@@ -440,8 +440,8 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastHasDKGMessageMessage(msg *types.DKGMessage) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&HasDKGMessageMessage{
+func (conR *ConsensusReactor) broadcastHasDKGDataMessage(msg *types.DKGData) {
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&HasDKGDataMessage{
 		Message: msg,
 	}))
 }
@@ -1381,7 +1381,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&DKGMessageMessage{}, "tendermint/DKGMessage", nil)
+	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1471,11 +1471,11 @@ func (m *NewValidBlockMessage) String() string {
 
 //-------------------------------------
 
-type DKGMessageMessage struct {
-	Share *types.DKGMessage
+type DKGDataMessage struct {
+	Share *types.DKGData
 }
 
-func (m *DKGMessageMessage) ValidateBasic() error {
+func (m *DKGDataMessage) ValidateBasic() error {
 	return nil
 }
 
@@ -1599,18 +1599,18 @@ func (m *HasVoteMessage) String() string {
 	return fmt.Sprintf("[HasVote VI:%v V:{%v/%02d/%v}]", m.Index, m.Height, m.Round, m.Type)
 }
 
-type HasDKGMessageMessage struct {
-	Message *types.DKGMessage
+type HasDKGDataMessage struct {
+	Message *types.DKGData
 }
 
 // ValidateBasic performs basic validation.
-func (m *HasDKGMessageMessage) ValidateBasic() error {
+func (m *HasDKGDataMessage) ValidateBasic() error {
 	return nil
 }
 
 // String returns a string representation.
-func (m *HasDKGMessageMessage) String() string {
-	return fmt.Sprintf("[DKGMessage %v/%02d/%v]", m.Message.ParticipantID, m.Message.RoundID, m.Message)
+func (m *HasDKGDataMessage) String() string {
+	return fmt.Sprintf("[DKGData %v/%02d/%v]", m.Message.ParticipantID, m.Message.RoundID, m.Message)
 }
 
 //-------------------------------------

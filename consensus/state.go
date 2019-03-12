@@ -138,7 +138,7 @@ type ConsensusState struct {
 
 	dkgMsgQueue      chan msgInfo
 	dkgRoundActive   bool
-	dkgShares        []*types.DKGMessage
+	dkgShares        []*types.DKGData
 	dkgParticipantID int
 	dkgNumBlocks     int64
 	dkgRoundID       int

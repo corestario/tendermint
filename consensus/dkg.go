@@ -12,7 +12,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		return
 	}
 
-	dkgMsg, ok := mi.Msg.(*DKGMessageMessage)
+	dkgMsg, ok := mi.Msg.(*DKGDataMessage)
 	if !ok {
 		cs.Logger.Info("rejecting dkg message (unknown type): %v", reflect.TypeOf(dkgMsg).Name())
 		return
@@ -43,11 +43,11 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	cs.finishDKGRound()
 }
 
-func (cs *ConsensusState) sendDKGMessage(msg *types.DKGMessage) {
+func (cs *ConsensusState) sendDKGMessage(msg *types.DKGData) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
 	cs.evsw.FireEvent(types.EventDKGMessage, msg)
-	mi := msgInfo{&DKGMessageMessage{msg}, ""}
+	mi := msgInfo{&DKGDataMessage{msg}, ""}
 	select {
 	case cs.dkgMsgQueue <- mi:
 	default:
@@ -71,7 +71,7 @@ func (cs *ConsensusState) startDKGRound() bool {
 	cs.dkgRoundID++
 	cs.dkgRoundActive = true
 	// Deal will be produced by actual DKG implementation, mock for now.
-	var deal = &types.DKGMessage{
+	var deal = &types.DKGData{
 		Type:          types.DKGDeal,
 		RoundID:       cs.dkgRoundID,
 		ParticipantID: cs.dkgParticipantID,
