@@ -320,11 +320,13 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
-	if genDoc.BLSShare == nil {
-		return nil, errors.New("failed to load BLS keypair: the BLS data should be in the Genesis")
+	fmt.Println("load bls from", config.BLSKeyFile())
+	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
 	}
 
-	keypair, err := genDoc.BLSShare.Deserialize()
+	keypair, err := blsShare.Deserialize()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}

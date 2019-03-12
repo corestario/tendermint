@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"os"
 
+	"encoding/json"
+
 	"github.com/spf13/cobra"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -51,6 +53,28 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
+	//todo what should we do if bls key not exsists
+	blsKeyFile := config.BLSKeyFile()
+	if cmn.FileExists(blsKeyFile) {
+		logger.Info("Found node key", "path", blsKeyFile)
+	} else {
+		f, err := os.Create(blsKeyFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		err = json.NewEncoder(f).Encode(types.BLSShareJSON{
+			ID:   types.DefaultBLSVerifierID,
+			Pub:  types.DefaultBLSVerifierPubKey,
+			Priv: types.DefaultBLSVerifierPrivKey,
+		})
+		if err != nil {
+			return err
+		}
+
+		logger.Info("Generated node key", "path", blsKeyFile)
+	}
+
 	// genesis file
 	genFile := config.GenesisFile()
 	if cmn.FileExists(genFile) {
@@ -70,11 +94,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
 		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
-		genDoc.BLSShare = &types.BLSShareJSON{
-			ID:   types.DefaultBLSVerifierID,
-			Pub:  types.DefaultBLSVerifierPubKey,
-			Priv: types.DefaultBLSVerifierPrivKey,
-		}
 		genDoc.Others = map[string]int{
 			pv.GetPubKey().Address().String(): types.DefaultBLSVerifierID,
 		}

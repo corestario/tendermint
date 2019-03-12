@@ -6,7 +6,10 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"encoding/json"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/types"
 )
 
 var configTemplate *template.Template
@@ -347,6 +350,7 @@ func ResetTestRoot(testName string) *Config {
 	genesisFilePath := filepath.Join(rootDir, baseConfig.Genesis)
 	privKeyFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorKey)
 	privStateFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorState)
+	BLSShareFilePath := filepath.Join(rootDir, baseConfig.BLSKeyFile())
 
 	// Write default config file if missing.
 	if !cmn.FileExists(configFilePath) {
@@ -358,6 +362,16 @@ func ResetTestRoot(testName string) *Config {
 	// we always overwrite the priv val
 	cmn.MustWriteFile(privKeyFilePath, []byte(testPrivValidatorKey), 0644)
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
+
+	b, err := json.Marshal(types.BLSShareJSON{
+		ID:   types.DefaultBLSVerifierID,
+		Pub:  types.DefaultBLSVerifierPubKey,
+		Priv: types.DefaultBLSVerifierPrivKey,
+	})
+	if err != nil {
+		panic(err)
+	}
+	cmn.MustWriteFile(BLSShareFilePath, b, 0644)
 
 	config := TestConfig().SetRoot(rootDir)
 	return config
