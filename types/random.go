@@ -327,12 +327,12 @@ func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 type DKGDataType byte
 
 const (
-	DKGDeal              DKGDataType = 1
-	DKGResponse          DKGDataType = 2
-	DKGJustification     DKGDataType = 3
-	DKGCommit            DKGDataType = 4
-	DKGComplaint         DKGDataType = 5
-	DKGReconstructCommit DKGDataType = 6
+	DKGDeal DKGDataType = iota
+	DKGResponse
+	DKGJustification
+	DKGCommit
+	DKGComplaint
+	DKGReconstructCommit
 )
 
 type DKGData struct {

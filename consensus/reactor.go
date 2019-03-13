@@ -383,7 +383,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		func(data tmevents.EventData) {
 			conR.broadcastHasVoteMessage(data.(*types.Vote))
 		})
-	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGMessage,
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
 		func(data tmevents.EventData) {
 			conR.broadcastHasDKGDataMessage(data.(*types.DKGData))
 		})

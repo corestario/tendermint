@@ -46,7 +46,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 func (cs *ConsensusState) sendDKGMessage(msg *types.DKGData) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
-	cs.evsw.FireEvent(types.EventDKGMessage, msg)
+	cs.evsw.FireEvent(types.EventDKGData, msg)
 	mi := msgInfo{&DKGDataMessage{msg}, ""}
 	select {
 	case cs.dkgMsgQueue <- mi:
