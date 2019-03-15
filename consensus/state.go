@@ -135,6 +135,13 @@ type ConsensusState struct {
 	metrics *Metrics
 
 	verifier types.Verifier
+
+	dkgMsgQueue      chan msgInfo
+	dkgRoundActive   bool
+	dkgShares        []*types.DKGData
+	dkgParticipantID int
+	dkgNumBlocks     int64
+	dkgRoundID       int
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -165,11 +172,19 @@ func NewConsensusState(
 		evpool:           evpool,
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
+		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
+
+	for _, option := range options {
+		option(cs)
+	}
+	if cs.dkgNumBlocks == 0 {
+		cs.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
+	}
 
 	cs.updateToState(state)
 
@@ -177,9 +192,7 @@ func NewConsensusState(
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
 	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
-	for _, option := range options {
-		option(cs)
-	}
+
 	return cs
 }
 
@@ -200,6 +213,10 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 
 func WithVerifier(verifier types.Verifier) StateOption {
 	return func(cs *ConsensusState) { cs.verifier = verifier }
+}
+
+func WithDKGNumBlocks(numBlocks int64) StateOption {
+	return func(cs *ConsensusState) { cs.dkgNumBlocks = numBlocks }
 }
 
 // StateMetrics sets the metrics.
@@ -437,6 +454,10 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
+
+	if height%cs.dkgNumBlocks == 0 {
+		cs.startDKGRound()
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -625,6 +646,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		var mi msgInfo
 
 		select {
+		case msg := <-cs.dkgMsgQueue:
+			cs.handleDKGShare(msg)
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -672,7 +695,6 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 			err = nil
 		}
 	case *VoteMessage:
-
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
 		added, err := cs.tryAddVote(msg.Vote, peerID)
@@ -983,14 +1005,14 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		logger.Info("enterPrevote: Block was locked")
-		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header(), nil)
+		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header())
 		return
 	}
 
 	// If ProposalBlock is nil, prevote nil.
 	if cs.ProposalBlock == nil {
 		logger.Info("enterPrevote: ProposalBlock is nil")
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, nil)
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
 		return
 	}
 
@@ -999,7 +1021,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, nil)
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
 		return
 	}
 
@@ -1007,7 +1029,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
 	logger.Info("enterPrevote: ProposalBlock is valid")
-	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header(), nil)
+	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
 }
 
 // Enter: any +2/3 prevotes at next round.
@@ -1065,7 +1087,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		} else {
 			logger.Info("enterPrecommit: No +2/3 prevotes during enterPrecommit. Precommitting nil.")
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
 		return
 	}
 
@@ -1089,19 +1111,17 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 			cs.LockedBlockParts = nil
 			cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
 		return
 	}
 
 	// At this point, +2/3 prevoted for a particular block.
-	prevBlock := cs.getPreviousBlock()
-	randomData := cs.verifier.Sign(prevBlock.Header.RandomData)
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
 		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomData)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
 		return
 	}
 
@@ -1116,7 +1136,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
 		cs.eventBus.PublishEventLock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, randomData)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
 		return
 	}
 
@@ -1132,7 +1152,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
 	cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
-	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, randomData)
+	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
 }
 
 // Enter: any +2/3 precommits for next round.
@@ -1674,7 +1694,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterNewRound(height, vote.Round)
 			cs.enterPrecommitWait(height, vote.Round)
 		}
-
 	default:
 		panic(fmt.Sprintf("Unexpected vote type %X", vote.Type)) // go-wire should prevent this.
 	}
@@ -1718,12 +1737,22 @@ func (cs *ConsensusState) voteTime() time.Time {
 }
 
 // sign the vote and publish on internalMsgQueue
-func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) *types.Vote {
+func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.Vote {
 	// if we don't have a key or we're not in the validator set, do nothing
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
 	}
-	vote, err := cs.signVote(type_, hash, header, data)
+	// If we don't have a verifier, do nothing.
+	if cs.verifier == nil {
+		return nil
+	}
+
+	var randomData []byte
+	if type_ == types.PrecommitType {
+		randomData = cs.verifier.Sign(cs.getPreviousBlock().Header.RandomData)
+	}
+
+	vote, err := cs.signVote(type_, hash, header, randomData)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)

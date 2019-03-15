@@ -26,6 +26,7 @@ const (
 	EventValidBlock          = "ValidBlock"
 	EventValidatorSetUpdates = "ValidatorSetUpdates"
 	EventVote                = "Vote"
+	EventDKGData             = "DKGData"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

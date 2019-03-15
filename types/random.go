@@ -323,3 +323,26 @@ func (m *MockVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) e
 func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
+
+type DKGDataType byte
+
+const (
+	DKGDeal DKGDataType = iota
+	DKGResponse
+	DKGJustification
+	DKGCommit
+	DKGComplaint
+	DKGReconstructCommit
+)
+
+type DKGData struct {
+	Type          DKGDataType
+	ParticipantID int
+	RoundID       int
+	Data          []byte         // Data is going to keep serialized kyber objects.
+	Meta          map[int][]byte // Meta can hold any additional data.
+}
+
+func (m *DKGData) ValidateBasic() error {
+	return nil
+}

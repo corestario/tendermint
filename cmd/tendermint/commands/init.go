@@ -99,6 +99,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		}
 		genDoc.BLSThreshold = 1
 		genDoc.BLSNumShares = 4
+		genDoc.DKGNumBlocks = 1000
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
