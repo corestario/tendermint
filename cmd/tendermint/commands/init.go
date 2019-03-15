@@ -152,6 +152,7 @@ services:{{range $i, $e := .Nodes}}
       - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
+    command: node --proxy_app=kvstore --log_level=info
     networks:
       localnet:
         ipv4_address: 192.167.10.{{.IP}}

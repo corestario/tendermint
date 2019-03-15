@@ -10,11 +10,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tendermint/tendermint/crypto"
+
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber"
 	"go.dedis.ch/kyber/pairing/bn256"
 	"go.dedis.ch/kyber/share"
-	kyberShare "go.dedis.ch/kyber/share"
 	"go.dedis.ch/kyber/sign/bls"
 	"go.dedis.ch/kyber/sign/tbls"
 )
@@ -50,10 +51,10 @@ var TestnetShares = map[int]*BLSShareJSON{
 }
 
 type BLSKeyring struct {
-	T            int                 // Threshold
-	N            int                 // Number of shares
-	Shares       map[int]*BLSShare   // mapping from share ID to share
-	MasterPubKey *kyberShare.PubPoly // Public key used to verify individual and aggregate signatures
+	T            int               // Threshold
+	N            int               // Number of shares
+	Shares       map[int]*BLSShare // mapping from share ID to share
+	MasterPubKey *share.PubPoly    // Public key used to verify individual and aggregate signatures
 }
 
 // NewBLSKeyring generates a tbls keyring (master key, t-of-n shares).
@@ -70,7 +71,7 @@ func NewBLSKeyring(t, n int) (*BLSKeyring, error) {
 	var (
 		suite   = bn256.NewSuite()
 		secret  = suite.G1().Scalar().Pick(suite.RandomStream())
-		priPoly = kyberShare.NewPriPoly(suite.G2(), t, secret, suite.RandomStream())
+		priPoly = share.NewPriPoly(suite.G2(), t, secret, suite.RandomStream())
 		pubPoly = priPoly.Commit(suite.G2().Point().Base())
 		keyring = &BLSKeyring{
 			N:            n,
@@ -93,8 +94,8 @@ func NewBLSKeyring(t, n int) (*BLSKeyring, error) {
 
 type BLSShare struct {
 	ID   int
-	Pub  *kyberShare.PubShare
-	Priv *kyberShare.PriShare
+	Pub  *share.PubShare
+	Priv *share.PriShare
 }
 
 type BLSShareJSON struct {
@@ -126,7 +127,7 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode public key: %v", err)
 	}
-	pubKey, pubDec := &kyberShare.PubShare{V: bn256.NewSuite().G2().Point()}, gob.NewDecoder(bytes.NewBuffer(pubBytes))
+	pubKey, pubDec := &share.PubShare{V: bn256.NewSuite().G2().Point()}, gob.NewDecoder(bytes.NewBuffer(pubBytes))
 	if err := pubDec.Decode(pubKey); err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %v", err)
 	}
@@ -135,7 +136,7 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode private key: %v", err)
 	}
-	privKey, privDec := &kyberShare.PriShare{V: bn256.NewSuite().G1().Scalar()}, gob.NewDecoder(bytes.NewBuffer(privBytes))
+	privKey, privDec := &share.PriShare{V: bn256.NewSuite().G1().Scalar()}, gob.NewDecoder(bytes.NewBuffer(privBytes))
 	if err := privDec.Decode(privKey); err != nil {
 		return nil, fmt.Errorf("failed to decode private key: %v", err)
 	}
@@ -147,13 +148,13 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 }
 
 func LoadBLSShareJSON(path string) (*BLSShareJSON, error) {
-	var share BLSShareJSON
+	var sh BLSShareJSON
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	err = json.NewDecoder(f).Decode(&share)
-	return &share, err
+	err = json.NewDecoder(f).Decode(&sh)
+	return &sh, err
 }
 
 func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
@@ -191,7 +192,7 @@ func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
 	return nil
 }
 
-func LoadPubKey(base64Key string, numHolders int) (*kyberShare.PubPoly, error) {
+func LoadPubKey(base64Key string, numHolders int) (*share.PubPoly, error) {
 	suite := bn256.NewSuite()
 
 	keyBytes, err := base64.StdEncoding.DecodeString(string(base64Key))
@@ -208,7 +209,7 @@ func LoadPubKey(base64Key string, numHolders int) (*kyberShare.PubPoly, error) {
 		return nil, fmt.Errorf("failed to decode public key: %v", err)
 	}
 
-	return kyberShare.NewPubPoly(bn256.NewSuite().G2(), nil, commits), nil
+	return share.NewPubPoly(bn256.NewSuite().G2(), nil, commits), nil
 }
 
 type Verifier interface {
@@ -221,23 +222,25 @@ type Verifier interface {
 type BLSVerifier struct {
 	Keypair      *BLSShare // This verifier's BLSShare.
 	masterPubKey *share.PubPoly
-	suite        *bn256.Suite
+	suiteG1      *bn256.Suite
+	suiteG2      *bn256.Suite
 	t            int
 	n            int
 }
 
-func NewBLSVerifier(masterPubKey *share.PubPoly, keypair *BLSShare, t, n int) *BLSVerifier {
+func NewBLSVerifier(masterPubKey *share.PubPoly, sh *BLSShare, t, n int) *BLSVerifier {
 	return &BLSVerifier{
 		masterPubKey: masterPubKey,
-		Keypair:      keypair,
-		suite:        bn256.NewSuite(),
+		Keypair:      sh,
+		suiteG1:      bn256.NewSuiteG1(),
+		suiteG2:      bn256.NewSuiteG2(),
 		t:            t,
 		n:            n,
 	}
 }
 
 func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
-	sig, err := tbls.Sign(m.suite, m.Keypair.Priv, data)
+	sig, err := tbls.Sign(m.suiteG1, m.Keypair.Priv, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sing random data with key %v %v with error %v", m.Keypair.Pub, data, err)
 	}
@@ -247,7 +250,7 @@ func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
 
 func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
 	// Check that the signature itself is correct for this validator.
-	if err := tbls.Verify(m.suite, m.masterPubKey, prevRandomData, currRandomData); err != nil {
+	if err := tbls.Verify(m.suiteG1, m.masterPubKey, prevRandomData, currRandomData); err != nil {
 		return fmt.Errorf("signature of share is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
@@ -255,7 +258,7 @@ func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomD
 }
 
 func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) error {
-	if err := bls.Verify(m.suite, m.masterPubKey.Commit(), prevRandomData, currRandomData); err != nil {
+	if err := bls.Verify(m.suiteG1, m.masterPubKey.Commit(), prevRandomData, currRandomData); err != nil {
 		return fmt.Errorf("signature is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
@@ -273,7 +276,7 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 		sigs = append(sigs, precommit.BLSSignature)
 	}
 
-	aggrSig, err := tbls.Recover(m.suite, m.masterPubKey, msg, sigs, m.t, m.n)
+	aggrSig, err := tbls.Recover(m.suiteG1, m.masterPubKey, msg, sigs, m.t, m.n)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover aggregate signature: %v", err)
 	}
@@ -290,7 +293,7 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 		Pub:  DefaultBLSVerifierPubKey,
 		Priv: DefaultBLSVerifierPrivKey,
 	}
-	share, err := shareJSON.Deserialize()
+	sh, err := shareJSON.Deserialize()
 	if err != nil {
 		panic(err)
 	}
@@ -299,7 +302,7 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 	if err != nil {
 		panic(err)
 	}
-	return NewBLSVerifier(pubPoly, share, t, n)
+	return NewBLSVerifier(pubPoly, sh, t, n)
 }
 
 type MockVerifier struct{}
@@ -317,23 +320,29 @@ func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
 
-type DKGDataType byte
+type DKGDataType int
 
 const (
-	DKGDeal DKGDataType = iota
+	DKGPubKey DKGDataType = iota
+	DKGDeal
 	DKGResponse
 	DKGJustification
-	DKGCommit
+	DKGCommits
 	DKGComplaint
 	DKGReconstructCommit
 )
 
 type DKGData struct {
-	Type          DKGDataType
-	ParticipantID int
-	RoundID       int
-	Data          []byte         // Data is going to keep serialized kyber objects.
-	Meta          map[int][]byte // Meta can hold any additional data.
+	Type        DKGDataType
+	Addr        []byte
+	RoundID     int
+	Data        []byte // Data is going to keep serialized kyber objects.
+	ToIndex     int    // ID of the participant for whom the message is; might be not set
+	NumEntities int    // Number of sub-entities in the Data array, sometimes required for unmarshaling.
+}
+
+func (m *DKGData) GetAddrString() string {
+	return crypto.Address(m.Addr).String()
 }
 
 func (m *DKGData) ValidateBasic() error {
