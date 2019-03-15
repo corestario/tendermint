@@ -12,6 +12,7 @@ import (
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 
+	"github.com/tendermint/tendermint/libs/common"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/fail"
@@ -134,14 +135,15 @@ type ConsensusState struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	verifier types.Verifier
+	verifier     types.Verifier
+	nextVerifier types.Verifier
+	changeHeight int64
 
+	// message queue used for dkg-related messages.
 	dkgMsgQueue      chan msgInfo
-	dkgRoundActive   bool
-	dkgShares        []*types.DKGData
-	dkgParticipantID int
-	dkgNumBlocks     int64
+	dkgRoundToDealer map[int]*DKGDealer
 	dkgRoundID       int
+	dkgNumBlocks     int64
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -173,7 +175,9 @@ func NewConsensusState(
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
 		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
+		dkgRoundToDealer: make(map[int]*DKGDealer),
 	}
+	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
@@ -191,7 +195,6 @@ func NewConsensusState(
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
-	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 
 	return cs
 }
@@ -455,9 +458,16 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	// Before height > 1 some values are not initialized, which might lead to panic.
+	if cs.changeHeight == height {
+		cs.Logger.Info("DKG: time to update verifier")
+		cs.verifier, cs.nextVerifier = cs.nextVerifier, nil
+		cs.changeHeight = 0
+	}
+
 	if height > 1 && height%cs.dkgNumBlocks == 0 {
-		cs.startDKGRound()
+		if err := cs.startDKGRound(); err != nil {
+			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
+		}
 	}
 }
 

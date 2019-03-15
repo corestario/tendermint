@@ -10,11 +10,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tendermint/tendermint/crypto"
+
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber"
 	"go.dedis.ch/kyber/pairing/bn256"
 	"go.dedis.ch/kyber/share"
-	kyberShare "go.dedis.ch/kyber/share"
 	"go.dedis.ch/kyber/sign/bls"
 	"go.dedis.ch/kyber/sign/tbls"
 )
@@ -25,35 +26,36 @@ const (
 )
 
 const (
-	DefaultBLSVerifierMasterPubKey = "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD+AQj/hAAC/4A9Dc2X6WOLNbInqOqkQJoiBKihZvJO6Wmzpg1BjVxv4RDb+EXpX8kwyed5GZ01vPo5EdHrBV4nEA33Fi7I/ldDfGeIUynG1XGx5dIvaPcRXGfVci5oc9EMcKs6VedQJExFy6Km4PQFPrFhPyuqUqpKHazusLkNwxpb0s1xiC6VNP+AgkM4H6h0ZqOYUH8tle6xRNhS4HvKIGsmCPYn5txFT3hwWIOQUGjYDNVbec23dJMeYZ60UGo6P3Y155JwlIiC3QKiusfr1104+kIVOjjI2O4uwNNGhRGqJaQ8bfida2FSIx8eSH9C5VbymmN6Hft8yqg4P+1gi0XhPkLpCjHbQ3U="
-	DefaultBLSVerifierPubKey       = "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gGXxwaGvZH+eIc9E7XmRwTJdQouaituJP2QRRt7z/VCwh3QKPjJYNkDxWEmKgpdRivtPDJPw+nzmecs/U3H5mQMCFN/DnFJJVR6uyqNBWiLqtERcYCdsPkC3IdoI4IexESjAxMH9vjL7Fuuns+PNfz6+Vm+xukQ2bwMZ/YS0zGQSAA=="
-	DefaultBLSVerifierPrivKey      = "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIgiWDlkozun6+xMzm4A3uMhM0fPxngtDmJneYqvbqAmCUA"
+	DefaultBLSVerifierMasterPubKey = "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD/hv+EAAH/gEaa2LoprFk0+K2z4mb7OWTJ1Gtd5LmCsrslgaYc7g31LBCoos5i1evy+j8F9rH5Taknr8KFvWGE83MwZTA579kYzizgrY9VGxQDFBe4eCRZ+6ppu42eSsKYYi/3Lf//cB/TbdlTzyRVz6lHwWn6lZqQhA6Eoa9q7bto2pltcWaZ"
+	DefaultBLSVerifierPubKey       = "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gEaa2LoprFk0+K2z4mb7OWTJ1Gtd5LmCsrslgaYc7g31LBCoos5i1evy+j8F9rH5Taknr8KFvWGE83MwZTA579kYzizgrY9VGxQDFBe4eCRZ+6ppu42eSsKYYi/3Lf//cB/TbdlTzyRVz6lHwWn6lZqQhA6Eoa9q7bto2pltcWaZAA=="
+	DefaultBLSVerifierPrivKey      = "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIgTx30WSwv2cXmC0ybf5OhX9RIHMog0dss+ecmfgAeVOIA"
 )
 
+var TestnetMasterPubKey = "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD+AYr/hAAD/4BZ1TvrtwmGJAEd7LX/6ywfWPCDstuv+THtNjdGaddQoVMmZ66itgzJ7WKpH9m8zSQrG1KgzpVMgrlUsh9g8n39YUCVYfKap+DCiN0pitOT7RoIYOZf2KVDZN1z4xg8VEsq03/C0PRbIFOFybsBYUhsesA1EPK94Duh/JMgJry2g/+ATxakEQPACdVDV8hf6La7w4KO9uGSt3aXS1Qx0YGQLzUVbBCl13Ii33daGLro8EPK/ItTTadwoGrpFLnpfnZhVmqrFojVMZGX+WePrKy5qPHrp2rIagq0J9AqmGcYAHRCEjWxsuHWotZZRBv0L+wy5zdBIMVgLT40J/7nY6qvUVj/gBJApeCMkB08+wuSKSd9/IsIJ7FfxRS6wM9qazxcKCSgXkvcSRtClB9a7awKkit2aZHYa4y46K9gZdOTWChiXq9oo4HWXGsviadnB612HbrCp9UJLkaWyIRA/tylJGFMDY109FS+Bg6XlyT+QwirN7rd/AB5ju7IU0CkVUsM74tI"
 var TestnetShares = map[int]*BLSShareJSON{
 	0: {
-		Pub:  DefaultBLSVerifierPubKey,
-		Priv: DefaultBLSVerifierPrivKey,
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gA8DxUCeyJZQHHyK2APRZLugem1ypJ5bnaI1f/RaYUoFexFbjTNxHh5pnG1Y9sKZh7wXo7XYcEfbdgxFwgm/EU5VhyqxQzDdWwF98cUewz38j2rvm+UZVJjqnkKfW0f3r0MK4mfG17g5ohzn4AwwYkCSBk6XrzY7VP0j0q4qPk6gAA==",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIgfHx7085Ms2rxbcI8LcNaljtXkun5cIrAdik7pkd334sA",
 	},
 	1: {
-		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgECAf+AhEqOOuENmkWFU467Nd0qZHHkxg0svT/xNqy6XOkvx2k3LFbm1bBZBH4A/L1OP50RgDJSuvGMeZHt6/KZjyugeGrM7I0DDOI62fh2AsH1LosSsHEZnZ6V+kcnee5JkjkFIVcerwDkzdbz0dMQu5GlRVk+I+WAuh3RQk4dZX5S8HgA",
-		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAECASBxLoheHSAjymeDXzysWu9zlO0fF3TCMXKYHVzjjtBDsAA=",
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgECAf+AJp1YmXFXJKaiV1QunKXvezMio9HQJkWCNOUWfyydZt85zmWCIvbM/f4uU6ZARkx+FCTXQrPnE0nZj9lt7tCkHERhwaTcPM+0HcBvEvwJS3sRFtvHLMdt5KbL8iVrWFsKAFjQ7wzvxXXbCDYfEWOJdsPeLECrbdhZdlk3OhfY5FcA",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAECASAWizrv9zw3K/x27a4MHgLw+OQUrYsHX4x6w1cAzZ3kWgA=",
 	},
 	2: {
-		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEEAf+AjM/WGGkNmEhbRh/rM93emzi0bQYbS4Xf83o32yYbDucO0/NTv1DK6yUqNRSpM+ycVmw2B4eRBJlUm+58i6ZIXAW0FNNZqVr0E2rCVVjhjE0/J8Lbo6vwzj8wJV+vF6c7GhkqbI6VFr3gUiY4L7Ohr7DTW9WM7W09BKEiS0ZNZB0A",
-		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEEASBY/CsprVGn5R3ThMFVOlJiXLr/FQjQKVuSVI8JYx/vOwA=",
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEEAf+AA2Ti1Yv7TqqSt4q/4dmZInlhV7bb7R3m6ZglC/QIQX1zdXSkcwAG2y7nPWWDUhS+xA0WdiR1sJZ+LrIX/kn6BTYin4X3Bm7QGgd9HgK8h/9Mta9zM3yvYj0PYPkI13GlQVbKKHLFdTvkHp4nHSy8Auzd+4/Hik5v8AJQBNuKCfIA",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEEASBYKzWg2U3LA+EENy7aTxJVVMMMvv4qB0b/8SCHLLrbEwA=",
 	},
 	3: {
-		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEGAf+AFv9ps05s4hf9xwtZ219eolKRjK2HtPe51nWAtW7mRuV4Mfob2zy9ivFcjGBYvbvCqtxbYxaP4F4FW0bGDhp1FArrZdPTPDo8gCUQS0jOKHOGE0QFdJJX/1n8sFFOsTi2EsBwHihjql06YIRx0bxHTRXooEL9fqrsf43gqJ1j8ekA",
-		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEGASBAyc31PYMr/9QjqkX+GbVRJIjfEpzeIUSMi8EvN2+axgA=",
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEGAf+AWIse6o5lP1NMJlD9mGTCR7wLyr9iBMzbpDTeqeHhkCA5LTIriGeoOF7qgZqs+lTdE1PmvY3laifLLDw+Ds/7RUSnzXdXMrnuS1yCoIqvzANq6K1VTJWZ8zIeDDqrMRG2ilaOW56X6ER4IogDOcUtWR7PtS5jKyINzGz02t4OqJsA",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEGASAh8mgf3zpe/0o1xU3VTNCA8dle+GKCD6fRVK+CtXXe9AA=",
 	},
 }
 
 type BLSKeyring struct {
-	T            int                 // Threshold
-	N            int                 // Number of shares
-	Shares       map[int]*BLSShare   // mapping from share ID to share
-	MasterPubKey *kyberShare.PubPoly // Public key used to verify individual and aggregate signatures
+	T            int               // Threshold
+	N            int               // Number of shares
+	Shares       map[int]*BLSShare // mapping from share ID to share
+	MasterPubKey *share.PubPoly    // Public key used to verify individual and aggregate signatures
 }
 
 // NewBLSKeyring generates a tbls keyring (master key, t-of-n shares).
@@ -70,7 +72,7 @@ func NewBLSKeyring(t, n int) (*BLSKeyring, error) {
 	var (
 		suite   = bn256.NewSuite()
 		secret  = suite.G1().Scalar().Pick(suite.RandomStream())
-		priPoly = kyberShare.NewPriPoly(suite.G2(), t, secret, suite.RandomStream())
+		priPoly = share.NewPriPoly(suite.G2(), t, secret, suite.RandomStream())
 		pubPoly = priPoly.Commit(suite.G2().Point().Base())
 		keyring = &BLSKeyring{
 			N:            n,
@@ -93,8 +95,8 @@ func NewBLSKeyring(t, n int) (*BLSKeyring, error) {
 
 type BLSShare struct {
 	ID   int
-	Pub  *kyberShare.PubShare
-	Priv *kyberShare.PriShare
+	Pub  *share.PubShare
+	Priv *share.PriShare
 }
 
 type BLSShareJSON struct {
@@ -126,7 +128,7 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode public key: %v", err)
 	}
-	pubKey, pubDec := &kyberShare.PubShare{V: bn256.NewSuite().G2().Point()}, gob.NewDecoder(bytes.NewBuffer(pubBytes))
+	pubKey, pubDec := &share.PubShare{V: bn256.NewSuite().G2().Point()}, gob.NewDecoder(bytes.NewBuffer(pubBytes))
 	if err := pubDec.Decode(pubKey); err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %v", err)
 	}
@@ -135,7 +137,7 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode private key: %v", err)
 	}
-	privKey, privDec := &kyberShare.PriShare{V: bn256.NewSuite().G1().Scalar()}, gob.NewDecoder(bytes.NewBuffer(privBytes))
+	privKey, privDec := &share.PriShare{V: bn256.NewSuite().G1().Scalar()}, gob.NewDecoder(bytes.NewBuffer(privBytes))
 	if err := privDec.Decode(privKey); err != nil {
 		return nil, fmt.Errorf("failed to decode private key: %v", err)
 	}
@@ -147,13 +149,13 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 }
 
 func LoadBLSShareJSON(path string) (*BLSShareJSON, error) {
-	var share BLSShareJSON
+	var sh BLSShareJSON
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	err = json.NewDecoder(f).Decode(&share)
-	return &share, err
+	err = json.NewDecoder(f).Decode(&sh)
+	return &sh, err
 }
 
 func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
@@ -191,7 +193,7 @@ func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
 	return nil
 }
 
-func LoadPubKey(base64Key string, numHolders int) (*kyberShare.PubPoly, error) {
+func LoadPubKey(base64Key string, numHolders int) (*share.PubPoly, error) {
 	suite := bn256.NewSuite()
 
 	keyBytes, err := base64.StdEncoding.DecodeString(string(base64Key))
@@ -208,7 +210,7 @@ func LoadPubKey(base64Key string, numHolders int) (*kyberShare.PubPoly, error) {
 		return nil, fmt.Errorf("failed to decode public key: %v", err)
 	}
 
-	return kyberShare.NewPubPoly(bn256.NewSuite().G2(), nil, commits), nil
+	return share.NewPubPoly(bn256.NewSuite().G2(), nil, commits), nil
 }
 
 type Verifier interface {
@@ -221,23 +223,25 @@ type Verifier interface {
 type BLSVerifier struct {
 	Keypair      *BLSShare // This verifier's BLSShare.
 	masterPubKey *share.PubPoly
-	suite        *bn256.Suite
+	suiteG1      *bn256.Suite
+	suiteG2      *bn256.Suite
 	t            int
 	n            int
 }
 
-func NewBLSVerifier(masterPubKey *share.PubPoly, keypair *BLSShare, t, n int) *BLSVerifier {
+func NewBLSVerifier(masterPubKey *share.PubPoly, sh *BLSShare, t, n int) *BLSVerifier {
 	return &BLSVerifier{
 		masterPubKey: masterPubKey,
-		Keypair:      keypair,
-		suite:        bn256.NewSuite(),
+		Keypair:      sh,
+		suiteG1:      bn256.NewSuiteG1(),
+		suiteG2:      bn256.NewSuiteG2(),
 		t:            t,
 		n:            n,
 	}
 }
 
 func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
-	sig, err := tbls.Sign(m.suite, m.Keypair.Priv, data)
+	sig, err := tbls.Sign(m.suiteG1, m.Keypair.Priv, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sing random data with key %v %v with error %v", m.Keypair.Pub, data, err)
 	}
@@ -247,7 +251,7 @@ func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
 
 func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
 	// Check that the signature itself is correct for this validator.
-	if err := tbls.Verify(m.suite, m.masterPubKey, prevRandomData, currRandomData); err != nil {
+	if err := tbls.Verify(m.suiteG1, m.masterPubKey, prevRandomData, currRandomData); err != nil {
 		return fmt.Errorf("signature of share is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
@@ -255,7 +259,7 @@ func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomD
 }
 
 func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) error {
-	if err := bls.Verify(m.suite, m.masterPubKey.Commit(), prevRandomData, currRandomData); err != nil {
+	if err := bls.Verify(m.suiteG1, m.masterPubKey.Commit(), prevRandomData, currRandomData); err != nil {
 		return fmt.Errorf("signature is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
@@ -273,7 +277,7 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 		sigs = append(sigs, precommit.BLSSignature)
 	}
 
-	aggrSig, err := tbls.Recover(m.suite, m.masterPubKey, msg, sigs, m.t, m.n)
+	aggrSig, err := tbls.Recover(m.suiteG1, m.masterPubKey, msg, sigs, m.t, m.n)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover aggregate signature: %v", err)
 	}
@@ -290,7 +294,7 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 		Pub:  DefaultBLSVerifierPubKey,
 		Priv: DefaultBLSVerifierPrivKey,
 	}
-	share, err := shareJSON.Deserialize()
+	sh, err := shareJSON.Deserialize()
 	if err != nil {
 		panic(err)
 	}
@@ -299,7 +303,7 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 	if err != nil {
 		panic(err)
 	}
-	return NewBLSVerifier(pubPoly, share, t, n)
+	return NewBLSVerifier(pubPoly, sh, t, n)
 }
 
 type MockVerifier struct{}
@@ -317,23 +321,29 @@ func (m *MockVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	return []byte{}, nil
 }
 
-type DKGDataType byte
+type DKGDataType int
 
 const (
-	DKGDeal DKGDataType = iota
+	DKGPubKey DKGDataType = iota
+	DKGDeal
 	DKGResponse
 	DKGJustification
-	DKGCommit
+	DKGCommits
 	DKGComplaint
 	DKGReconstructCommit
 )
 
 type DKGData struct {
-	Type          DKGDataType
-	ParticipantID int
-	RoundID       int
-	Data          []byte         // Data is going to keep serialized kyber objects.
-	Meta          map[int][]byte // Meta can hold any additional data.
+	Type        DKGDataType
+	Addr        []byte
+	RoundID     int
+	Data        []byte // Data is going to keep serialized kyber objects.
+	ToIndex     int    // ID of the participant for whom the message is; might be not set
+	NumEntities int    // Number of sub-entities in the Data array, sometimes required for unmarshaling.
+}
+
+func (m *DKGData) GetAddrString() string {
+	return crypto.Address(m.Addr).String()
 }
 
 func (m *DKGData) ValidateBasic() error {
