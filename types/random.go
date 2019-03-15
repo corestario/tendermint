@@ -339,8 +339,8 @@ type DKGData struct {
 	Type          DKGDataType
 	ParticipantID int
 	RoundID       int
-	Data          []byte
-	Meta          map[int][]byte
+	Data          []byte         // Data is going to keep serialized kyber objects.
+	Meta          map[int][]byte // Meta can hold any additional data.
 }
 
 func (m *DKGData) ValidateBasic() error {
