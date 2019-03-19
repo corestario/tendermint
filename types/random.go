@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/libs/common"
 	"go.dedis.ch/kyber"
 	"go.dedis.ch/kyber/pairing/bn256"
 	"go.dedis.ch/kyber/share"
@@ -198,7 +197,7 @@ func LoadPubKey(base64Key string, numHolders int) (*kyberShare.PubPoly, error) {
 }
 
 type Verifier interface {
-	Sign(data []byte) []byte
+	Sign(data []byte) ([]byte, error)
 	VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error
 	VerifyRandomData(prevRandomData, currRandomData []byte) error
 	Recover(msg []byte, precommits []*Vote) ([]byte, error)
@@ -224,13 +223,13 @@ func NewBLSVerifier(masterPubKey *share.PubPoly, keypair *BLSShare, others map[s
 	}
 }
 
-func (m *BLSVerifier) Sign(data []byte) []byte {
+func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
 	sig, err := tbls.Sign(m.suite, m.Keypair.Priv, data)
 	if err != nil {
-		common.PanicSanity("failed to sing random data")
+		return nil, fmt.Errorf("failed to sing random data with key %v %v with error %v", m.Keypair.Pub, data, err)
 	}
 
-	return sig
+	return sig, nil
 }
 
 func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
@@ -251,7 +250,7 @@ func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomD
 
 	// Check that the signature itself is correct for this validator.
 	if err := tbls.Verify(m.suite, m.masterPubKey, prevRandomData, currRandomData); err != nil {
-		return fmt.Errorf("signature is corrupt: %v", err)
+		return fmt.Errorf("signature of share is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
 	return nil
@@ -259,7 +258,7 @@ func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomD
 
 func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) error {
 	if err := bls.Verify(m.suite, m.masterPubKey.Commit(), prevRandomData, currRandomData); err != nil {
-		return fmt.Errorf("signature is corrupt: %v", err)
+		return fmt.Errorf("signature is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
 	}
 
 	return nil
@@ -269,7 +268,7 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 	var sigs [][]byte
 	for _, precommit := range precommits {
 		// Nil votes do exist, keep that in mind.
-		if precommit == nil {
+		if precommit == nil || len(precommit.BlockID.Hash) == 0 || len(precommit.BLSSignature) == 0 {
 			continue
 		}
 
@@ -311,8 +310,8 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 
 type MockVerifier struct{}
 
-func (m *MockVerifier) Sign(data []byte) []byte {
-	return data
+func (m *MockVerifier) Sign(data []byte) ([]byte, error) {
+	return data, nil
 }
 func (m *MockVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
 	return nil
