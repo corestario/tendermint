@@ -1095,7 +1095,10 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 
 	// At this point, +2/3 prevoted for a particular block.
 	prevBlock := cs.getPreviousBlock()
-	randomData := cs.verifier.Sign(prevBlock.Header.RandomData)
+	randomData, err := cs.verifier.Sign(prevBlock.Header.RandomData)
+	if err != nil {
+		cmn.PanicConsensus(fmt.Sprintf("incorrect random: %v. prevRandom %v", err, prevBlock.Header.RandomData))
+	}
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
