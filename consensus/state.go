@@ -1748,8 +1748,14 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	}
 
 	var randomData []byte
+	var err error
 	if type_ == types.PrecommitType {
-		randomData = cs.verifier.Sign(cs.getPreviousBlock().Header.RandomData)
+		randomData, err = cs.verifier.Sign(cs.getPreviousBlock().Header.RandomData)
+		if err != nil {
+			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
+				"type", type_, "hash", hash, "header", header, "random", randomData)
+			return nil
+		}
 	}
 
 	vote, err := cs.signVote(type_, hash, header, randomData)
