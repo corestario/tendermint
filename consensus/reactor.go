@@ -1382,6 +1382,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
 	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
+	cdc.RegisterConcrete(&HasDKGDataMessage{}, "tendermint/HasDKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1477,6 +1478,10 @@ type DKGDataMessage struct {
 
 func (m *DKGDataMessage) ValidateBasic() error {
 	return nil
+}
+
+func (m *DKGDataMessage) String() string {
+	return fmt.Sprintf("[Proposal %+v]", m.Share)
 }
 
 // ProposalMessage is sent when a new block is proposed.

@@ -455,7 +455,8 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	if height%cs.dkgNumBlocks == 0 {
+	// Before height > 1 some values are not initialized, which might lead to panic.
+	if height > 1 && height%cs.dkgNumBlocks == 0 {
 		cs.startDKGRound()
 	}
 }

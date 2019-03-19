@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
 func TestDumpLoad(t *testing.T) {
@@ -57,6 +59,32 @@ func TestDumpLoad(t *testing.T) {
 	_, err = skp.Deserialize()
 	if err != nil {
 		t.Errorf("failed to load keypair: %v", err)
+		return
+	}
+}
+
+func TestRecover(t *testing.T) {
+	var (
+		testVerifier = NewTestBLSVerifier("test")
+		msg          = []byte("test")
+	)
+	sign, err := testVerifier.Sign(msg)
+	if err != nil {
+		t.Errorf("failed to sing with test verifier: %v", err)
+		return
+	}
+
+	_, err = testVerifier.Recover(msg, []*Vote{
+		{
+			BlockID: BlockID{
+				Hash: cmn.HexBytes("text"),
+			},
+			ValidatorAddress: Address("test"),
+			BLSSignature:     sign,
+		},
+	})
+	if err != nil {
+		t.Errorf("failed to sing with test verifier: %v", err)
 		return
 	}
 }
