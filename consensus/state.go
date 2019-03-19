@@ -30,6 +30,8 @@ var (
 	ErrInvalidProposalPOLRound  = errors.New("Error invalid proposal POL round")
 	ErrAddingVote               = errors.New("Error adding vote")
 	ErrVoteHeightMismatch       = errors.New("Error vote height mismatch")
+	ErrBLSSignatureMissing      = errors.New("Error vote BLS signature is missing")
+	ErrBLSSignatureIncorrect    = errors.New("Error vote BLS signature incorrect")
 )
 
 //-----------------------------------------------------------------------------
@@ -1099,6 +1101,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	if err != nil {
 		cmn.PanicConsensus(fmt.Sprintf("incorrect random: %v. prevRandom %v", err, prevBlock.Header.RandomData))
 	}
+
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
@@ -1204,6 +1207,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	}
 
 	randomData, err := cs.verifier.Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+	cs.Logger.Debug("BSL recover", "votes", precommits.GetVotes(), "bls", randomData)
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
@@ -1277,8 +1281,20 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	prevBlock := cs.getPreviousBlock()
+	if len(prevBlock.Header.RandomData) == 0 {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value for previous block" +
+			"Prev random %v; new random %v. Height %v. Votes %v",
+			prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
+	}
+	if len(block.Header.RandomData) == 0 {
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value for new block" +
+			"Prev random %v; new random %v. Height %v. Votes %v",
+			prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
+	}
 	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value"))
+		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value." +
+			"Error %q. Prev random %v; new random %v. Height %v. Votes %v",
+			err.Error(), prevBlock.Header.RandomData, block.Header.RandomData, block.Height, block.LastCommit))
 	}
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
@@ -1517,6 +1533,9 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, err
 			}
 			cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence)
 			return added, err
+		} else if err == ErrBLSSignatureIncorrect || err == ErrBLSSignatureMissing {
+			cs.Logger.Error("Error checking BLS signature or block random number", "err", err)
+			return added, err
 		} else {
 			// Probably an invalid signature / Bad peer.
 			// Seems this can also err sometimes with "Unexpected step" - perhaps not from a bad peer ?
@@ -1567,13 +1586,23 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
-	if vote.Type == types.PrecommitType {
+	// check BLS signatures only if non-nil vote
+	if vote.Type == types.PrecommitType && len(vote.BlockID.Hash) != 0 {
 		var (
 			prevBlockData = cs.getPreviousBlock().RandomData
 			validatorAddr = vote.ValidatorAddress.String()
 		)
-		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
-			return false, fmt.Errorf("random share authenticy check failed: %v", err)
+		if len(vote.BLSSignature) == 0 {
+			err = ErrBLSSignatureMissing
+			cs.Logger.Info("Vote ignored and not added. BLS signature is missing", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID)
+			return
+		}
+
+		err = cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature)
+		if err != nil {
+			cs.Logger.Info("Vote ignored and not added. BLS signature is incorrect", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID, "err", err)
+			err = ErrBLSSignatureIncorrect
+			return
 		}
 	}
 
