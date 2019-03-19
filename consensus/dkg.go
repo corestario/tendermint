@@ -65,7 +65,6 @@ func (cs *ConsensusState) startDKGRound() bool {
 	if cs.dkgRoundActive {
 		return false
 	}
-
 	cs.dkgParticipantID, _ = cs.Validators.GetByAddress(cs.privValidator.GetPubKey().Bytes())
 
 	cs.dkgRoundID++

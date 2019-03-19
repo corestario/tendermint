@@ -36,14 +36,6 @@
   version = "v1.1.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b5bf4db8b7f8d7e98d09bd7b09c4c30718cf1664bc3ed4b5f77e3eb5d26716b1"
-  name = "github.com/dgamingfoundation/dgaming-crypto"
-  packages = ["go/bls"]
-  pruneopts = "UT"
-  revision = "947d3235ef4e2f7c75a605580d70a238b778f691"
-
-[[projects]]
   digest = "1:544229a3ca0fb2dd5ebc2896d3d2ff7ce096d9751635301e44e37e761349ee70"
   name = "github.com/fortytw2/leaktest"
   packages = ["."]
@@ -565,7 +557,6 @@
   input-imports = [
     "github.com/btcsuite/btcutil/base58",
     "github.com/btcsuite/btcutil/bech32",
-    "github.com/dgamingfoundation/dgaming-crypto/go/bls",
     "github.com/fortytw2/leaktest",
     "github.com/go-kit/kit/log",
     "github.com/go-kit/kit/log/level",

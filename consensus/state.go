@@ -455,7 +455,7 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	if height%cs.dkgNumBlocks == 0 {
+	if height > 1 && height%cs.dkgNumBlocks == 0 {
 		cs.startDKGRound()
 	}
 }
