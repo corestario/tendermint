@@ -1098,9 +1098,12 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	// At this point, +2/3 prevoted for a particular block.
 	prevBlock := cs.getPreviousBlock()
 	randomData, err := cs.verifier.Sign(prevBlock.Header.RandomData)
-	if err != nil {
-		cmn.PanicConsensus(fmt.Sprintf("incorrect random: %v. prevRandom %v", err, prevBlock.Header.RandomData))
+	if err != nil || len(randomData) == 0 {
+		cmn.PanicConsensus(fmt.Sprintf("incorrect random: %v. prevRandom %v. current random %v",
+			err, prevBlock.Header.RandomData, randomData))
 	}
+	logger.Info(fmt.Sprintf("enterPrecommit(%v/%v). Current: %v/%v/%v. Random: %v. Previous random: %v",
+		height, round, cs.Height, cs.Round, cs.Step, randomData, prevBlock.Header.RandomData))
 
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
@@ -1594,7 +1597,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		)
 		if len(vote.BLSSignature) == 0 {
 			err = ErrBLSSignatureMissing
-			cs.Logger.Info("Vote ignored and not added. BLS signature is missing", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID)
+			cs.Logger.Debug("Vote ignored and not added. BLS signature is missing", "voteHeight", vote.Height, "csHeight", cs.Height, "peerID", peerID)
 			return
 		}
 
@@ -1758,7 +1761,8 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	vote, err := cs.signVote(type_, hash, header, data)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
-		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
+		cs.Logger.Debug("Signed and pushed vote", "height", cs.Height, "round", cs.Round,
+			"vote", vote, "hash", hash, "data", data, "header", header.String())
 		return vote
 	}
 	//if !cs.replayMode {

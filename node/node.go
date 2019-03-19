@@ -337,6 +337,12 @@ func NewNode(config *cfg.Config,
 
 	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.Others, genDoc.BLSThreshold, genDoc.BLSNumShares)
 
+	blockExecLogger.Debug("BLS data", "genDoc.BLSMasterPubKey", genDoc.BLSMasterPubKey)
+	for addr, other := range genDoc.Others {
+		blockExecLogger.Debug("BLS other", "addr", addr, "otherId", other)
+	}
+	blockExecLogger.Debug("BLS keypair", "keypairId", keypair.ID, "keypairPub", keypair.Pub, "keypairPriv", keypair.Priv)
+
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
