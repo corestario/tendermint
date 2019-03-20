@@ -330,12 +330,13 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}
+
 	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
 
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.Others, genDoc.BLSThreshold, genDoc.BLSNumShares)
+	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)

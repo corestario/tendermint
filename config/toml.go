@@ -364,7 +364,6 @@ func ResetTestRoot(testName string) *Config {
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
 
 	b, err := json.Marshal(types.BLSShareJSON{
-		ID:   types.DefaultBLSVerifierID,
 		Pub:  types.DefaultBLSVerifierPubKey,
 		Priv: types.DefaultBLSVerifierPrivKey,
 	})

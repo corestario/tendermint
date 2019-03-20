@@ -5,7 +5,8 @@ GOTOOLS = \
 	github.com/gogo/protobuf/protoc-gen-gogo \
 	github.com/square/certstrap
 GOBIN?=${GOPATH}/bin
-PACKAGES=$(shell go list ./...)
+# PACKAGES=$(shell go list ./... | grep -v "tendermint/node")
+PACKAGES="github.com/tendermint/tendermint/abci/example/kvstore"
 
 INCLUDE = -I=. -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf
 BUILD_TAGS?='tendermint'
@@ -301,11 +302,10 @@ build-linux:
 build-docker-localnode:
 	cd networks/local
 	make
-	cd -
 
 # Run a $TESTNET_NODES-node testnet locally
 localnet-start:
-	@if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --v $(TESTNET_NODES) --d $(TESTNET_DEAD_NODES) --o . --populate-persistent-peers --starting-ip-address 192.167.10.2 ; mv $(CURDIR)/build/docker-compose.yml $(CURDIR) ; fi
+	@if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --o . --populate-persistent-peers --starting-ip-address 192.167.10.2 ; mv $(CURDIR)/build/docker-compose.yml $(CURDIR) ; fi
 	make localnet-stop
 	docker-compose up
 

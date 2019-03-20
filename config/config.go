@@ -195,6 +195,8 @@ type BaseConfig struct {
 	// If true, query the ABCI app on connecting to a new peer
 	// so the app can decide if we should keep the connection or not
 	FilterPeers bool `mapstructure:"filter_peers"` // false
+
+	NodeID int `mapstructure:"node_id"`
 }
 
 // DefaultBaseConfig returns a default base configuration for a Tendermint node

@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber"
@@ -25,11 +26,29 @@ const (
 )
 
 const (
-	DefaultBLSVerifierMasterPubKey = "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD/hv+EAAH/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/Q"
-	DefaultBLSVerifierID           = 0
-	DefaultBLSVerifierPubKey       = "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/QAA=="
-	DefaultBLSVerifierPrivKey      = "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIghVFMQNE4GNFCGPpzYXJ8lqUnHA0IlIefA3j+lvDdoUYA"
+	DefaultBLSVerifierMasterPubKey = "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD+AQj/hAAC/4A9Dc2X6WOLNbInqOqkQJoiBKihZvJO6Wmzpg1BjVxv4RDb+EXpX8kwyed5GZ01vPo5EdHrBV4nEA33Fi7I/ldDfGeIUynG1XGx5dIvaPcRXGfVci5oc9EMcKs6VedQJExFy6Km4PQFPrFhPyuqUqpKHazusLkNwxpb0s1xiC6VNP+AgkM4H6h0ZqOYUH8tle6xRNhS4HvKIGsmCPYn5txFT3hwWIOQUGjYDNVbec23dJMeYZ60UGo6P3Y155JwlIiC3QKiusfr1104+kIVOjjI2O4uwNNGhRGqJaQ8bfida2FSIx8eSH9C5VbymmN6Hft8yqg4P+1gi0XhPkLpCjHbQ3U="
+	DefaultBLSVerifierPubKey       = "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gGXxwaGvZH+eIc9E7XmRwTJdQouaituJP2QRRt7z/VCwh3QKPjJYNkDxWEmKgpdRivtPDJPw+nzmecs/U3H5mQMCFN/DnFJJVR6uyqNBWiLqtERcYCdsPkC3IdoI4IexESjAxMH9vjL7Fuuns+PNfz6+Vm+xukQ2bwMZ/YS0zGQSAA=="
+	DefaultBLSVerifierPrivKey      = "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIgiWDlkozun6+xMzm4A3uMhM0fPxngtDmJneYqvbqAmCUA"
 )
+
+var TestnetShares = map[int]*BLSShareJSON{
+	0: {
+		Pub:  DefaultBLSVerifierPubKey,
+		Priv: DefaultBLSVerifierPrivKey,
+	},
+	1: {
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgECAf+AhEqOOuENmkWFU467Nd0qZHHkxg0svT/xNqy6XOkvx2k3LFbm1bBZBH4A/L1OP50RgDJSuvGMeZHt6/KZjyugeGrM7I0DDOI62fh2AsH1LosSsHEZnZ6V+kcnee5JkjkFIVcerwDkzdbz0dMQu5GlRVk+I+WAuh3RQk4dZX5S8HgA",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAECASBxLoheHSAjymeDXzysWu9zlO0fF3TCMXKYHVzjjtBDsAA=",
+	},
+	2: {
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEEAf+AjM/WGGkNmEhbRh/rM93emzi0bQYbS4Xf83o32yYbDucO0/NTv1DK6yUqNRSpM+ycVmw2B4eRBJlUm+58i6ZIXAW0FNNZqVr0E2rCVVjhjE0/J8Lbo6vwzj8wJV+vF6c7GhkqbI6VFr3gUiY4L7Ohr7DTW9WM7W09BKEiS0ZNZB0A",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEEASBY/CsprVGn5R3ThMFVOlJiXLr/FQjQKVuSVI8JYx/vOwA=",
+	},
+	3: {
+		Pub:  "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4j/hgEGAf+AFv9ps05s4hf9xwtZ219eolKRjK2HtPe51nWAtW7mRuV4Mfob2zy9ivFcjGBYvbvCqtxbYxaP4F4FW0bGDhp1FArrZdPTPDo8gCUQS0jOKHOGE0QFdJJX/1n8sFFOsTi2EsBwHihjql06YIRx0bxHTRXooEL9fqrsf43gqJ1j8ekA",
+		Priv: "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACf/iAEGASBAyc31PYMr/9QjqkX+GbVRJIjfEpzeIUSMi8EvN2+axgA=",
+	},
+}
 
 type BLSKeyring struct {
 	T            int                 // Threshold
@@ -80,7 +99,6 @@ type BLSShare struct {
 }
 
 type BLSShareJSON struct {
-	ID   int    `json:"id"`
 	Pub  string `json:"pub"`
 	Priv string `json:"priv"`
 }
@@ -99,7 +117,6 @@ func NewBLSShareJSON(keypair *BLSShare) (*BLSShareJSON, error) {
 	}
 
 	return &BLSShareJSON{
-		ID:   keypair.ID,
 		Pub:  base64.StdEncoding.EncodeToString(pubBuf.Bytes()),
 		Priv: base64.StdEncoding.EncodeToString(privBuf.Bytes()),
 	}, nil
@@ -125,7 +142,6 @@ func (m *BLSShareJSON) Deserialize() (*BLSShare, error) {
 	}
 
 	return &BLSShare{
-		ID:   m.ID,
 		Pub:  pubKey,
 		Priv: privKey,
 	}, nil
@@ -157,19 +173,19 @@ func DumpBLSKeyring(keyring *BLSKeyring, targetDir string) error {
 		return fmt.Errorf("failed to write master public key to disk: %v", err)
 	}
 
-	for _, keypair := range keyring.Shares {
+	for id, keypair := range keyring.Shares {
 		skp, err := NewBLSShareJSON(keypair)
 		if err != nil {
-			return fmt.Errorf("failed to serialize keypair #%d: %v", skp.ID, err)
+			return fmt.Errorf("failed to serialize keypair #%d: %v", id, err)
 		}
 		data, err := json.Marshal(skp)
 		if err != nil {
 			return fmt.Errorf("failed to marshal keypair for id %d: %v", keypair.ID, err)
 		}
 
-		fileName := fmt.Sprintf(storeShare, fmt.Sprintf("%d", skp.ID))
+		fileName := fmt.Sprintf(storeShare, fmt.Sprintf("%d", id))
 		if err := ioutil.WriteFile(filepath.Join(targetDir, fileName), data, 0644); err != nil {
-			return fmt.Errorf("failed to write key pair for id %d to disk: %v", skp.ID, err)
+			return fmt.Errorf("failed to write key pair for id %d to disk: %v", id, err)
 		}
 	}
 
@@ -204,19 +220,17 @@ type Verifier interface {
 }
 
 type BLSVerifier struct {
-	Others       map[string]int // string(crypto.Address) -> verifier's tbls ID.
-	Keypair      *BLSShare      // This verifier's BLSShare.
+	Keypair      *BLSShare // This verifier's BLSShare.
 	masterPubKey *share.PubPoly
 	suite        *bn256.Suite
 	t            int
 	n            int
 }
 
-func NewBLSVerifier(masterPubKey *share.PubPoly, keypair *BLSShare, others map[string]int, t, n int) *BLSVerifier {
+func NewBLSVerifier(masterPubKey *share.PubPoly, keypair *BLSShare, t, n int) *BLSVerifier {
 	return &BLSVerifier{
 		masterPubKey: masterPubKey,
 		Keypair:      keypair,
-		Others:       others,
 		suite:        bn256.NewSuite(),
 		t:            t,
 		n:            n,
@@ -233,21 +247,6 @@ func (m *BLSVerifier) Sign(data []byte) ([]byte, error) {
 }
 
 func (m *BLSVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
-	expectedID, ok := m.Others[addr]
-	if !ok {
-		return fmt.Errorf("found no keypair for address %s", addr)
-	}
-
-	// Check that we got the signature from the right validator.
-	s := tbls.SigShare(currRandomData)
-	id, err := s.Index()
-	if err != nil {
-		return fmt.Errorf("failed to get validator's index from signature: %v", err)
-	}
-	if expectedID != id {
-		return fmt.Errorf("got signature from unexpected validator")
-	}
-
 	// Check that the signature itself is correct for this validator.
 	if err := tbls.Verify(m.suite, m.masterPubKey, prevRandomData, currRandomData); err != nil {
 		return fmt.Errorf("signature of share is corrupt: %v. prev random: %v; current random: %v", err, prevRandomData, currRandomData)
@@ -265,6 +264,7 @@ func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) er
 }
 
 func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
+	var s []string
 	var sigs [][]byte
 	for _, precommit := range precommits {
 		// Nil votes do exist, keep that in mind.
@@ -273,7 +273,10 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 		}
 
 		sigs = append(sigs, precommit.BLSSignature)
+		s = append(s, fmt.Sprintf("%v", precommit.BLSSignature[:4]))
 	}
+
+	fmt.Println(strings.Join(s, "\n"))
 
 	aggrSig, err := tbls.Recover(m.suite, m.masterPubKey, msg, sigs, m.t, m.n)
 	if err != nil {
@@ -289,7 +292,6 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 func NewTestBLSVerifier(addr string) *BLSVerifier {
 	t, n := 1, 4
 	shareJSON := BLSShareJSON{
-		ID:   DefaultBLSVerifierID,
 		Pub:  DefaultBLSVerifierPubKey,
 		Priv: DefaultBLSVerifierPrivKey,
 	}
@@ -302,10 +304,7 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 	if err != nil {
 		panic(err)
 	}
-	others := map[string]int{
-		addr: DefaultBLSVerifierID,
-	}
-	return NewBLSVerifier(pubPoly, share, others, t, n)
+	return NewBLSVerifier(pubPoly, share, t, n)
 }
 
 type MockVerifier struct{}
