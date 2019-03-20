@@ -137,7 +137,7 @@ clean_certs:
 	rm -f db/remotedb/::.crt db/remotedb/::.key
 
 test_libs: gen_certs
-	GOCACHE=off go test -tags gcc $(PACKAGES)
+	go test -tags gcc $(PACKAGES)
 	make clean_certs
 
 grpc_dbserver:
@@ -220,15 +220,15 @@ vagrant_test:
 ### go tests
 test:
 	@echo "--> Running go test"
-	@GOCACHE=off go test -p 1 $(PACKAGES)
+	@go test -p 1 $(PACKAGES)
 
 test_verbose:
 	@echo "--> Running go test (verbose)"
-	@GOCACHE=off go test -v -p 1 $(PACKAGES)
+	@go test -v -p 1 $(PACKAGES)
 
 test_race:
 	@echo "--> Running go test --race"
-	@GOCACHE=off go test -p 1 -v -race $(PACKAGES)
+	@go test -p 1 -v -race $(PACKAGES)
 
 ### benchmarks
 bench:

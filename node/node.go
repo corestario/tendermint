@@ -357,7 +357,9 @@ func NewNode(config *cfg.Config,
 		evidencePool,
 		cs.StateMetrics(csMetrics),
 		cs.WithVerifier(verifier),
+		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
 	)
+
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)

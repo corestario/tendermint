@@ -85,7 +85,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		panic(cmn.ErrorWrap(err, "error constructing state from genesis file"))
 	}
 
-	// A BLSVerifier with a 1-of-2 key set that doesn't require any other signatures but his own.
+	// A BLSVerifier with a 1-of-4 key set that doesn't require any other signatures but his own.
 	testVerifier := types.NewTestBLSVerifier(state.Validators.Validators[0].Address.String())
 
 	// Make the BlockchainReactor itself.
@@ -114,10 +114,17 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		if blockHeight == 1 {
 			thisBlock.RandomData = []byte(types.InitialRandomData)
 		} else {
+			sign, err := testVerifier.Sign(prevBlock.RandomData)
+			if err != nil {
+				panic(cmn.ErrorWrap(err, "error sign random data"))
+			}
 			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []*types.Vote{
 				{
+					BlockID: types.BlockID{
+						Hash: cmn.HexBytes("text"),
+					},
 					ValidatorAddress: state.Validators.Validators[0].Address,
-					BLSSignature:     testVerifier.Sign(prevBlock.RandomData),
+					BLSSignature:     sign,
 				},
 			})
 			if err != nil {
