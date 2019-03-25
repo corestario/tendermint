@@ -5,8 +5,7 @@ GOTOOLS = \
 	github.com/gogo/protobuf/protoc-gen-gogo \
 	github.com/square/certstrap
 GOBIN?=${GOPATH}/bin
-# PACKAGES=$(shell go list ./... | grep -v "tendermint/node")
-PACKAGES="github.com/tendermint/tendermint/abci/example/kvstore"
+PACKAGES=$(shell go list ./...)
 
 INCLUDE = -I=. -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf
 BUILD_TAGS?='tendermint'

@@ -1225,7 +1225,6 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
-
 	cs.Logger.Info("Generated random data", "rand_data", randomData)
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {

@@ -330,7 +330,6 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}
-
 	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
