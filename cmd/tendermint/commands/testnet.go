@@ -94,6 +94,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
+		config.NodeID = i
 		initFilesWithConfig(config)
 
 		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
@@ -123,9 +124,13 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 
 	// Generate genesis doc from generated validators
 	genDoc := &types.GenesisDoc{
-		GenesisTime: tmtime.Now(),
-		ChainID:     "chain-" + cmn.RandStr(6),
-		Validators:  genVals,
+		GenesisTime:     tmtime.Now(),
+		ChainID:         "chain-" + cmn.RandStr(6),
+		Validators:      genVals,
+		BLSMasterPubKey: types.DefaultBLSVerifierMasterPubKey,
+		BLSThreshold:    2,
+		BLSNumShares:    4,
+		DKGNumBlocks:    1000,
 	}
 
 	// Write genesis file.

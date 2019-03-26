@@ -53,7 +53,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
-	//todo what should we do if bls key not exsists
+	// todo what should we do if bls key not exsists
 	blsKeyFile := config.BLSKeyFile()
 	if cmn.FileExists(blsKeyFile) {
 		logger.Info("Found node key", "path", blsKeyFile)
@@ -63,11 +63,11 @@ func initFilesWithConfig(config *cfg.Config) error {
 			return err
 		}
 		defer f.Close()
-		err = json.NewEncoder(f).Encode(types.BLSShareJSON{
-			ID:   types.DefaultBLSVerifierID,
-			Pub:  types.DefaultBLSVerifierPubKey,
-			Priv: types.DefaultBLSVerifierPrivKey,
-		})
+		share, ok := types.TestnetShares[config.NodeID]
+		if !ok {
+			return fmt.Errorf("node id #%d is unexpected", config.NodeID)
+		}
+		err = json.NewEncoder(f).Encode(share)
 		if err != nil {
 			return err
 		}
@@ -94,10 +94,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
 		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
-		genDoc.Others = map[string]int{
-			pv.GetPubKey().Address().String(): types.DefaultBLSVerifierID,
-		}
-		genDoc.BLSThreshold = 1
+		genDoc.BLSThreshold = 2
 		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 1000
 
