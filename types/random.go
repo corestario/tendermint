@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/pkg/errors"
 	"go.dedis.ch/kyber"
@@ -264,7 +263,6 @@ func (m *BLSVerifier) VerifyRandomData(prevRandomData, currRandomData []byte) er
 }
 
 func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
-	var s []string
 	var sigs [][]byte
 	for _, precommit := range precommits {
 		// Nil votes do exist, keep that in mind.
@@ -273,10 +271,7 @@ func (m *BLSVerifier) Recover(msg []byte, precommits []*Vote) ([]byte, error) {
 		}
 
 		sigs = append(sigs, precommit.BLSSignature)
-		s = append(s, fmt.Sprintf("%v", precommit.BLSSignature[:4]))
 	}
-
-	fmt.Println(strings.Join(s, "\n"))
 
 	aggrSig, err := tbls.Recover(m.suite, m.masterPubKey, msg, sigs, m.t, m.n)
 	if err != nil {
