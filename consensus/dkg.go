@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	"go.dedis.ch/kyber/share"
 	dkg "go.dedis.ch/kyber/share/dkg/rabin"
 	vss "go.dedis.ch/kyber/share/vss/rabin"
+	"go.dedis.ch/kyber/sign/schnorr"
 )
 
 // TODO: implement round timeouts.
@@ -30,6 +32,7 @@ const (
 
 var (
 	errDKGVerifierNotReady = errors.New("verifier not ready yet")
+	errPKStorePKNotFound   = errors.New("There is no PK for this address")
 )
 
 func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
@@ -56,6 +59,19 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		cs.Logger.Info("DKG: received message for inactive round:", "round", msg.RoundID)
 		return
 	}
+
+	if dkgMsg.Data.Type != types.DKGPubKey {
+		cs.Logger.Info("DKG: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
+		if err := dealer.VerifyMessage(*dkgMsg); err != nil {
+			if err == errPKStorePKNotFound {
+				cs.Logger.Info("DKG: "+err.Error(), "address", dkgMsg.Data.GetAddrString())
+			}
+			cs.Logger.Info("DKG: received message with invalid signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
+			return
+		}
+		cs.Logger.Info("DKG: message verified")
+	}
+
 	fromAddr := crypto.Address(msg.Addr).String()
 
 	var err error
@@ -206,6 +222,36 @@ func (m *DKGDealer) start() error {
 	return nil
 }
 
+func (m *DKGDealer) sendSignedMsg(data *types.DKGData) {
+	signature := m.Sign(data)
+	data.Signature = signature
+	m.sendMsgCb(data)
+}
+
+//Sign sign message by dealer's secret key
+func (m *DKGDealer) Sign(data *types.DKGData) []byte {
+	var (
+		sig []byte
+		err error
+	)
+	if sig, err = schnorr.Sign(bn256.NewSuiteG2(), m.secKey, data.SignBytes()); err != nil {
+		panic(err)
+	}
+	return sig
+}
+
+//VerifyMessage verify message by signature
+func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
+	var (
+		pk  kyber.Point
+		err error
+	)
+	if pk, err = m.pubKeys.FindByAddress(msg.Data.GetAddrString()); err != nil {
+		return err
+	}
+	return schnorr.Verify(bn256.NewSuiteG2(), pk, msg.Data.SignBytes(), msg.Data.Signature)
+}
+
 func (m *DKGDealer) transit() error {
 	for len(m.transitions) > 0 {
 		var tn = m.transitions[0]
@@ -316,7 +362,7 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 		if err := enc.Encode(deal); err != nil {
 			return fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err), true
 		}
-		m.sendMsgCb(&types.DKGData{
+		m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGDeal,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
@@ -377,7 +423,7 @@ func (m *DKGDealer) processDeals() (err error, ready bool) {
 		if err := enc.Encode(resp); err != nil {
 			return fmt.Errorf("failed to encode response: %v", err), true
 		}
-		m.sendMsgCb(&types.DKGData{
+		m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGResponse,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
@@ -454,7 +500,7 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 			return err, true
 		}
 
-		m.sendMsgCb(msg)
+		m.sendSignedMsg(msg)
 	}
 
 	return nil, true
@@ -531,7 +577,7 @@ func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	if err := enc.Encode(commits); err != nil {
 		return fmt.Errorf("failed to encode response: %v", err), true
 	}
-	m.sendMsgCb(&types.DKGData{
+	m.sendSignedMsg(&types.DKGData{
 		Type:        types.DKGCommits,
 		RoundID:     m.roundID,
 		Addr:        m.addrBytes,
@@ -600,7 +646,7 @@ func (m *DKGDealer) processCommits() (err error, ready bool) {
 	}
 	if !alreadyFinished {
 		for _, msg := range messages {
-			m.sendMsgCb(msg)
+			m.sendSignedMsg(msg)
 		}
 	}
 
@@ -659,7 +705,7 @@ func (m *DKGDealer) processComplaints() (err error, ready bool) {
 				msg.Data = buf.Bytes()
 			}
 		}
-		m.sendMsgCb(msg)
+		m.sendSignedMsg(msg)
 	}
 
 	return nil, true
@@ -755,6 +801,18 @@ func (m PKStore) GetPKs() []kyber.Point {
 		out[idx] = val.PK
 	}
 	return out
+}
+
+func (m PKStore) FindByAddress(addr string) (kyber.Point, error) {
+	size := len(m)
+	searchFunc := func(i int) bool {
+		return m[i].Addr.String() >= addr
+	}
+	index := sort.Search(size, searchFunc)
+	if index == size {
+		return nil, errPKStorePKNotFound
+	}
+	return m[index].PK, nil
 }
 
 type transition func() (error, bool)
