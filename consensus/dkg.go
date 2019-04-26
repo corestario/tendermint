@@ -65,6 +65,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		if err := dealer.VerifyMessage(*dkgMsg); err != nil {
 			if err == errPKStorePKNotFound {
 				cs.Logger.Info("DKG: "+err.Error(), "address", dkgMsg.Data.GetAddrString())
+				return
 			}
 			cs.Logger.Info("DKG: received message with invalid signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
 			return
@@ -223,33 +224,36 @@ func (m *DKGDealer) start() error {
 }
 
 func (m *DKGDealer) sendSignedMsg(data *types.DKGData) {
-	signature := m.Sign(data)
-	data.Signature = signature
+	if err := m.Sign(data); err != nil {
+		panic(err)
+	}
+	m.logger.Info("DKG: msg signed with signature", "signature", hex.EncodeToString(data.Signature))
 	m.sendMsgCb(data)
 }
 
 //Sign sign message by dealer's secret key
-func (m *DKGDealer) Sign(data *types.DKGData) []byte {
+func (m *DKGDealer) Sign(data *types.DKGData) error {
 	var (
 		sig []byte
 		err error
 	)
 	if sig, err = schnorr.Sign(bn256.NewSuiteG2(), m.secKey, data.SignBytes()); err != nil {
-		panic(err)
+		return err
 	}
-	return sig
+	data.Signature = sig
+	return nil
 }
 
 //VerifyMessage verify message by signature
 func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 	var (
-		pk  kyber.Point
+		pk  *PK2Addr
 		err error
 	)
 	if pk, err = m.pubKeys.FindByAddress(msg.Data.GetAddrString()); err != nil {
 		return err
 	}
-	return schnorr.Verify(bn256.NewSuiteG2(), pk, msg.Data.SignBytes(), msg.Data.Signature)
+	return schnorr.Verify(bn256.NewSuiteG2(), pk.PK, msg.Data.SignBytes(), msg.Data.Signature)
 }
 
 func (m *DKGDealer) transit() error {
@@ -803,7 +807,8 @@ func (m PKStore) GetPKs() []kyber.Point {
 	return out
 }
 
-func (m PKStore) FindByAddress(addr string) (kyber.Point, error) {
+//FindByAddress find first pk by given address
+func (m PKStore) FindByAddress(addr string) (*PK2Addr, error) {
 	size := len(m)
 	searchFunc := func(i int) bool {
 		return m[i].Addr.String() >= addr
@@ -812,7 +817,7 @@ func (m PKStore) FindByAddress(addr string) (kyber.Point, error) {
 	if index == size {
 		return nil, errPKStorePKNotFound
 	}
-	return m[index].PK, nil
+	return m[index], nil
 }
 
 type transition func() (error, bool)
