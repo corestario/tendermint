@@ -30,9 +30,7 @@ const (
 )
 
 var (
-	errDKGVerifierNotReady        = errors.New("verifier not ready yet")
-	errPKStorePKNotFound          = errors.New("There is no PK for this address")
-	errDKGInvalidMessageSignature = errors.New("Invalid DKG message signature")
+	errDKGVerifierNotReady = errors.New("verifier not ready yet")
 )
 
 func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
@@ -63,11 +61,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	if dkgMsg.Data.Type != types.DKGPubKey {
 		cs.Logger.Info("DKG: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
 		if err := dealer.VerifyMessage(*dkgMsg); err != nil {
-			if err == errPKStorePKNotFound {
-				cs.Logger.Info("DKG: "+err.Error(), "address", dkgMsg.Data.GetAddrString())
-				return
-			}
-			cs.Logger.Info("DKG: received message with invalid signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
+			cs.Logger.Info("DKG: can't verify message:", "error", err.Error())
 			return
 		}
 		cs.Logger.Info("DKG: message verified")
@@ -246,11 +240,14 @@ func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 		err       error
 	)
 	_, validator := m.validators.GetByAddress(msg.Data.Addr)
+	if validator == nil {
+		return fmt.Errorf("Can't find validator by address: %s", msg.Data.GetAddrString())
+	}
 	if signBytes, err = msg.Data.SignBytes(); err != nil {
 		return err
 	}
 	if !validator.PubKey.VerifyBytes(signBytes, msg.Data.Signature) {
-		return errDKGInvalidMessageSignature
+		return fmt.Errorf("Invalid DKG message signature: %s", hex.EncodeToString(msg.Data.Signature))
 	}
 	return nil
 }
