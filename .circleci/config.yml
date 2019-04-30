@@ -3,7 +3,7 @@ version: 2
 defaults: &defaults
   working_directory: /go/src/github.com/tendermint/tendermint
   docker:
-    - image: circleci/golang:1.11.4
+    - image: circleci/golang
   environment:
     GOBIN: /tmp/workspace/bin
 
@@ -113,7 +113,7 @@ jobs:
           command: |
             set -ex
             export PATH="$GOBIN:$PATH"
-            make metalinter
+            make lint
       - run:
           name: check_dep
           command: |
