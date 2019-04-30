@@ -223,21 +223,25 @@ func (m *DKGDealer) start() error {
 	return nil
 }
 
-func (m *DKGDealer) sendSignedMsg(data *types.DKGData) {
+func (m *DKGDealer) sendSignedMsg(data *types.DKGData) error {
 	if err := m.Sign(data); err != nil {
-		panic(err)
+		return err
 	}
 	m.logger.Info("DKG: msg signed with signature", "signature", hex.EncodeToString(data.Signature))
 	m.sendMsgCb(data)
+	return nil
 }
 
 //Sign sign message by dealer's secret key
 func (m *DKGDealer) Sign(data *types.DKGData) error {
 	var (
-		sig []byte
-		err error
+		sig, signBytes []byte
+		err            error
 	)
-	if sig, err = schnorr.Sign(bn256.NewSuiteG2(), m.secKey, data.SignBytes()); err != nil {
+	if signBytes, err = data.SignBytes(); err != nil {
+		return err
+	}
+	if sig, err = schnorr.Sign(bn256.NewSuiteG2(), m.secKey, signBytes); err != nil {
 		return err
 	}
 	data.Signature = sig
@@ -247,13 +251,17 @@ func (m *DKGDealer) Sign(data *types.DKGData) error {
 //VerifyMessage verify message by signature
 func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 	var (
-		pk  *PK2Addr
-		err error
+		pk        *PK2Addr
+		signBytes []byte
+		err       error
 	)
 	if pk, err = m.pubKeys.FindByAddress(msg.Data.GetAddrString()); err != nil {
 		return err
 	}
-	return schnorr.Verify(bn256.NewSuiteG2(), pk.PK, msg.Data.SignBytes(), msg.Data.Signature)
+	if signBytes, err = msg.Data.SignBytes(); err != nil {
+		return err
+	}
+	return schnorr.Verify(bn256.NewSuiteG2(), pk.PK, signBytes, msg.Data.Signature)
 }
 
 func (m *DKGDealer) transit() error {
@@ -342,6 +350,7 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 	}
 	m.logger.Info("DKG: sending deals")
 
+	//It's needed for DistKeyGenerator and for binary search in array
 	sort.Sort(m.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(m.suiteG2, m.secKey, m.pubKeys.GetPKs(), (m.validators.Size()*2)/3)
 	if err != nil {
@@ -366,13 +375,15 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 		if err := enc.Encode(deal); err != nil {
 			return fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err), true
 		}
-		m.sendSignedMsg(&types.DKGData{
+		if err := m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGDeal,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
 			Data:    buf.Bytes(),
 			ToIndex: toIndex,
-		})
+		}); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -427,12 +438,14 @@ func (m *DKGDealer) processDeals() (err error, ready bool) {
 		if err := enc.Encode(resp); err != nil {
 			return fmt.Errorf("failed to encode response: %v", err), true
 		}
-		m.sendSignedMsg(&types.DKGData{
+		if err := m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGResponse,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
 			Data:    buf.Bytes(),
-		})
+		}); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -504,7 +517,9 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 			return err, true
 		}
 
-		m.sendSignedMsg(msg)
+		if err := m.sendSignedMsg(msg); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -581,13 +596,15 @@ func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	if err := enc.Encode(commits); err != nil {
 		return fmt.Errorf("failed to encode response: %v", err), true
 	}
-	m.sendSignedMsg(&types.DKGData{
+	if err := m.sendSignedMsg(&types.DKGData{
 		Type:        types.DKGCommits,
 		RoundID:     m.roundID,
 		Addr:        m.addrBytes,
 		Data:        buf.Bytes(),
 		NumEntities: len(commits.Commitments),
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to sign message: %v", err), true
+	}
 
 	return nil, true
 }
@@ -650,7 +667,9 @@ func (m *DKGDealer) processCommits() (err error, ready bool) {
 	}
 	if !alreadyFinished {
 		for _, msg := range messages {
-			m.sendSignedMsg(msg)
+			if err := m.sendSignedMsg(msg); err != nil {
+				return fmt.Errorf("failed to sign message: %v", err), true
+			}
 		}
 	}
 
@@ -709,7 +728,9 @@ func (m *DKGDealer) processComplaints() (err error, ready bool) {
 				msg.Data = buf.Bytes()
 			}
 		}
-		m.sendSignedMsg(msg)
+		if err := m.sendSignedMsg(msg); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -813,6 +834,8 @@ func (m PKStore) FindByAddress(addr string) (*PK2Addr, error) {
 	searchFunc := func(i int) bool {
 		return m[i].Addr.String() >= addr
 	}
+	//Slice is already sorted at the moment of call
+	//The sorting happens on line 353 in sendDeals()
 	index := sort.Search(size, searchFunc)
 	if index == size {
 		return nil, errPKStorePKNotFound

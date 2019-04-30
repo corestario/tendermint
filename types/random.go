@@ -344,16 +344,16 @@ type DKGData struct {
 	Signature []byte
 }
 
-func (m DKGData) SignBytes() []byte {
+func (m DKGData) SignBytes() ([]byte, error) {
 	var (
 		sb  []byte
 		err error
 	)
 	m.Signature = nil
 	if sb, err = cdc.MarshalBinaryLengthPrefixed(m); err != nil {
-		panic(err)
+		return nil, err
 	}
-	return sb
+	return sb, nil
 }
 
 func (m *DKGData) GetAddrString() string {
