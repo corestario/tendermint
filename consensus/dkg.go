@@ -19,7 +19,6 @@ import (
 	"go.dedis.ch/kyber/share"
 	dkg "go.dedis.ch/kyber/share/dkg/rabin"
 	vss "go.dedis.ch/kyber/share/vss/rabin"
-	"go.dedis.ch/kyber/sign/schnorr"
 )
 
 // TODO: implement round timeouts.
@@ -31,8 +30,9 @@ const (
 )
 
 var (
-	errDKGVerifierNotReady = errors.New("verifier not ready yet")
-	errPKStorePKNotFound   = errors.New("There is no PK for this address")
+	errDKGVerifierNotReady        = errors.New("verifier not ready yet")
+	errPKStorePKNotFound          = errors.New("There is no PK for this address")
+	errDKGInvalidMessageSignature = errors.New("Invalid DKG message signature")
 )
 
 func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
@@ -49,7 +49,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	dealer, ok := cs.dkgRoundToDealer[msg.RoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
 		cs.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.start(); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
@@ -130,7 +130,7 @@ func (cs *ConsensusState) startDKGRound() error {
 	dealer, ok := cs.dkgRoundToDealer[cs.dkgRoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", cs.dkgRoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
 		cs.dkgRoundToDealer[cs.dkgRoundID] = dealer
 		return dealer.start()
 	}
@@ -158,10 +158,11 @@ func (cs *ConsensusState) slashDKGLosers(losers []*types.Validator) {
 }
 
 type DKGDealer struct {
-	sendMsgCb  func(*types.DKGData)
-	validators *types.ValidatorSet
-	addrBytes  []byte
-	logger     log.Logger
+	sendMsgCb     func(*types.DKGData)
+	validators    *types.ValidatorSet
+	privValidator types.PrivValidator
+	addrBytes     []byte
+	logger        log.Logger
 
 	participantID int
 	roundID       int
@@ -184,14 +185,15 @@ type DKGDealer struct {
 	losers []crypto.Address
 }
 
-func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) *DKGDealer {
+func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValidator, sendMsgCb func(*types.DKGData), logger log.Logger) *DKGDealer {
 	return &DKGDealer{
-		validators: validators,
-		addrBytes:  pubKey.Address().Bytes(),
-		sendMsgCb:  sendMsgCb,
-		logger:     logger,
-		suiteG1:    bn256.NewSuiteG1(),
-		suiteG2:    bn256.NewSuiteG2(),
+		validators:    validators,
+		addrBytes:     privValidator.GetPubKey().Address().Bytes(),
+		privValidator: privValidator,
+		sendMsgCb:     sendMsgCb,
+		logger:        logger,
+		suiteG1:       bn256.NewSuiteG1(),
+		suiteG2:       bn256.NewSuiteG2(),
 
 		deals:          make(map[string]*dkg.Deal),
 		justifications: make(map[string]*dkg.Justification),
@@ -234,34 +236,23 @@ func (m *DKGDealer) sendSignedMsg(data *types.DKGData) error {
 
 //Sign sign message by dealer's secret key
 func (m *DKGDealer) Sign(data *types.DKGData) error {
-	var (
-		sig, signBytes []byte
-		err            error
-	)
-	if signBytes, err = data.SignBytes(); err != nil {
-		return err
-	}
-	if sig, err = schnorr.Sign(bn256.NewSuiteG2(), m.secKey, signBytes); err != nil {
-		return err
-	}
-	data.Signature = sig
-	return nil
+	return m.privValidator.SignDKGData(data)
 }
 
 //VerifyMessage verify message by signature
 func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 	var (
-		pk        *PK2Addr
 		signBytes []byte
 		err       error
 	)
-	if pk, err = m.pubKeys.FindByAddress(msg.Data.GetAddrString()); err != nil {
-		return err
-	}
+	_, validator := m.validators.GetByAddress(msg.Data.Addr)
 	if signBytes, err = msg.Data.SignBytes(); err != nil {
 		return err
 	}
-	return schnorr.Verify(bn256.NewSuiteG2(), pk.PK, signBytes, msg.Data.Signature)
+	if !validator.PubKey.VerifyBytes(signBytes, msg.Data.Signature) {
+		return errDKGInvalidMessageSignature
+	}
+	return nil
 }
 
 func (m *DKGDealer) transit() error {
@@ -826,21 +817,6 @@ func (m PKStore) GetPKs() []kyber.Point {
 		out[idx] = val.PK
 	}
 	return out
-}
-
-//FindByAddress find first pk by given address
-func (m PKStore) FindByAddress(addr string) (*PK2Addr, error) {
-	size := len(m)
-	searchFunc := func(i int) bool {
-		return m[i].Addr.String() >= addr
-	}
-	//Slice is already sorted at the moment of call
-	//The sorting happens on line 353 in sendDeals()
-	index := sort.Search(size, searchFunc)
-	if index == size {
-		return nil, errPKStorePKNotFound
-	}
-	return m[index], nil
 }
 
 type transition func() (error, bool)
