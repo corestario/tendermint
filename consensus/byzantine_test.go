@@ -229,40 +229,10 @@ func TestByzantineDKG(t *testing.T) {
 		cr.SwitchToConsensus(cr.conS.GetState(), 0)
 	}
 
-	// start the byzantine state machine
-	//byzR := reactors[0].(*ByzantineReactor)
-	//s := byzR.reactor.conS.GetState()
-	//byzR.reactor.SwitchToConsensus(s, 0)
-
-	// byz proposer sends one block to peers[0]
-	// and the other block to peers[1] and peers[2].
-	// note peers and switches order don't match.
-	peers := switches[0].Peers().List()
-
-	// partition A
-	//ind0 := getSwitchIndex(switches, peers[0])
-
-	// partition B
-	//ind1 := getSwitchIndex(switches, peers[1])
-	ind2 := getSwitchIndex(switches, peers[2])
-	//p2p.Connect2Switches(switches, ind1, ind2)
-	//p2p.Connect2Switches(switches, ind0, ind1)
-	//p2p.Connect2Switches(switches, ind0, ind2)
-
-	// wait for someone in the big partition (B) to make a block
-	<-eventChans[ind2]
-
-	t.Log("A block has been committed. Healing partition")
-	//p2p.Connect2Switches(switches, ind0, ind1)
-	//p2p.Connect2Switches(switches, ind0, ind2)
-
-	// wait till everyone makes the first new block
-	// (one of them already has)
+	const blocksToWait = 50
 	wg := new(sync.WaitGroup)
-
-	const blocksToWait = 10
-	wg.Add(blocksToWait*2)
-	for i := 1; i < N-1; i++ {
+	wg.Add(blocksToWait*N)
+	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
 			for range eventChans[j] {
