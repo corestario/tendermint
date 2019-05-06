@@ -328,6 +328,7 @@ func (c *MConnection) Send(chID byte, msgBytes []byte) bool {
 // Nonblocking, returns true if successful.
 func (c *MConnection) TrySend(chID byte, msgBytes []byte) bool {
 	if !c.IsRunning() {
+		fmt.Println("**** 1")
 		return false
 	}
 
@@ -336,6 +337,7 @@ func (c *MConnection) TrySend(chID byte, msgBytes []byte) bool {
 	// Send message to channel.
 	channel, ok := c.channelsIdx[chID]
 	if !ok {
+		fmt.Println("**** 2")
 		c.Logger.Error(fmt.Sprintf("Cannot send bytes, unknown channel %X", chID))
 		return false
 	}
@@ -346,8 +348,11 @@ func (c *MConnection) TrySend(chID byte, msgBytes []byte) bool {
 		select {
 		case c.send <- struct{}{}:
 		default:
+			fmt.Println("**** 3")
 		}
 	}
+
+	fmt.Println("**** 4", ok)
 
 	return ok
 }

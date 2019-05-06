@@ -803,6 +803,14 @@ OUTER_LOOP:
 					Type:    types.PrecommitType,
 					BlockID: commit.BlockID,
 				}))
+				conR.conS.Logger.Error("=== VoteSetMaj23Message part 1",
+					"prs.Proposal", prs.Proposal,
+					"peer",  prs.String())
+				conR.conS.Logger.Error("=== VoteSetMaj23Message part 2",
+					"Height:", prs.Height,
+					"Round:",   commit.Round(),
+					"Type:",    types.PrecommitType,
+					"BlockID:", commit.BlockID)
 				time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
 			}
 		}
