@@ -228,12 +228,12 @@ func (m *DKGDealer) sendSignedMsg(data *types.DKGData) error {
 	return nil
 }
 
-//Sign sign message by dealer's secret key
+// Sign sign message by dealer's secret key
 func (m *DKGDealer) Sign(data *types.DKGData) error {
 	return m.privValidator.SignDKGData(data)
 }
 
-//VerifyMessage verify message by signature
+// VerifyMessage verify message by signature
 func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 	var (
 		signBytes []byte
@@ -338,7 +338,7 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 	}
 	m.logger.Info("DKG: sending deals")
 
-	//It's needed for DistKeyGenerator and for binary search in array
+	// It's needed for DistKeyGenerator and for binary search in array
 	sort.Sort(m.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(m.suiteG2, m.secKey, m.pubKeys.GetPKs(), (m.validators.Size()*2)/3)
 	if err != nil {
