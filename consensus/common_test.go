@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -242,15 +243,15 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
 // consensus states
 
 func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application) *ConsensusState {
-	return newConsensusStateWithConfig(config, state, pv, app)
+	return newConsensusStateWithConfig(config, state, pv, app, &types.MockVerifier{})
 }
 
-func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application) *ConsensusState {
+func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier) *ConsensusState {
 	blockDB := dbm.NewMemDB()
-	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB)
+	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier)
 }
 
-func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB) *ConsensusState {
+func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier) *ConsensusState {
 	// Get BlockStore
 	blockStore := bc.NewBlockStore(blockDB)
 
@@ -272,7 +273,8 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 	// Make ConsensusState
 	stateDB := dbm.NewMemDB()
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
+
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(verifier))
 	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 	cs.SetPrivValidator(pv)
 
@@ -601,7 +603,39 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app)
+		blsKeyFile := thisConfig.BLSKeyFile()
+			f, err := os.Create(blsKeyFile)
+			if err != nil {
+				panic(err)
+			}
+			defer f.Close()
+			share, ok := types.TestnetShares[thisConfig.NodeID]
+			if !ok {
+				panic(fmt.Errorf("node id #%d is unexpected", thisConfig.NodeID))
+			}
+			err = json.NewEncoder(f).Encode(share)
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Println("Generated node key", "path", blsKeyFile)
+
+		fmt.Println("load bls from", config.BLSKeyFile())
+		blsShare, err := types.LoadBLSShareJSON(thisConfig.BLSKeyFile())
+		if err != nil {
+			panic(err)
+		}
+		keypair, err := blsShare.Deserialize()
+		if err != nil {
+			panic(err)
+		}
+		masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
+		if err != nil {
+			panic(err)
+		}
+		verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
@@ -638,7 +672,7 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{})
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
@@ -675,6 +709,10 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 		GenesisTime: tmtime.Now(),
 		ChainID:     config.ChainID(),
 		Validators:  validators,
+		BLSMasterPubKey: types.DefaultBLSVerifierMasterPubKey,
+		BLSThreshold: 2,
+		BLSNumShares: 4,
+		DKGNumBlocks: 1000,
 	}, privValidators
 }
 
