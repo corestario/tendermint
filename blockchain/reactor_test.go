@@ -115,7 +115,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 			thisBlock.RandomData = []byte(types.InitialRandomData)
 		} else {
 			sign, err := testVerifier.Sign(prevBlock.RandomData)
-			if err != nil {
+			if err != nil || len(sign) == 0 {
 				panic(cmn.ErrorWrap(err, "error sign random data"))
 			}
 			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []*types.Vote{

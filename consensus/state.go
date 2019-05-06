@@ -1591,7 +1591,8 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			validatorAddr = vote.ValidatorAddress.String()
 		)
 		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
-			return false, fmt.Errorf("random share authenticy check failed: %v", err)
+			return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
+				err, validatorAddr, prevBlockData, vote.BLSSignature)
 		}
 	}
 
@@ -1753,7 +1754,8 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	if type_ == types.PrecommitType {
 		cs.Logger.Error("!!!", "verifier", cs.verifier)
 		randomData, err = cs.verifier.Sign(cs.getPreviousBlock().Header.RandomData)
-		if err != nil {
+		fmt.Println("!!! random for", header.String(), randomData, cs.getPreviousBlock().Header.RandomData)
+		if err != nil || len(randomData) == 0 {
 			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
 				"type", type_, "hash", hash, "header", header, "random", randomData)
 			return nil
