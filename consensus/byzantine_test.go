@@ -175,11 +175,6 @@ func TestByzantineDKG(t *testing.T) {
 	logger := consensusLogger().With("test", "byzantine")
 	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter)
 
-	// give the byzantine validator a normal ticker
-	ticker := NewTimeoutTicker()
-	ticker.SetLogger(css[0].Logger)
-	css[0].SetTimeoutTicker(ticker)
-
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
 	for i := 0; i < N; i++ {
@@ -196,19 +191,6 @@ func TestByzantineDKG(t *testing.T) {
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
 	for i := 0; i < N; i++ {
-		// make first val byzantine
-		if i == 0 {
-			// NOTE: Now, test validators are MockPV, which by default doesn't
-			// do any safety checks.
-			css[i].privValidator.(*types.MockPV).DisableChecks()
-			css[i].decideProposal = func(j int) func(int64, int) {
-				return func(height int64, round int) {
-					byzantineDecideProposalFunc(t, height, round, css[j], switches[j])
-				}
-			}(i)
-			css[i].doPrevote = func(height int64, round int) {}
-		}
-
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
@@ -223,21 +205,12 @@ func TestByzantineDKG(t *testing.T) {
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
 
-		// make first val byzantine
-		if i == 0 {
-			//conRI = NewByzantineReactor(conR)
-		}
-
 		reactors[i] = conRI
 	}
 
 	defer func() {
 		for _, r := range reactors {
-			if rr, ok := r.(*ByzantineReactor); ok {
-				rr.reactor.Switch.Stop()
-			} else {
-				r.(*ConsensusReactor).Switch.Stop()
-			}
+			r.(*ConsensusReactor).Switch.Stop()
 		}
 	}()
 
@@ -246,10 +219,6 @@ func TestByzantineDKG(t *testing.T) {
 		switches[i].AddReactor("CONSENSUS", reactors[i])
 		return switches[i]
 	}, func(sws []*p2p.Switch, i, j int) {
-		// the network starts partitioned with globally active adversary
-		//if i != 0 {
-		//	return
-		//}
 		p2p.Connect2Switches(sws, i, j)
 	})
 
