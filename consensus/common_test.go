@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -604,47 +603,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		blsKeyFile := thisConfig.BLSKeyFile()
-		f, err := os.Create(blsKeyFile)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-		fmt.Println("!!! nodeID", thisConfig.NodeID)
-		share, ok := types.TestnetShares[thisConfig.NodeID]
-		if !ok {
-			panic(fmt.Errorf("node id #%d is unexpected", thisConfig.NodeID))
-		}
-		err = json.NewEncoder(f).Encode(share)
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Println("Generated node key", "path", blsKeyFile)
-
-		fmt.Println("load bls from", thisConfig.BLSKeyFile())
-		blsShare, err := types.LoadBLSShareJSON(thisConfig.BLSKeyFile())
-		if err != nil {
-			panic(err)
-		}
-		keypair, err := blsShare.Deserialize()
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Println("!!! bls share", i, blsShare.Pub, blsShare.Priv)
-		fmt.Println("!!! keypair.ID", i, keypair.ID)
-		fmt.Println("!!! keypair.Priv", i, keypair.Priv.String())
-		fmt.Println("!!! keypair.Pub", i, keypair.Pub.I, keypair.Pub.V.String())
-
-		masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("!!! valSize, genMasterPubKey", i, state.Validators.Size(), genDoc.BLSMasterPubKey)
-		fmt.Println("!!! masterPubKey", i, masterPubKey)
-
-		verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+		verifier := types.NewTestBLSVerifierByID(testName, i, 3, 4)
 
 		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier)
 		css[i].SetTimeoutTicker(tickerFunc())

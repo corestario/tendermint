@@ -200,7 +200,6 @@ func TestByzantineDKG(t *testing.T) {
 		if i == 0 {
 			// NOTE: Now, test validators are MockPV, which by default doesn't
 			// do any safety checks.
-			/*
 			css[i].privValidator.(*types.MockPV).DisableChecks()
 			css[i].decideProposal = func(j int) func(int64, int) {
 				return func(height int64, round int) {
@@ -208,7 +207,6 @@ func TestByzantineDKG(t *testing.T) {
 				}
 			}(i)
 			css[i].doPrevote = func(height int64, round int) {}
-			*/
 		}
 
 		eventBus := css[i].eventBus
@@ -292,7 +290,9 @@ func TestByzantineDKG(t *testing.T) {
 	// wait till everyone makes the first new block
 	// (one of them already has)
 	wg := new(sync.WaitGroup)
-	wg.Add(2)
+
+	const blocksToWait = 10
+	wg.Add(blocksToWait*2)
 	for i := 1; i < N-1; i++ {
 		go func(j int) {
 			<-eventChans[j]
@@ -306,7 +306,7 @@ func TestByzantineDKG(t *testing.T) {
 		close(done)
 	}()
 
-	tick := time.NewTicker(time.Second * 10)
+	tick := time.NewTicker(time.Second * 10*blocksToWait)
 	select {
 	case <-done:
 	case <-tick.C:
@@ -316,6 +316,8 @@ func TestByzantineDKG(t *testing.T) {
 		}
 		t.Fatalf("Timed out waiting for all validators to commit first block")
 	}
+
+	fmt.Println("************************************ All is done")
 }
 
 //-------------------------------

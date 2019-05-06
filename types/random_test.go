@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -21,9 +22,6 @@ func TestDumpLoad(t *testing.T) {
 		t.Log(err)
 	}
 	t.Log(targetDir)
-	defer func() {
-
-	}()
 
 	if err := os.Mkdir(targetDir, 0777); err != nil {
 		t.Errorf("failed to create test directory: %v", err)
@@ -92,6 +90,70 @@ func TestRecover(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to sing with test verifier: %v", err)
 		return
+	}
+}
+
+func TestRecover4(t *testing.T) {
+	const N = 4
+	const T = 3
+	msg := []byte("test")
+
+	var testVerifiers []*BLSVerifier
+	for i := 0; i < N; i++ {
+		testVerifiers = append(testVerifiers, NewTestBLSVerifierByID("TestRecover4", i, T, N))
+	}
+
+	signs := make([][]byte, N)
+	votes := make([]*Vote, N)
+	var err error
+
+	for i := 0; i < N; i++ {
+		signs[i], err = testVerifiers[i].Sign(msg)
+		if err != nil {
+			t.Errorf("failed to sing with test verifier: %v", err)
+			return
+		}
+
+		votes = append(votes, &Vote{
+			BlockID: BlockID{
+				Hash: cmn.HexBytes("text"),
+			},
+			ValidatorAddress: Address("test"),
+			BLSSignature:     signs[i],
+		})
+
+		for j := 0; j <= i; j++ {
+			if err = testVerifiers[i].VerifyRandomShare("", msg, signs[j]); err != nil {
+				t.Errorf("failed to verify share %d by verifier %d: %v", j, i, err)
+				return
+			}
+		}
+	}
+
+	blsSigns := make([][]byte, N)
+	for i := 0; i < N; i++ {
+		blsSigns[i], err = testVerifiers[i].Recover(msg, votes)
+		if err != nil {
+			t.Errorf("failed to sing with test verifier: %v", err)
+			return
+		}
+
+		if len(blsSigns[i]) == 0 {
+			t.Errorf("failed to sing with test verifier - empty signature: %v", err)
+			return
+		}
+	}
+
+	for i := 1; i < N; i++ {
+		if !bytes.Equal(blsSigns[0], blsSigns[i]) {
+			t.Errorf("different bls signatures 0(%v) and %d(%v)", blsSigns[0], i, blsSigns[i])
+			return
+		}
+
+		if err = testVerifiers[0].VerifyRandomData(msg, blsSigns[i]); err != nil {
+			t.Errorf("failed to verify share %d by verifier 0: %v", i, err)
+			return
+		}
 	}
 }
 
