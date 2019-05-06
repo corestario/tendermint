@@ -595,6 +595,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		stateDB := dbm.NewMemDB() // each state needs its own db
 		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
 		thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
+		thisConfig.NodeID = i
 		for _, opt := range configOpts {
 			opt(thisConfig)
 		}
@@ -604,23 +605,24 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
 		blsKeyFile := thisConfig.BLSKeyFile()
-			f, err := os.Create(blsKeyFile)
-			if err != nil {
-				panic(err)
-			}
-			defer f.Close()
-			share, ok := types.TestnetShares[thisConfig.NodeID]
-			if !ok {
-				panic(fmt.Errorf("node id #%d is unexpected", thisConfig.NodeID))
-			}
-			err = json.NewEncoder(f).Encode(share)
-			if err != nil {
-				panic(err)
-			}
+		f, err := os.Create(blsKeyFile)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		fmt.Println("!!! nodeID", thisConfig.NodeID)
+		share, ok := types.TestnetShares[thisConfig.NodeID]
+		if !ok {
+			panic(fmt.Errorf("node id #%d is unexpected", thisConfig.NodeID))
+		}
+		err = json.NewEncoder(f).Encode(share)
+		if err != nil {
+			panic(err)
+		}
 
-			fmt.Println("Generated node key", "path", blsKeyFile)
+		fmt.Println("Generated node key", "path", blsKeyFile)
 
-		fmt.Println("load bls from", config.BLSKeyFile())
+		fmt.Println("load bls from", thisConfig.BLSKeyFile())
 		blsShare, err := types.LoadBLSShareJSON(thisConfig.BLSKeyFile())
 		if err != nil {
 			panic(err)
@@ -629,10 +631,19 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		if err != nil {
 			panic(err)
 		}
+
+		fmt.Println("!!! bls share", i, blsShare.Pub, blsShare.Priv)
+		fmt.Println("!!! keypair.ID", i, keypair.ID)
+		fmt.Println("!!! keypair.Priv", i, keypair.Priv.String())
+		fmt.Println("!!! keypair.Pub", i, keypair.Pub.I, keypair.Pub.V.String())
+
 		masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
 		if err != nil {
 			panic(err)
 		}
+		fmt.Println("!!! valSize, genMasterPubKey", i, state.Validators.Size(), genDoc.BLSMasterPubKey)
+		fmt.Println("!!! masterPubKey", i, masterPubKey)
+
 		verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 
 		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier)
@@ -706,13 +717,13 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	sort.Sort(types.PrivValidatorsByAddress(privValidators))
 
 	return &types.GenesisDoc{
-		GenesisTime: tmtime.Now(),
-		ChainID:     config.ChainID(),
-		Validators:  validators,
+		GenesisTime:     tmtime.Now(),
+		ChainID:         config.ChainID(),
+		Validators:      validators,
 		BLSMasterPubKey: types.DefaultBLSVerifierMasterPubKey,
-		BLSThreshold: 2,
-		BLSNumShares: 4,
-		DKGNumBlocks: 1000,
+		BLSThreshold:    2,
+		BLSNumShares:    4,
+		DKGNumBlocks:    1000,
 	}, privValidators
 }
 
