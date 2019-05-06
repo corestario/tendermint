@@ -104,7 +104,7 @@ func TestRecover2of4(t *testing.T) {
 		sig1, _   = tbls.Sign(suite, share1.Priv, msg)
 	)
 
-	aggrSig, err := tbls.Recover(suite, pubKey, msg, [][]byte{sig0, sig1}, 2, 4)
+	aggrSig, err := tbls.Recover(suite, pubKey, msg, [][]byte{sig0, sig1}, 1, 4)
 	if err != nil {
 		t.Errorf("aggr sign: %v", err)
 		return
