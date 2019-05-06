@@ -295,8 +295,16 @@ func TestByzantineDKG(t *testing.T) {
 	wg.Add(blocksToWait*2)
 	for i := 1; i < N-1; i++ {
 		go func(j int) {
-			<-eventChans[j]
-			wg.Done()
+			n := 0
+			for range eventChans[j] {
+				wg.Done()
+				n++
+				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				if n == blocksToWait {
+					fmt.Printf("Validator %d got all %d blocks", j, n)
+					break
+				}
+			}
 		}(i)
 	}
 
