@@ -34,7 +34,8 @@ import (
 )
 
 const (
-	testSubscriber = "test-client"
+	testSubscriber   = "test-client"
+	testDKGNumBlocks = 10
 )
 
 // genesis, chain_id, priv_val
@@ -273,7 +274,7 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 	stateDB := dbm.NewMemDB()
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
 
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(verifier))
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks))
 	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 	cs.SetPrivValidator(pv)
 
