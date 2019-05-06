@@ -17,10 +17,12 @@ import (
 
 func TestDumpLoad(t *testing.T) {
 	var targetDir = filepath.Join(os.TempDir(), "go-bls-test")
+	if err := os.RemoveAll(targetDir); err != nil {
+		t.Log(err)
+	}
+	t.Log(targetDir)
 	defer func() {
-		if err := os.RemoveAll(targetDir); err != nil {
-			t.Log(err)
-		}
+
 	}()
 
 	if err := os.Mkdir(targetDir, 0777); err != nil {
@@ -28,7 +30,7 @@ func TestDumpLoad(t *testing.T) {
 		return
 	}
 
-	var threshold, numHolders = 10, 16
+	var threshold, numHolders = 1, 4
 	keyring, err := NewBLSKeyring(threshold, numHolders)
 	if err != nil {
 		t.Errorf("failed to generate keyring: %v", err)
@@ -49,7 +51,7 @@ func TestDumpLoad(t *testing.T) {
 		return
 	}
 
-	keyPairBytes, err := ioutil.ReadFile(filepath.Join(targetDir, fmt.Sprintf(storeShare, "5")))
+	keyPairBytes, err := ioutil.ReadFile(filepath.Join(targetDir, fmt.Sprintf(storeShare, "1")))
 	if err != nil {
 		t.Errorf("failed to read keypair file: %v", err)
 		return
@@ -128,14 +130,12 @@ func TestRecover3of4(t *testing.T) {
 			var sigs [][]byte
 			share, _ := TestnetShares[j].Deserialize()
 			shares = append(shares, share)
-			fmt.Println("shares", i, j, len(shares))
 			for k := range shares {
 				sig, err := tbls.Sign(suite, shares[k].Priv, msg)
 				if err != nil {
 					t.Fatal(err)
 				}
 				sigs = append(sigs, sig)
-
 				aggrSig, err := tbls.Recover(suite, pubKey, msg, sigs, 1, 4)
 				if err != nil {
 					t.Errorf("aggr sign: %v", err)
