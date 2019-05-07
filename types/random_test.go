@@ -95,16 +95,18 @@ func TestRecover(t *testing.T) {
 
 func TestRecover2of4(t *testing.T) {
 	var (
-		pubKey, _ = LoadPubKey(DefaultBLSVerifierMasterPubKey, 4)
+		pubKey, _ = LoadPubKey(TestnetMasterPubKey, 4)
 		share0, _ = TestnetShares[0].Deserialize()
 		share1, _ = TestnetShares[1].Deserialize()
+		share2, _ = TestnetShares[2].Deserialize()
 		msg       = []byte(InitialRandomData)
 		suite     = bn256.NewSuite()
 		sig0, _   = tbls.Sign(suite, share0.Priv, msg)
 		sig1, _   = tbls.Sign(suite, share1.Priv, msg)
+		sig2, _   = tbls.Sign(suite, share2.Priv, msg)
 	)
 
-	aggrSig, err := tbls.Recover(suite, pubKey, msg, [][]byte{sig0, sig1}, 1, 4)
+	aggrSig, err := tbls.Recover(suite, pubKey, msg, [][]byte{sig0, sig1, sig2}, 3, 4)
 	if err != nil {
 		t.Errorf("aggr sign: %v", err)
 		return
