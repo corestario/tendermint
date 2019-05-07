@@ -166,45 +166,68 @@ func (m *DKGDealer) HandleDKGPubKey(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) SendDeals() (err error, ready bool) {
-	if len(m.pubKeys) != m.validators.Size() {
+	if !m.IsReady() {
 		return nil, false
 	}
-	m.logger.Info("dkgState: sending deals")
 
+	dealMessages, err := m.GetDeals()
+	for _, dealMsg := range dealMessages {
+		m.sendMsgCb(dealMsg)
+	}
+
+	m.logger.Info("dkgState: sending deals", "deals", len(dealMessages))
+
+	if err != nil {
+		return err, true
+	}
+
+	return nil, true
+}
+
+func (m *DKGDealer) IsReady() bool {
+	return len(m.pubKeys) == m.validators.Size()
+}
+
+func (m *DKGDealer) GetDeals() ([]*types.DKGData, error) {
 	sort.Sort(m.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(m.suiteG2, m.secKey, m.pubKeys.GetPKs(), (m.validators.Size()*2)/3)
 	if err != nil {
-		return fmt.Errorf("failed to create dkgState instance: %v", err), true
+		return nil, fmt.Errorf("failed to create dkgState instance: %v", err)
 	}
 	m.instance = dkgInstance
 
 	deals, err := m.instance.Deals()
 	if err != nil {
-		return fmt.Errorf("failed to populate deals: %v", err), true
+		return nil, fmt.Errorf("failed to populate deals: %v", err)
 	}
 	for _, deal := range deals {
 		m.participantID = int(deal.Index) // Same for each deal.
 		break
 	}
 
+	var dealMessages []*types.DKGData
 	for toIndex, deal := range deals {
 		var (
 			buf = bytes.NewBuffer(nil)
 			enc = gob.NewEncoder(buf)
 		)
+
 		if err := enc.Encode(deal); err != nil {
-			return fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err), true
+			return nil, fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err)
 		}
-		m.sendMsgCb(&types.DKGData{
+
+		dealMessage := &types.DKGData{
 			Type:    types.DKGDeal,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
 			Data:    buf.Bytes(),
 			ToIndex: toIndex,
-		})
+		}
+
+		dealMessages = append(dealMessages, dealMessage)
 	}
 
-	return nil, true
+	return dealMessages, nil
 }
 
 func (m *DKGDealer) HandleDKGDeal(msg *types.DKGData) error {
@@ -607,6 +630,10 @@ func (m *DKGDealer) GetVerifier() (types.Verifier, error) {
 	return types.NewBLSVerifier(masterPubKey, newShare, t, n), nil
 }
 
+func (m *DKGDealer) SendMsgCb(msg *types.DKGData)  {
+	m.sendMsgCb(msg)
+}
+
 type PK2Addr struct {
 	Addr crypto.Address
 	PK   kyber.Point
@@ -651,6 +678,8 @@ type Dealer interface {
 	GetLosers() []*types.Validator
 	HandleDKGPubKey(msg *types.DKGData) error
 	SendDeals() (err error, ready bool)
+	IsReady() bool
+	GetDeals() ([]*types.DKGData, error)
 	HandleDKGDeal(msg *types.DKGData) error
 	ProcessDeals() (err error, ready bool)
 	HandleDKGResponse(msg *types.DKGData) error
@@ -664,4 +693,5 @@ type Dealer interface {
 	HandleDKGReconstructCommit(msg *types.DKGData) error
 	ProcessReconstructCommits() (err error, ready bool)
 	GetVerifier() (types.Verifier, error)
+	SendMsgCb(*types.DKGData)
 }

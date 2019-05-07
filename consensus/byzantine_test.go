@@ -173,7 +173,7 @@ func TestByzantine(t *testing.T) {
 func TestByzantineDKG(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealer})
+	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoDeal})
 	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor)
 
 	switches := make([]*p2p.Switch, N)
