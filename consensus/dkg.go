@@ -3,15 +3,15 @@ package consensus
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"sync"
-	"errors"
 
+	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/events"
-	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
 	"go.dedis.ch/kyber"
@@ -47,12 +47,12 @@ type dkgState struct {
 	dkgNumBlocks     int64
 
 	Logger log.Logger
-	evsw events.EventSwitch
+	evsw   events.EventSwitch
 }
 
 func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 	dkg := &dkgState{
-		evsw: evsw,
+		evsw:             evsw,
 		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
 		dkgRoundToDealer: make(map[int]*DKGDealer),
 	}
@@ -60,7 +60,7 @@ func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 	for _, option := range options {
 		option(dkg)
 	}
-	
+
 	if dkg.dkgNumBlocks == 0 {
 		dkg.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
 	}
@@ -81,10 +81,6 @@ func WithDKGNumBlocks(numBlocks int64) DKGOption {
 
 func WithLogger(l log.Logger) DKGOption {
 	return func(d *dkgState) { d.Logger = l }
-}
-
-func (dkg *dkgState) SetVerifier(verifier types.Verifier) {
-	dkg.verifier = verifier
 }
 
 func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) {
@@ -199,8 +195,8 @@ func (dkg *dkgState) slashDKGLosers(losers []*types.Validator) {
 }
 
 func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator) {
-	if dkg.changeHeight != height {
-		dkg.Logger.Info("dkgState: time to update verifier")
+	if dkg.changeHeight == height {
+		dkg.Logger.Info("dkgState: time to update verifier", dkg.changeHeight, height)
 		dkg.verifier, dkg.nextVerifier = dkg.nextVerifier, nil
 		dkg.changeHeight = 0
 	}

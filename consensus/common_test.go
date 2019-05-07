@@ -277,7 +277,7 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks), WithLogger(consensusLogger.With("dkg")))
+	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks), WithLogger(consensusLogger.With("state", "dkg")))
 	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 	cs.SetLogger(consensusLogger)
 	cs.SetPrivValidator(pv)

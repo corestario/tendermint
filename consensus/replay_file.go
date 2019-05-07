@@ -139,7 +139,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("dkg")))
+	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
 		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw), WithDKG(dkg))
 	newCS.SetEventBus(pb.cs.eventBus)
@@ -348,7 +348,7 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("dkg")))
+	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
 		blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 

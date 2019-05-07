@@ -446,7 +446,7 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	cs.dkg.CheckDKGTime(height, cs.Validators, cs.privValidator)
+	cs.dkg.CheckDKGTime(cs.Height, cs.Validators, cs.privValidator)
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
