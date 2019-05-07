@@ -593,10 +593,16 @@ func consensusLogger() log.Logger {
 	}).With("module", "consensus")
 }
 
-func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, configOpts ...func(*cfg.Config)) []*ConsensusState {
+func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, configOpts ...func(*cfg.Config)) []*ConsensusState {
 	genDoc, privVals := randGenesisDoc(nValidators, false, 30)
 	css := make([]*ConsensusState, nValidators)
 	logger := consensusLogger()
+	if dkgFunc == nil {
+		dkgFunc = func(i int) DKGDealerConstructor {
+			return NewDKGDealer
+		}
+	}
+
 	for i := 0; i < nValidators; i++ {
 		stateDB := dbm.NewMemDB() // each state needs its own db
 		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
@@ -612,7 +618,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 
 		verifier := types.NewTestBLSVerifierByID(testName, i, 3, 4)
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, NewDKGMockDealer)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i))
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}

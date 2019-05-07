@@ -29,7 +29,7 @@ func init() {
 func TestByzantine(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter)
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil)
 
 	// give the byzantine validator a normal ticker
 	ticker := NewTimeoutTicker()
@@ -173,7 +173,8 @@ func TestByzantine(t *testing.T) {
 func TestByzantineDKG(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter)
+	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealer})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")

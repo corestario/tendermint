@@ -7,6 +7,15 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
+func NewDealerConstructor(indexToConstructor map[int]DKGDealerConstructor) func(i int) DKGDealerConstructor {
+	return func(i int) DKGDealerConstructor {
+		if constructor, ok := indexToConstructor[i]; ok {
+			return constructor
+		}
+		return NewDKGDealer
+	}
+}
+
 type DKGMock struct {
 	Dealer
 }
