@@ -244,15 +244,15 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
 // consensus states
 
 func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application) *ConsensusState {
-	return newConsensusStateWithConfig(config, state, pv, app, &types.MockVerifier{})
+	return newConsensusStateWithConfig(config, state, pv, app, &types.MockVerifier{}, nil)
 }
 
-func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier) *ConsensusState {
+func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, newDealer DKGDealerConstructor) *ConsensusState {
 	blockDB := dbm.NewMemDB()
-	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier)
+	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier, newDealer)
 }
 
-func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier) *ConsensusState {
+func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier, newDealer DKGDealerConstructor) *ConsensusState {
 	// Get BlockStore
 	blockStore := bc.NewBlockStore(blockDB)
 
@@ -277,7 +277,9 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks), WithLogger(consensusLogger.With("state", "dkg")))
+	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGDealerConstructor(newDealer), WithDKGNumBlocks(testDKGNumBlocks),
+		WithLogger(consensusLogger.With("state", "dkg")))
+
 	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 	cs.SetLogger(consensusLogger)
 	cs.SetPrivValidator(pv)
@@ -610,7 +612,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 
 		verifier := types.NewTestBLSVerifierByID(testName, i, 3, 4)
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, NewDKGMockDealer)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
@@ -647,7 +649,7 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{})
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{}, nil)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
