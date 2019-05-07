@@ -264,6 +264,8 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
+		case *DKGDataMessage:
+			conR.conS.dkgMsgQueue <- msgInfo{Msg: msg, PeerID: ""}
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -385,7 +387,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		})
 	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
 		func(data tmevents.EventData) {
-			conR.broadcastHasDKGDataMessage(data.(*types.DKGData))
+			conR.broadcastDKGDataMessage(data.(*types.DKGData))
 		})
 }
 
@@ -440,10 +442,8 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastHasDKGDataMessage(msg *types.DKGData) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&HasDKGDataMessage{
-		Message: msg,
-	}))
+func (conR *ConsensusReactor) broadcastDKGDataMessage(data *types.DKGData) {
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&DKGDataMessage{Data: data}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -1382,7 +1382,6 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
 	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
-	cdc.RegisterConcrete(&HasDKGDataMessage{}, "tendermint/HasDKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1473,7 +1472,7 @@ func (m *NewValidBlockMessage) String() string {
 //-------------------------------------
 
 type DKGDataMessage struct {
-	Share *types.DKGData
+	Data *types.DKGData
 }
 
 func (m *DKGDataMessage) ValidateBasic() error {
@@ -1481,7 +1480,7 @@ func (m *DKGDataMessage) ValidateBasic() error {
 }
 
 func (m *DKGDataMessage) String() string {
-	return fmt.Sprintf("[Proposal %+v]", m.Share)
+	return fmt.Sprintf("[Proposal %+v]", m.Data)
 }
 
 // ProposalMessage is sent when a new block is proposed.
@@ -1602,20 +1601,6 @@ func (m *HasVoteMessage) ValidateBasic() error {
 // String returns a string representation.
 func (m *HasVoteMessage) String() string {
 	return fmt.Sprintf("[HasVote VI:%v V:{%v/%02d/%v}]", m.Index, m.Height, m.Round, m.Type)
-}
-
-type HasDKGDataMessage struct {
-	Message *types.DKGData
-}
-
-// ValidateBasic performs basic validation.
-func (m *HasDKGDataMessage) ValidateBasic() error {
-	return nil
-}
-
-// String returns a string representation.
-func (m *HasDKGDataMessage) String() string {
-	return fmt.Sprintf("[DKGData %v/%02d/%v]", m.Message.ParticipantID, m.Message.RoundID, m.Message)
 }
 
 //-------------------------------------

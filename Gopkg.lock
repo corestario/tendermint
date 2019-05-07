@@ -408,7 +408,7 @@
   version = "v1.0.3"
 
 [[projects]]
-  digest = "1:1af470039aaee5182cf61fb541fda4687616d6411fb02e3e199fe87895d720f8"
+  digest = "1:3b60defa9f8923c0ecb07803eddf7a426d49f3ef28ca0348cf7cdd268b39046b"
   name = "go.dedis.ch/kyber"
   packages = [
     ".",
@@ -417,7 +417,10 @@
     "pairing",
     "pairing/bn256",
     "share",
+    "share/dkg/rabin",
+    "share/vss/rabin",
     "sign/bls",
+    "sign/schnorr",
     "sign/tbls",
     "util/random",
     "xof/blake2xb",
@@ -425,6 +428,14 @@
   pruneopts = "UT"
   revision = "ffb71910365195c4510c86015eefc677010f7fdb"
   version = "v3.0.0-pre1"
+
+[[projects]]
+  digest = "1:afc75a76632fbbeb7ef5643978c7116bcf70f0b87ab0afd41cf55fe07a52fe21"
+  name = "go.dedis.ch/protobuf"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "79e08a65667fe5f9f712115b6240101fe1e9b9a5"
+  version = "v1.0.6"
 
 [[projects]]
   digest = "1:6f185ce68f6d58e337cf82c967553db900e16f074b4ffd38d92ada6d5f2a90ed"
@@ -592,6 +603,8 @@
     "go.dedis.ch/kyber",
     "go.dedis.ch/kyber/pairing/bn256",
     "go.dedis.ch/kyber/share",
+    "go.dedis.ch/kyber/share/dkg/rabin",
+    "go.dedis.ch/kyber/share/vss/rabin",
     "go.dedis.ch/kyber/sign/bls",
     "go.dedis.ch/kyber/sign/tbls",
     "golang.org/x/crypto/bcrypt",

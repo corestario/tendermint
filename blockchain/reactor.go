@@ -303,7 +303,7 @@ FOR_LOOP:
 			}
 
 			if err := bcR.verifier.VerifyRandomData(first.RandomData, second.RandomData); err != nil {
-				bcR.poolRoutineHandleErr(errors.New("Invalid random number"), first, second)
+				bcR.poolRoutineHandleErr(err, first, second)
 				continue FOR_LOOP
 			}
 
