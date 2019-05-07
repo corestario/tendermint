@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"github.com/tendermint/tendermint/crypto"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -11,8 +12,6 @@ import (
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
-
-	"github.com/tendermint/tendermint/libs/common"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/fail"
@@ -135,15 +134,14 @@ type ConsensusState struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	verifier     types.Verifier
-	nextVerifier types.Verifier
-	changeHeight int64
+	dkg DKG
+}
 
-	// message queue used for dkg-related messages.
-	dkgMsgQueue      chan msgInfo
-	dkgRoundToDealer map[int]*DKGDealer
-	dkgRoundID       int
-	dkgNumBlocks     int64
+type DKG interface {
+	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
+	CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator)
+	Verifier() types.Verifier
+	MsgQueue() chan msgInfo
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -172,10 +170,7 @@ func NewConsensusState(
 		doWALCatchup:     true,
 		wal:              nilWAL{},
 		evpool:           evpool,
-		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
-		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
-		dkgRoundToDealer: make(map[int]*DKGDealer),
 	}
 	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 	// set function defaults (may be overwritten before calling Start)
@@ -185,9 +180,6 @@ func NewConsensusState(
 
 	for _, option := range options {
 		option(cs)
-	}
-	if cs.dkgNumBlocks == 0 {
-		cs.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
 	}
 
 	cs.updateToState(state)
@@ -214,12 +206,12 @@ func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.blockExec.SetEventBus(b)
 }
 
-func WithVerifier(verifier types.Verifier) StateOption {
-	return func(cs *ConsensusState) { cs.verifier = verifier }
+func WithDKG(dkg DKG) StateOption {
+	return func(cs *ConsensusState) { cs.dkg = dkg }
 }
 
-func WithDKGNumBlocks(numBlocks int64) StateOption {
-	return func(cs *ConsensusState) { cs.dkgNumBlocks = numBlocks }
+func WithEVSW(evsw tmevents.EventSwitch) StateOption {
+	return func(cs *ConsensusState) { cs.evsw = evsw }
 }
 
 // StateMetrics sets the metrics.
@@ -289,10 +281,6 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()
 	cs.timeoutTicker = timeoutTicker
 	cs.mtx.Unlock()
-}
-
-func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
-	cs.verifier = verifier
 }
 
 // LoadCommit loads the commit for a given height.
@@ -458,17 +446,7 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	if cs.changeHeight == height {
-		cs.Logger.Info("DKG: time to update verifier")
-		cs.verifier, cs.nextVerifier = cs.nextVerifier, nil
-		cs.changeHeight = 0
-	}
-
-	if height > 1 && height%cs.dkgNumBlocks == 0 {
-		if err := cs.startDKGRound(); err != nil {
-			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
-		}
-	}
+	cs.dkg.CheckDKGTime(height, cs.Validators, cs.privValidator)
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -657,8 +635,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		var mi msgInfo
 
 		select {
-		case msg := <-cs.dkgMsgQueue:
-			cs.handleDKGShare(msg)
+		case msg := <-cs.dkg.MsgQueue():
+			cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -1231,7 +1209,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
-	randomData, err := cs.verifier.Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
 	if err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
@@ -1305,7 +1283,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	prevBlock := cs.getPreviousBlock()
-	if err := cs.verifier.VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
+	if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
 		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
 	}
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
@@ -1600,7 +1578,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			prevBlockData = cs.getPreviousBlock().RandomData
 			validatorAddr = vote.ValidatorAddress.String()
 		)
-		if err := cs.verifier.VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+		if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
 			return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
 				err, validatorAddr, prevBlockData, vote.BLSSignature)
 		}
@@ -1755,15 +1733,15 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 		return nil
 	}
 	// If we don't have a verifier, do nothing.
-	if cs.verifier == nil {
+	if cs.dkg.Verifier() == nil {
 		return nil
 	}
 
 	var randomData []byte
 	var err error
 	if type_ == types.PrecommitType {
-		cs.Logger.Error("!!!", "verifier", cs.verifier)
-		randomData, err = cs.verifier.Sign(cs.getPreviousBlock().Header.RandomData)
+		cs.Logger.Error("!!!", "verifier", cs.dkg.Verifier())
+		randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
 		fmt.Println("!!! random for", header.String(), randomData, cs.getPreviousBlock().Header.RandomData)
 		if err != nil || len(randomData) == 0 {
 			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,

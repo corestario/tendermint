@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"os"
 	"path"
 	"runtime"
@@ -148,8 +149,13 @@ func TestReactorWithEvidence(t *testing.T) {
 
 		// Make ConsensusState
 		blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
-		cs.SetLogger(log.TestingLogger().With("module", "consensus"))
+
+
+		evsw := events.NewEventSwitch()
+		consensusLogger := log.TestingLogger().With("module", "consensus")
+		dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("dkg")))
+		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+		cs.SetLogger(consensusLogger)
 		cs.SetPrivValidator(pv)
 
 		eventBus := types.NewEventBus()

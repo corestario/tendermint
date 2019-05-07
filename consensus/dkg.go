@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"sync"
+	"errors"
 
 	"github.com/tendermint/tendermint/libs/common"
-
-	"github.com/pkg/errors"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -32,28 +33,82 @@ var (
 	errDKGVerifierNotReady = errors.New("verifier not ready yet")
 )
 
-func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
+type dkgState struct {
+	mtx sync.RWMutex
+
+	verifier     types.Verifier
+	nextVerifier types.Verifier
+	changeHeight int64
+
+	// message queue used for dkgState-related messages.
+	dkgMsgQueue      chan msgInfo
+	dkgRoundToDealer map[int]*DKGDealer
+	dkgRoundID       int
+	dkgNumBlocks     int64
+
+	Logger log.Logger
+	evsw events.EventSwitch
+}
+
+func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
+	dkg := &dkgState{
+		evsw: evsw,
+		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
+		dkgRoundToDealer: make(map[int]*DKGDealer),
+	}
+
+	for _, option := range options {
+		option(dkg)
+	}
+	
+	if dkg.dkgNumBlocks == 0 {
+		dkg.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
+	}
+
+	return dkg
+}
+
+// DKGOption sets an optional parameter on the dkgState.
+type DKGOption func(*dkgState)
+
+func WithVerifier(verifier types.Verifier) DKGOption {
+	return func(d *dkgState) { d.verifier = verifier }
+}
+
+func WithDKGNumBlocks(numBlocks int64) DKGOption {
+	return func(d *dkgState) { d.dkgNumBlocks = numBlocks }
+}
+
+func WithLogger(l log.Logger) DKGOption {
+	return func(d *dkgState) { d.Logger = l }
+}
+
+func (dkg *dkgState) SetVerifier(verifier types.Verifier) {
+	dkg.verifier = verifier
+}
+
+func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) {
+	dkg.mtx.Lock()
+	defer dkg.mtx.Unlock()
 
 	dkgMsg, ok := mi.Msg.(*DKGDataMessage)
 	if !ok {
-		cs.Logger.Info("DKG: rejecting message (unknown type)", reflect.TypeOf(dkgMsg).Name())
+		dkg.Logger.Info("dkgState: rejecting message (unknown type)", reflect.TypeOf(dkgMsg).Name())
 		return
 	}
 
 	var msg = dkgMsg.Data
-	dealer, ok := cs.dkgRoundToDealer[msg.RoundID]
+	dealer, ok := dkg.dkgRoundToDealer[msg.RoundID]
 	if !ok {
-		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
-		cs.dkgRoundToDealer[msg.RoundID] = dealer
+		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", msg.RoundID)
+		dealer = NewDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.Logger)
+		dkg.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.start(); err != nil {
-			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
+			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
 		}
 	}
 	if dealer == nil {
-		cs.Logger.Info("DKG: received message for inactive round:", "round", msg.RoundID)
+		dkg.Logger.Info("dkgState: received message for inactive round:", "round", msg.RoundID)
 		return
 	}
 	fromAddr := crypto.Address(msg.Addr).String()
@@ -61,86 +116,108 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	var err error
 	switch msg.Type {
 	case types.DKGPubKey:
-		cs.Logger.Info("DKG: received PubKey message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received PubKey message", "from", fromAddr)
 		err = dealer.handleDKGPubKey(msg)
 	case types.DKGDeal:
-		cs.Logger.Info("DKG: received Deal message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received Deal message", "from", fromAddr)
 		err = dealer.handleDKGDeal(msg)
 	case types.DKGResponse:
-		cs.Logger.Info("DKG: received Response message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received Response message", "from", fromAddr)
 		err = dealer.handleDKGResponse(msg)
 	case types.DKGJustification:
-		cs.Logger.Info("DKG: received Justification message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received Justification message", "from", fromAddr)
 		err = dealer.handleDKGJustification(msg)
 	case types.DKGCommits:
-		cs.Logger.Info("DKG: received Commit message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received Commit message", "from", fromAddr)
 		err = dealer.handleDKGCommit(msg)
 	case types.DKGComplaint:
-		cs.Logger.Info("DKG: received Complaint message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received Complaint message", "from", fromAddr)
 		err = dealer.handleDKGComplaint(msg)
 	case types.DKGReconstructCommit:
-		cs.Logger.Info("DKG: received ReconstructCommit message", "from", fromAddr)
+		dkg.Logger.Info("dkgState: received ReconstructCommit message", "from", fromAddr)
 		err = dealer.handleDKGReconstructCommit(msg)
 	}
 	if err != nil {
-		cs.Logger.Error("DKG: failed to handle message", "error", err, "type", msg.Type)
-		cs.slashDKGLosers(dealer.getLosers())
-		cs.dkgRoundToDealer[msg.RoundID] = nil
+		dkg.Logger.Error("dkgState: failed to handle message", "error", err, "type", msg.Type)
+		dkg.slashDKGLosers(dealer.getLosers())
+		dkg.dkgRoundToDealer[msg.RoundID] = nil
 		return
 	}
 
 	verifier, err := dealer.getVerifier()
 	if err == errDKGVerifierNotReady {
-		cs.Logger.Debug("DKG: verifier not ready")
+		dkg.Logger.Debug("dkgState: verifier not ready")
 		return
 	}
 	if err != nil {
-		cs.Logger.Error("DKG: verifier should be ready, but it's not ready:", err)
-		cs.slashDKGLosers(dealer.getLosers())
-		cs.dkgRoundToDealer[msg.RoundID] = nil
+		dkg.Logger.Error("dkgState: verifier should be ready, but it's not ready:", err)
+		dkg.slashDKGLosers(dealer.getLosers())
+		dkg.dkgRoundToDealer[msg.RoundID] = nil
 		return
 	}
-	cs.Logger.Info("DKG: verifier is ready, killing older rounds")
-	for roundID := range cs.dkgRoundToDealer {
+	dkg.Logger.Info("dkgState: verifier is ready, killing older rounds")
+	for roundID := range dkg.dkgRoundToDealer {
 		if roundID < msg.RoundID {
-			cs.dkgRoundToDealer[msg.RoundID] = nil
+			dkg.dkgRoundToDealer[msg.RoundID] = nil
 		}
 	}
-	cs.nextVerifier = verifier
-	cs.changeHeight = (cs.Height + BlocksAhead) - ((cs.Height + BlocksAhead) % 5)
+	dkg.nextVerifier = verifier
+	dkg.changeHeight = (height + BlocksAhead) - ((height + BlocksAhead) % 5)
 }
 
-func (cs *ConsensusState) startDKGRound() error {
-	cs.dkgRoundID++
-	cs.Logger.Info("DKG: starting round", "round_id", cs.dkgRoundID)
-	dealer, ok := cs.dkgRoundToDealer[cs.dkgRoundID]
+func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet, pubKey crypto.PubKey) error {
+	dkg.dkgRoundID++
+	dkg.Logger.Info("dkgState: starting round", "round_id", dkg.dkgRoundID)
+	dealer, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
 	if !ok {
-		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", cs.dkgRoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
-		cs.dkgRoundToDealer[cs.dkgRoundID] = dealer
+		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", dkg.dkgRoundID)
+		dealer = NewDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.Logger)
+		dkg.dkgRoundToDealer[dkg.dkgRoundID] = dealer
 		return dealer.start()
 	}
 
 	return nil
 }
 
-func (cs *ConsensusState) sendDKGMessage(msg *types.DKGData) {
+func (dkg *dkgState) sendDKGMessage(msg *types.DKGData) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
-	cs.evsw.FireEvent(types.EventDKGData, msg)
+	dkg.evsw.FireEvent(types.EventDKGData, msg)
 	mi := msgInfo{&DKGDataMessage{msg}, ""}
 	select {
-	case cs.dkgMsgQueue <- mi:
+	case dkg.dkgMsgQueue <- mi:
 	default:
-		cs.Logger.Info("dkgMsgQueue is full. Using a go-routine")
-		go func() { cs.dkgMsgQueue <- mi }()
+		dkg.Logger.Info("dkgMsgQueue is full. Using a go-routine")
+		go func() { dkg.dkgMsgQueue <- mi }()
 	}
 }
 
-func (cs *ConsensusState) slashDKGLosers(losers []*types.Validator) {
+func (dkg *dkgState) slashDKGLosers(losers []*types.Validator) {
 	for _, loser := range losers {
-		cs.Logger.Info("Slashing validator", loser.Address.String())
+		dkg.Logger.Info("Slashing validator", loser.Address.String())
 	}
+}
+
+func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator) {
+	if dkg.changeHeight != height {
+		dkg.Logger.Info("dkgState: time to update verifier")
+		dkg.verifier, dkg.nextVerifier = dkg.nextVerifier, nil
+		dkg.changeHeight = 0
+	}
+
+	if height > 1 && height%dkg.dkgNumBlocks == 0 {
+		if err := dkg.startDKGRound(validators, privateValidator.GetPubKey()); err != nil {
+			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
+		}
+	}
+}
+
+func (dkg *dkgState) MsgQueue() chan msgInfo {
+	return dkg.dkgMsgQueue
+}
+
+func (dkg *dkgState) Verifier() types.Verifier {
+	return dkg.verifier
 }
 
 type DKGDealer struct {
@@ -198,7 +275,7 @@ func (m *DKGDealer) start() error {
 		return fmt.Errorf("failed to encode public key: %v", err)
 	}
 
-	m.logger.Info("DKG: sending pub key", "key", m.pubKey.String())
+	m.logger.Info("dkgState: sending pub key", "key", m.pubKey.String())
 	m.sendMsgCb(&types.DKGData{
 		Type:    types.DKGPubKey,
 		RoundID: m.roundID,
@@ -278,7 +355,7 @@ func (m *DKGDealer) handleDKGPubKey(msg *types.DKGData) error {
 		pubKey = m.suiteG2.Point()
 	)
 	if err := dec.Decode(pubKey); err != nil {
-		return fmt.Errorf("DKG: failed to decode public key from %s: %v", msg.Addr, err)
+		return fmt.Errorf("dkgState: failed to decode public key from %s: %v", msg.Addr, err)
 	}
 	m.pubKeys.Add(&PK2Addr{PK: pubKey, Addr: crypto.Address(msg.Addr)})
 
@@ -293,12 +370,12 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 	if len(m.pubKeys) != m.validators.Size() {
 		return nil, false
 	}
-	m.logger.Info("DKG: sending deals")
+	m.logger.Info("dkgState: sending deals")
 
 	sort.Sort(m.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(m.suiteG2, m.secKey, m.pubKeys.GetPKs(), (m.validators.Size()*2)/3)
 	if err != nil {
-		return fmt.Errorf("failed to create DKG instance: %v", err), true
+		return fmt.Errorf("failed to create dkgState instance: %v", err), true
 	}
 	m.instance = dkgInstance
 
@@ -345,11 +422,11 @@ func (m *DKGDealer) handleDKGDeal(msg *types.DKGData) error {
 	}
 
 	if m.participantID != msg.ToIndex {
-		m.logger.Debug("DKG: rejecting deal (intended for another participant)", "intended", msg.ToIndex)
+		m.logger.Debug("dkgState: rejecting deal (intended for another participant)", "intended", msg.ToIndex)
 		return nil
 	}
 
-	m.logger.Info("DKG: deal is intended for us, storing")
+	m.logger.Info("dkgState: deal is intended for us, storing")
 	if _, exists := m.deals[msg.GetAddrString()]; exists {
 		return nil
 	}
@@ -366,7 +443,7 @@ func (m *DKGDealer) processDeals() (err error, ready bool) {
 	if len(m.deals) < m.validators.Size()-1 {
 		return nil, false
 	}
-	m.logger.Info("DKG: processing deals")
+	m.logger.Info("dkgState: processing deals")
 
 	for _, deal := range m.deals {
 		resp, err := m.instance.ProcessDeal(deal)
@@ -401,11 +478,11 @@ func (m *DKGDealer) handleDKGResponse(msg *types.DKGData) error {
 	}
 
 	if uint32(m.participantID) == resp.Response.Index {
-		m.logger.Debug("DKG: skipping response")
+		m.logger.Debug("dkgState: skipping response")
 		return nil
 	}
 
-	m.logger.Info("DKG: response is intended for us, storing")
+	m.logger.Info("dkgState: response is intended for us, storing")
 
 	m.responses = append(m.responses, resp)
 	if err := m.transit(); err != nil {
@@ -419,7 +496,7 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 	if len(m.responses) < (m.validators.Size()-1)*(m.validators.Size()-1) {
 		return nil, false
 	}
-	m.logger.Info("DKG: processing responses")
+	m.logger.Info("dkgState: processing responses")
 
 	for _, resp := range m.responses {
 		var msg = &types.DKGData{
@@ -431,7 +508,7 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 		// In this call we might or might not put a justification to msg.Data.
 		err := func() error {
 			if resp.Response.Approved {
-				m.logger.Info("DKG: deal is approved", "to", resp.Index, "from", resp.Response.Index)
+				m.logger.Info("dkgState: deal is approved", "to", resp.Index, "from", resp.Response.Index)
 			}
 
 			justification, err := m.instance.ProcessResponse(resp)
@@ -489,16 +566,16 @@ func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	if len(m.justifications) < m.validators.Size() {
 		return nil, false
 	}
-	m.logger.Info("DKG: processing justifications")
+	m.logger.Info("dkgState: processing justifications")
 
 	for _, justification := range m.justifications {
 		if justification != nil {
-			m.logger.Info("DKG: processing non-empty justification", "from", justification.Index)
+			m.logger.Info("dkgState: processing non-empty justification", "from", justification.Index)
 			if err := m.instance.ProcessJustification(justification); err != nil {
 				return fmt.Errorf("failed to ProcessJustification: %v", err), true
 			}
 		} else {
-			m.logger.Info("DKG: empty justification, everything is o.k.")
+			m.logger.Info("dkgState: empty justification, everything is o.k.")
 		}
 	}
 
@@ -507,7 +584,7 @@ func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	}
 
 	qual := m.instance.QUAL()
-	m.logger.Info("DKG: got the QUAL set", "qual", qual)
+	m.logger.Info("dkgState: got the QUAL set", "qual", qual)
 	if len(qual) < m.validators.Size() {
 		qualSet := map[int]bool{}
 		for _, idx := range qual {
@@ -573,7 +650,7 @@ func (m *DKGDealer) processCommits() (err error, ready bool) {
 	if len(m.commits) < len(m.instance.QUAL()) {
 		return nil, false
 	}
-	m.logger.Info("DKG: processing commits")
+	m.logger.Info("dkgState: processing commits")
 
 	var alreadyFinished = true
 	var messages []*types.DKGData
@@ -638,7 +715,7 @@ func (m *DKGDealer) processComplaints() (err error, ready bool) {
 	if len(m.complaints) < len(m.instance.QUAL())-1 {
 		return nil, false
 	}
-	m.logger.Info("DKG: processing commits")
+	m.logger.Info("dkgState: processing commits")
 
 	for _, complaint := range m.complaints {
 		var msg = &types.DKGData{
@@ -702,7 +779,7 @@ func (m *DKGDealer) processReconstructCommits() (err error, ready bool) {
 	}
 
 	if !m.instance.Finished() {
-		return errors.Errorf("dkg round is finished, but dkg instance is not ready"), true
+		return errors.New("dkgState round is finished, but dkgState instance is not ready"), true
 	}
 
 	return nil, true

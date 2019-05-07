@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -341,6 +342,8 @@ func NewNode(config *cfg.Config,
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	// Make ConsensusReactor
+	evsw := events.NewEventSwitch()
+	dkg := cs.NewDKG(evsw, cs.WithVerifier(verifier), cs.WithDKGNumBlocks(genDoc.DKGNumBlocks), cs.WithLogger(consensusLogger.With("dkg")))
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
 		state.Copy(),
@@ -349,8 +352,8 @@ func NewNode(config *cfg.Config,
 		mempool,
 		evidencePool,
 		cs.StateMetrics(csMetrics),
-		cs.WithVerifier(verifier),
-		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
+		cs.WithEVSW(evsw),
+		cs.WithDKG(dkg),
 	)
 
 	consensusState.SetLogger(consensusLogger)

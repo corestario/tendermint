@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"io"
 	"os"
 	"path/filepath"
@@ -72,7 +73,11 @@ func WALGenerateNBlocks(wr io.Writer, numBlocks int) (err error) {
 	mempool := sm.MockMempool{}
 	evpool := sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
-	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
+
+
+	evsw := events.NewEventSwitch()
+	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(logger.With("dkg")))
+	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg))
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)
 	if privValidator != nil {

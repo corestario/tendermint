@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -274,8 +275,11 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 	stateDB := dbm.NewMemDB()
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
 
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks))
-	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
+	evsw := events.NewEventSwitch()
+	consensusLogger := log.TestingLogger().With("module", "consensus")
+	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGNumBlocks(testDKGNumBlocks), WithLogger(consensusLogger.With("dkg")))
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+	cs.SetLogger(consensusLogger)
 	cs.SetPrivValidator(pv)
 
 	eventBus := types.NewEventBus()
