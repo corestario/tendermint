@@ -5,6 +5,8 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"math"
+
 	"reflect"
 	"sort"
 
@@ -26,7 +28,7 @@ import (
 // TODO: implement tests.
 
 const (
-	BlocksAhead = 20
+	BlocksAhead = 20 // Agree to swap verifier after around this number of blocks.
 )
 
 var (
@@ -97,16 +99,19 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		cs.Logger.Error("DKG: failed to handle message", "error", err, "type", msg.Type)
 		cs.slashDKGLosers(dealer.getLosers())
 		cs.dkgRoundToDealer[msg.RoundID] = nil
+		return
 	}
 
 	verifier, err := dealer.getVerifier()
 	if err == errDKGVerifierNotReady {
+		cs.Logger.Debug("DKG: verifier not ready")
 		return
 	}
 	if err != nil {
 		cs.Logger.Error("DKG: verifier should be ready, but it's not ready:", err)
 		cs.slashDKGLosers(dealer.getLosers())
 		cs.dkgRoundToDealer[msg.RoundID] = nil
+		return
 	}
 	cs.Logger.Info("DKG: verifier is ready, killing older rounds")
 	for roundID := range cs.dkgRoundToDealer {
@@ -119,8 +124,8 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 }
 
 func (cs *ConsensusState) startDKGRound() error {
-	cs.Logger.Info("DKG: starting round", "round_id", cs.dkgRoundID)
 	cs.dkgRoundID++
+	cs.Logger.Info("DKG: starting round", "round_id", cs.dkgRoundID)
 	dealer, ok := cs.dkgRoundToDealer[cs.dkgRoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", cs.dkgRoundID)
@@ -171,7 +176,7 @@ type DKGDealer struct {
 	pubKeys            PKStore
 	deals              map[string]*dkg.Deal
 	responses          []*dkg.Response
-	justifications     map[string]*dkg.Justification
+	justifications     []*dkg.Justification
 	commits            []*dkg.SecretCommits
 	complaints         []*dkg.ComplaintCommits
 	reconstructCommits []*dkg.ReconstructCommits
@@ -189,8 +194,7 @@ func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValida
 		suiteG1:       bn256.NewSuiteG1(),
 		suiteG2:       bn256.NewSuiteG2(),
 
-		deals:          make(map[string]*dkg.Deal),
-		justifications: make(map[string]*dkg.Justification),
+		deals: make(map[string]*dkg.Deal),
 	}
 }
 
@@ -346,12 +350,13 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 	}
 	m.instance = dkgInstance
 
+	// We have N - 1 deals produced here (here and below N stands for the number of validators).
 	deals, err := m.instance.Deals()
 	if err != nil {
 		return fmt.Errorf("failed to populate deals: %v", err), true
 	}
 	for _, deal := range deals {
-		m.participantID = int(deal.Index)
+		m.participantID = int(deal.Index) // Same for each deal.
 		break
 	}
 
@@ -390,6 +395,7 @@ func (m *DKGDealer) handleDKGDeal(msg *types.DKGData) error {
 		return fmt.Errorf("failed to decode deal: %v", err)
 	}
 
+	// We expect to keep N - 1 deals (we don't care about the deals sent to other participants).
 	if m.participantID != msg.ToIndex {
 		m.logger.Debug("DKG: rejecting deal (intended for another participant)", "intended", msg.ToIndex)
 		return nil
@@ -414,6 +420,7 @@ func (m *DKGDealer) processDeals() (err error, ready bool) {
 	}
 	m.logger.Info("DKG: processing deals")
 
+	// Each deal produces a response for the deal's issuer (that makes N - 1 responses).
 	for _, deal := range m.deals {
 		resp, err := m.instance.ProcessDeal(deal)
 		if err != nil {
@@ -448,6 +455,10 @@ func (m *DKGDealer) handleDKGResponse(msg *types.DKGData) error {
 		return fmt.Errorf("failed to decode deal: %v", err)
 	}
 
+	// Unlike the procedure for deals, with responses we do care about other
+	// participants state of affairs. All responses sent make N * (N - 1) responses,
+	// but we skip the responses produced by  ourselves, which gives
+	// N * (N - 1) - (N - 1) responses, which gives (N - 1) ^ 2 responses.
 	if uint32(m.participantID) == resp.Response.Index {
 		m.logger.Debug("DKG: skipping response")
 		return nil
@@ -464,7 +475,8 @@ func (m *DKGDealer) handleDKGResponse(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processResponses() (err error, ready bool) {
-	if len(m.responses) < (m.validators.Size()-1)*(m.validators.Size()-1) {
+	// We expect
+	if len(m.responses) < int(math.Pow(float64(m.validators.Size()-1), 2)) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing responses")
@@ -482,6 +494,10 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 				m.logger.Info("DKG: deal is approved", "to", resp.Index, "from", resp.Response.Index)
 			}
 
+			// Each of (N - 1) ^ 2 received response generates a (possibly nil) justification.
+			// Nil justifications (and other nil messages) are used to avoid having timeouts
+			// (i.e., this allows us to know exactly how many messages should be received to
+			// proceed). This might be changed in the future.
 			justification, err := m.instance.ProcessResponse(resp)
 			if err != nil {
 				return fmt.Errorf("failed to ProcessResponse: %v", err)
@@ -523,10 +539,9 @@ func (m *DKGDealer) handleDKGJustification(msg *types.DKGData) error {
 		}
 	}
 
-	if _, exists := m.justifications[msg.GetAddrString()]; exists {
-		return nil
-	}
-	m.justifications[msg.GetAddrString()] = justification
+	// We will nave N * (N - 1) ^ 2 justifications. This looks rather bad,
+	// actually.
+	m.justifications = append(m.justifications, justification)
 
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
@@ -536,7 +551,8 @@ func (m *DKGDealer) handleDKGJustification(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processJustifications() (err error, ready bool) {
-	if len(m.justifications) < m.validators.Size() {
+	// N * (N - 1) ^ 2.
+	if len(m.justifications) < m.validators.Size()*int(math.Pow(float64(m.validators.Size()-1), 2)) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing justifications")
@@ -622,7 +638,7 @@ func (m *DKGDealer) handleDKGCommit(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processCommits() (err error, ready bool) {
-	if len(m.commits) < m.validators.Size() {
+	if len(m.commits) < len(m.instance.QUAL()) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing commits")
@@ -689,7 +705,7 @@ func (m *DKGDealer) handleDKGComplaint(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processComplaints() (err error, ready bool) {
-	if len(m.complaints) < m.validators.Size()-1 {
+	if len(m.complaints) < len(m.instance.QUAL())-1 {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing commits")
@@ -744,7 +760,7 @@ func (m *DKGDealer) handleDKGReconstructCommit(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processReconstructCommits() (err error, ready bool) {
-	if len(m.reconstructCommits) < m.validators.Size()-1 {
+	if len(m.reconstructCommits) < len(m.instance.QUAL())-1 {
 		return nil, false
 	}
 

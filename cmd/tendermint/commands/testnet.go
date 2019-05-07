@@ -127,8 +127,8 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		GenesisTime:     tmtime.Now(),
 		ChainID:         "chain-" + cmn.RandStr(6),
 		Validators:      genVals,
-		BLSMasterPubKey: types.DefaultBLSVerifierMasterPubKey,
-		BLSThreshold:    2,
+		BLSMasterPubKey: types.TestnetMasterPubKey,
+		BLSThreshold:    3,
 		BLSNumShares:    4,
 		DKGNumBlocks:    1000,
 	}
