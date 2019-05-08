@@ -59,15 +59,12 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		cs.Logger.Info("DKG: received message for inactive round:", "round", msg.RoundID)
 		return
 	}
-
-	if dkgMsg.Data.Type != types.DKGPubKey {
-		cs.Logger.Info("DKG: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
-		if err := dealer.VerifyMessage(*dkgMsg); err != nil {
-			cs.Logger.Info("DKG: can't verify message:", "error", err.Error())
-			return
-		}
-		cs.Logger.Info("DKG: message verified")
+	cs.Logger.Info("DKG: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
+	if err := dealer.VerifyMessage(*dkgMsg); err != nil {
+		cs.Logger.Info("DKG: can't verify message:", "error", err.Error())
+		return
 	}
+	cs.Logger.Info("DKG: message verified")
 
 	fromAddr := crypto.Address(msg.Addr).String()
 
@@ -213,12 +210,14 @@ func (m *DKGDealer) start() error {
 	}
 
 	m.logger.Info("DKG: sending pub key", "key", m.pubKey.String())
-	m.sendMsgCb(&types.DKGData{
+	if err := m.sendSignedMsg(&types.DKGData{
 		Type:    types.DKGPubKey,
 		RoundID: m.roundID,
 		Addr:    m.addrBytes,
 		Data:    buf.Bytes(),
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to sign message: %v", err)
+	}
 
 	return nil
 }
