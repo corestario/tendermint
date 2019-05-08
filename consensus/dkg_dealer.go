@@ -174,18 +174,14 @@ func (d *DKGDealer) SendDeals() (err error, ready bool) {
 		return nil, false
 	}
 
-	dealMessages, err := d.GetDeals()
-	for _, dealMsg := range dealMessages {
-		d.SendMsgCb(dealMsg)
+	messages, err := d.GetDeals()
+	for _, msg := range messages {
+		d.SendMsgCb(msg)
 	}
 
-	d.logger.Info("dkgState: sending deals", "deals", len(dealMessages))
+	d.logger.Info("dkgState: sending deals", "deals", len(messages))
 
-	if err != nil {
-		return err, true
-	}
-
-	return nil, true
+	return err, true
 }
 
 func (d *DKGDealer) IsReady() bool {
@@ -276,11 +272,7 @@ func (d *DKGDealer) ProcessDeals() (err error, ready bool) {
 		d.SendMsgCb(responseMsg)
 	}
 
-	if err != nil {
-		return err, true
-	}
-
-	return nil, true
+	return err, true
 }
 
 func (d *DKGDealer) IsDealsReady() bool {
@@ -339,10 +331,49 @@ func (d *DKGDealer) HandleDKGResponse(msg *types.DKGData) error {
 }
 
 func (d *DKGDealer) ProcessResponses() (err error, ready bool) {
-	if len(d.responses) < (d.validators.Size()-1)*(d.validators.Size()-1) {
+	if !d.IsResponsesReady() {
 		return nil, false
 	}
 	d.logger.Info("dkgState: processing responses")
+
+	messages, err := d.GetJustifications()
+	for _, msg := range messages {
+		d.SendMsgCb(msg)
+	}
+
+	return err, true
+}
+
+func (d *DKGDealer) IsResponsesReady() bool {
+	return len(d.responses) >= (d.validators.Size()-1)*(d.validators.Size()-1)
+}
+
+func (d *DKGDealer) processResponse(resp *dkg.Response) ([]byte, error) {
+	if resp.Response.Approved {
+		d.logger.Info("dkgState: deal is approved", "to", resp.Index, "from", resp.Response.Index)
+	}
+
+	justification, err := d.instance.ProcessResponse(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to ProcessResponse: %v", err)
+	}
+	if justification == nil {
+		return nil, nil
+	}
+
+	var (
+		buf = bytes.NewBuffer(nil)
+		enc = gob.NewEncoder(buf)
+	)
+	if err := enc.Encode(justification); err != nil {
+		return nil, fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (d *DKGDealer) GetJustifications() ([]*types.DKGData, error) {
+	var messages []*types.DKGData
 
 	for _, resp := range d.responses {
 		var msg = &types.DKGData{
@@ -352,38 +383,15 @@ func (d *DKGDealer) ProcessResponses() (err error, ready bool) {
 		}
 
 		// In this call we might or might not put a justification to msg.Data.
-		err := func() error {
-			if resp.Response.Approved {
-				d.logger.Info("dkgState: deal is approved", "to", resp.Index, "from", resp.Response.Index)
-			}
-
-			justification, err := d.instance.ProcessResponse(resp)
-			if err != nil {
-				return fmt.Errorf("failed to ProcessResponse: %v", err)
-			}
-			if justification == nil {
-				return nil
-			}
-
-			var (
-				buf = bytes.NewBuffer(nil)
-				enc = gob.NewEncoder(buf)
-			)
-			if err := enc.Encode(justification); err != nil {
-				return fmt.Errorf("failed to encode response: %v", err)
-			}
-			msg.Data = buf.Bytes()
-
-			return nil
-		}()
+		justificationBytes, err := d.processResponse(resp)
 		if err != nil {
-			return err, true
+			return messages, err
 		}
 
-		d.SendMsgCb(msg)
+		msg.Data = justificationBytes
 	}
 
-	return nil, true
+	return messages, nil
 }
 
 func (d *DKGDealer) HandleDKGJustification(msg *types.DKGData) error {
@@ -713,6 +721,8 @@ type Dealer interface {
 	ProcessResponses() (err error, ready bool)
 	HandleDKGJustification(msg *types.DKGData) error
 	ProcessJustifications() (err error, ready bool)
+	IsResponsesReady() bool
+	GetJustifications() ([]*types.DKGData, error)
 	HandleDKGCommit(msg *types.DKGData) error
 	ProcessCommits() (err error, ready bool)
 	HandleDKGComplaint(msg *types.DKGData) error

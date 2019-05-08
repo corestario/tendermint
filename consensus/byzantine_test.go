@@ -665,6 +665,200 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	fmt.Println("************************************ All is done")
 }
 
+func TestByzantineDKGDontSendOneJustification(t *testing.T) {
+	N := 4
+	logger := consensusLogger().With("test", "byzantine")
+	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoJustification})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor)
+
+	switches := make([]*p2p.Switch, N)
+	p2pLogger := logger.With("module", "p2p")
+	for i := 0; i < N; i++ {
+		switches[i] = p2p.MakeSwitch(
+			config.P2P,
+			i,
+			"foo", "1.0.0",
+			func(i int, sw *p2p.Switch) *p2p.Switch {
+				return sw
+			})
+		switches[i].SetLogger(p2pLogger.With("validator", i))
+	}
+
+	eventChans := make([]chan interface{}, N)
+	reactors := make([]p2p.Reactor, N)
+	for i := 0; i < N; i++ {
+		eventBus := css[i].eventBus
+		eventBus.SetLogger(logger.With("module", "events", "validator", i))
+
+		eventChans[i] = make(chan interface{}, 1)
+		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		require.NoError(t, err)
+
+		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
+		conR.SetLogger(logger.With("validator", i))
+		conR.SetEventBus(eventBus)
+
+		var conRI p2p.Reactor // nolint: gotype, gosimple
+		conRI = conR
+
+		reactors[i] = conRI
+	}
+
+	defer func() {
+		for _, r := range reactors {
+			r.(*ConsensusReactor).Switch.Stop()
+		}
+	}()
+
+	p2p.MakeConnectedSwitches(config.P2P, N, func(i int, s *p2p.Switch) *p2p.Switch {
+		// ignore new switch s, we already made ours
+		switches[i].AddReactor("CONSENSUS", reactors[i])
+		return switches[i]
+	}, func(sws []*p2p.Switch, i, j int) {
+		p2p.Connect2Switches(sws, i, j)
+	})
+
+	// start the non-byz state machines.
+	// note these must be started before the byz
+	for i := 0; i < N; i++ {
+		cr := reactors[i].(*ConsensusReactor)
+		cr.SwitchToConsensus(cr.conS.GetState(), 0)
+	}
+
+	wg := new(sync.WaitGroup)
+	wg.Add(blocksToWait * N)
+	for i := 0; i < N; i++ {
+		go func(j int) {
+			n := 0
+			for range eventChans[j] {
+				wg.Done()
+				n++
+				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				if n == blocksToWait {
+					fmt.Printf("Validator %d got all %d blocks", j, n)
+					break
+				}
+			}
+		}(i)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	tick := time.NewTicker(timeToWait)
+	select {
+	case <-done:
+	case <-tick.C:
+		for i, reactor := range reactors {
+			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
+			t.Log(fmt.Sprintf("%v", reactor))
+		}
+		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+
+	fmt.Println("************************************ All is done")
+}
+
+func TestByzantineDKGDontAnyJustifications(t *testing.T) {
+	N := 4
+	logger := consensusLogger().With("test", "byzantine")
+	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyJustifications})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor)
+
+	switches := make([]*p2p.Switch, N)
+	p2pLogger := logger.With("module", "p2p")
+	for i := 0; i < N; i++ {
+		switches[i] = p2p.MakeSwitch(
+			config.P2P,
+			i,
+			"foo", "1.0.0",
+			func(i int, sw *p2p.Switch) *p2p.Switch {
+				return sw
+			})
+		switches[i].SetLogger(p2pLogger.With("validator", i))
+	}
+
+	eventChans := make([]chan interface{}, N)
+	reactors := make([]p2p.Reactor, N)
+	for i := 0; i < N; i++ {
+		eventBus := css[i].eventBus
+		eventBus.SetLogger(logger.With("module", "events", "validator", i))
+
+		eventChans[i] = make(chan interface{}, 1)
+		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		require.NoError(t, err)
+
+		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
+		conR.SetLogger(logger.With("validator", i))
+		conR.SetEventBus(eventBus)
+
+		var conRI p2p.Reactor // nolint: gotype, gosimple
+		conRI = conR
+
+		reactors[i] = conRI
+	}
+
+	defer func() {
+		for _, r := range reactors {
+			r.(*ConsensusReactor).Switch.Stop()
+		}
+	}()
+
+	p2p.MakeConnectedSwitches(config.P2P, N, func(i int, s *p2p.Switch) *p2p.Switch {
+		// ignore new switch s, we already made ours
+		switches[i].AddReactor("CONSENSUS", reactors[i])
+		return switches[i]
+	}, func(sws []*p2p.Switch, i, j int) {
+		p2p.Connect2Switches(sws, i, j)
+	})
+
+	// start the non-byz state machines.
+	// note these must be started before the byz
+	for i := 0; i < N; i++ {
+		cr := reactors[i].(*ConsensusReactor)
+		cr.SwitchToConsensus(cr.conS.GetState(), 0)
+	}
+
+	wg := new(sync.WaitGroup)
+	wg.Add(blocksToWait * N)
+	for i := 0; i < N; i++ {
+		go func(j int) {
+			n := 0
+			for range eventChans[j] {
+				wg.Done()
+				n++
+				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				if n == blocksToWait {
+					fmt.Printf("Validator %d got all %d blocks", j, n)
+					break
+				}
+			}
+		}(i)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	tick := time.NewTicker(timeToWait)
+	select {
+	case <-done:
+	case <-tick.C:
+		for i, reactor := range reactors {
+			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
+			t.Log(fmt.Sprintf("%v", reactor))
+		}
+		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+
+	fmt.Println("************************************ All is done")
+}
+
 //-------------------------------
 // byzantine consensus functions
 
