@@ -17,6 +17,37 @@ import (
 	vss "go.dedis.ch/kyber/share/vss/rabin"
 )
 
+type Dealer interface {
+	Start() error
+	Transit() error
+	ResetDKGData()
+	GenerateTransitions()
+	GetLosers() []*types.Validator
+	HandleDKGPubKey(msg *types.DKGData) error
+	SetTransitions(t []transition)
+	SendDeals() (err error, ready bool)
+	IsReady() bool
+	GetDeals() ([]*types.DKGData, error)
+	HandleDKGDeal(msg *types.DKGData) error
+	ProcessDeals() (err error, ready bool)
+	IsDealsReady() bool
+	GetResponses() ([]*types.DKGData, error)
+	HandleDKGResponse(msg *types.DKGData) error
+	ProcessResponses() (err error, ready bool)
+	HandleDKGJustification(msg *types.DKGData) error
+	ProcessJustifications() (err error, ready bool)
+	IsResponsesReady() bool
+	GetJustifications() ([]*types.DKGData, error)
+	HandleDKGCommit(msg *types.DKGData) error
+	ProcessCommits() (err error, ready bool)
+	HandleDKGComplaint(msg *types.DKGData) error
+	ProcessComplaints() (err error, ready bool)
+	HandleDKGReconstructCommit(msg *types.DKGData) error
+	ProcessReconstructCommits() (err error, ready bool)
+	GetVerifier() (types.Verifier, error)
+	SendMsgCb(*types.DKGData)
+}
+
 type DKGDealer struct {
 	sendMsgCb  func(*types.DKGData)
 	validators *types.ValidatorSet
@@ -673,23 +704,23 @@ type PK2Addr struct {
 
 type PKStore []*PK2Addr
 
-func (m *PKStore) Add(newPk *PK2Addr) bool {
-	for _, pk := range *m {
+func (s *PKStore) Add(newPk *PK2Addr) bool {
+	for _, pk := range *s {
 		if pk.Addr.String() == newPk.Addr.String() && pk.PK.Equal(newPk.PK) {
 			return false
 		}
 	}
-	*m = append(*m, newPk)
+	*s = append(*s, newPk)
 
 	return true
 }
 
-func (m PKStore) Len() int           { return len(m) }
-func (m PKStore) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
-func (m PKStore) Less(i, j int) bool { return m[i].Addr.String() < m[j].Addr.String() }
-func (m PKStore) GetPKs() []kyber.Point {
-	var out = make([]kyber.Point, len(m))
-	for idx, val := range m {
+func (s PKStore) Len() int           { return len(s) }
+func (s PKStore) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s PKStore) Less(i, j int) bool { return s[i].Addr.String() < s[j].Addr.String() }
+func (s PKStore) GetPKs() []kyber.Point {
+	var out = make([]kyber.Point, len(s))
+	for idx, val := range s {
 		out[idx] = val.PK
 	}
 	return out
@@ -700,35 +731,4 @@ type transition func() (error, bool)
 type Justification struct {
 	Void          bool
 	Justification *dkg.Justification
-}
-
-type Dealer interface {
-	Start() error
-	Transit() error
-	ResetDKGData()
-	GenerateTransitions()
-	GetLosers() []*types.Validator
-	HandleDKGPubKey(msg *types.DKGData) error
-	SetTransitions(t []transition)
-	SendDeals() (err error, ready bool)
-	IsReady() bool
-	GetDeals() ([]*types.DKGData, error)
-	HandleDKGDeal(msg *types.DKGData) error
-	ProcessDeals() (err error, ready bool)
-	IsDealsReady() bool
-	GetResponses() ([]*types.DKGData, error)
-	HandleDKGResponse(msg *types.DKGData) error
-	ProcessResponses() (err error, ready bool)
-	HandleDKGJustification(msg *types.DKGData) error
-	ProcessJustifications() (err error, ready bool)
-	IsResponsesReady() bool
-	GetJustifications() ([]*types.DKGData, error)
-	HandleDKGCommit(msg *types.DKGData) error
-	ProcessCommits() (err error, ready bool)
-	HandleDKGComplaint(msg *types.DKGData) error
-	ProcessComplaints() (err error, ready bool)
-	HandleDKGReconstructCommit(msg *types.DKGData) error
-	ProcessReconstructCommits() (err error, ready bool)
-	GetVerifier() (types.Verifier, error)
-	SendMsgCb(*types.DKGData)
 }
