@@ -244,13 +244,13 @@ func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
 	)
 	_, validator := m.validators.GetByAddress(msg.Data.Addr)
 	if validator == nil {
-		return fmt.Errorf("Can't find validator by address: %s", msg.Data.GetAddrString())
+		return fmt.Errorf("can't find validator by address: %s", msg.Data.GetAddrString())
 	}
 	if signBytes, err = msg.Data.SignBytes(); err != nil {
 		return err
 	}
 	if !validator.PubKey.VerifyBytes(signBytes, msg.Data.Signature) {
-		return fmt.Errorf("Invalid DKG message signature: %s", hex.EncodeToString(msg.Data.Signature))
+		return fmt.Errorf("invalid DKG message signature: %s", hex.EncodeToString(msg.Data.Signature))
 	}
 	return nil
 }
