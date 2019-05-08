@@ -162,6 +162,8 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	}
 	dkg.nextVerifier = verifier
 	dkg.changeHeight = (height + BlocksAhead) - ((height + BlocksAhead) % 5)
+	dkg.evsw.FireEvent(types.EventDKGSuccessful, dkg.changeHeight)
+
 }
 
 func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet, pubKey crypto.PubKey) error {
@@ -203,6 +205,7 @@ func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet, 
 		dkg.Logger.Info("dkgState: time to update verifier", dkg.changeHeight, height)
 		dkg.verifier, dkg.nextVerifier = dkg.nextVerifier, nil
 		dkg.changeHeight = 0
+		dkg.evsw.FireEvent(types.EventDKGKeyChange, height)
 	}
 
 	if height > 1 && height%dkg.dkgNumBlocks == 0 {
