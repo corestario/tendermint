@@ -9,8 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
+	"reflect"
 )
 
 func init() {
@@ -235,7 +237,7 @@ func TestByzantineDKG(t *testing.T) {
 	}
 
 	wg := new(sync.WaitGroup)
-	wg.Add(blocksToWait*N)
+	wg.Add(blocksToWait * N)
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
@@ -332,7 +334,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 	}
 
 	wg := new(sync.WaitGroup)
-	wg.Add(blocksToWait*N)
+	wg.Add(blocksToWait * N)
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
@@ -429,7 +431,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	}
 
 	wg := new(sync.WaitGroup)
-	wg.Add(blocksToWait*N)
+	wg.Add(blocksToWait * N)
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
@@ -497,7 +499,9 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
 		conR.SetLogger(logger.With("validator", i))
 		conR.SetEventBus(eventBus)
-
+		conR.conS.evsw.AddListenerForEvent("test", types.EventDKGStart, func(data events.EventData) {
+			t.Log("Event received", data)
+		})
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
 
@@ -525,12 +529,14 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		cr.SwitchToConsensus(cr.conS.GetState(), 0)
 	}
 
+	const blocksToWait = 11
 	wg := new(sync.WaitGroup)
-	wg.Add(blocksToWait*N)
+	wg.Add(blocksToWait * N)
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
-			for range eventChans[j] {
+			for i := range eventChans[j] {
+				logger.Info("***got ", "node", j, "name", reflect.TypeOf(i).Name())
 				wg.Done()
 				n++
 				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
@@ -623,7 +629,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	}
 
 	wg := new(sync.WaitGroup)
-	wg.Add(blocksToWait*N)
+	wg.Add(blocksToWait * N)
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0

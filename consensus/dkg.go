@@ -172,6 +172,7 @@ func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet, pubKey crypto
 		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", dkg.dkgRoundID)
 		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.Logger)
 		dkg.dkgRoundToDealer[dkg.dkgRoundID] = dealer
+		dkg.evsw.FireEvent(types.EventDKGStart, dkg.dkgRoundID)
 		return dealer.Start()
 	}
 

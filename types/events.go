@@ -27,6 +27,9 @@ const (
 	EventValidatorSetUpdates = "ValidatorSetUpdates"
 	EventVote                = "Vote"
 	EventDKGData             = "DKGData"
+	EventDKGStart            = "DKGStart"
+	EventDKGSuccessful       = "DKGSuccessful"
+	EventDKGKeyChange        = "DKGKeyChange"
 )
 
 ///////////////////////////////////////////////////////////////////////////////
