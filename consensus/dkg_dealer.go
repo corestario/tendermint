@@ -132,6 +132,10 @@ func (m *DKGDealer) GenerateTransitions() {
 	}
 }
 
+func (m *DKGDealer) SetTransitions(t []transition) {
+	m.transitions = t
+}
+
 func (m *DKGDealer) GetLosers() []*types.Validator {
 	var out []*types.Validator
 	for _, loser := range m.losers {
@@ -677,6 +681,7 @@ type Dealer interface {
 	GenerateTransitions()
 	GetLosers() []*types.Validator
 	HandleDKGPubKey(msg *types.DKGData) error
+	SetTransitions(t []transition)
 	SendDeals() (err error, ready bool)
 	IsReady() bool
 	GetDeals() ([]*types.DKGData, error)

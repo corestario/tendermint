@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"fmt"
+
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -16,16 +17,38 @@ func NewDealerConstructor(indexToConstructor map[int]DKGDealerConstructor) func(
 	}
 }
 
-type DKGMock struct {
+type DKGMockDontSendOneDeal struct {
 	Dealer
 }
 
 func NewDKGMockDealerNoDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	fmt.Println("++++++++++++++++++ 3")
-	return &DKGMock{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+	return &DKGMockDontSendOneDeal{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
 }
 
-func (m *DKGMock) SendDeals() (err error, ready bool) {
+func (m *DKGMockDontSendOneDeal) Start() error {
+	err := m.Dealer.Start()
+	if err != nil {
+		return err
+	}
+	m.GenerateTransitions()
+	return nil
+}
+
+func (m *DKGMockDontSendOneDeal) GenerateTransitions() {
+	m.Dealer.SetTransitions([]transition{
+		// Phase I
+		m.SendDeals,
+		m.Dealer.ProcessDeals,
+		m.Dealer.ProcessResponses,
+		m.Dealer.ProcessJustifications,
+		// Phase II
+		m.Dealer.ProcessCommits,
+		m.Dealer.ProcessComplaints,
+		m.Dealer.ProcessReconstructCommits,
+	})
+}
+
+func (m *DKGMockDontSendOneDeal) SendDeals() (err error, ready bool) {
 	fmt.Println("+++++++++++++++ 1")
 	if !m.Dealer.IsReady() {
 		return nil, false
@@ -41,11 +64,11 @@ func (m *DKGMock) SendDeals() (err error, ready bool) {
 	return nil, true
 }
 
-func (m *DKGMock) GetDeals() ([]*types.DKGData, error) {
-	fmt.Println("+++++++++++++++ 2")
+func (m *DKGMockDontSendOneDeal) GetDeals() ([]*types.DKGData, error) {
 	deals, err := m.Dealer.GetDeals()
 
 	// remove one deal message
 	deals = deals[:len(deals)-1]
-	return nil, err
+
+	return deals, err
 }
