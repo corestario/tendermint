@@ -3,8 +3,10 @@ package consensus
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"math"
+
 	"reflect"
 	"sort"
 
@@ -47,7 +49,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	dealer, ok := cs.dkgRoundToDealer[msg.RoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
 		cs.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.start(); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
@@ -57,6 +59,13 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 		cs.Logger.Info("DKG: received message for inactive round:", "round", msg.RoundID)
 		return
 	}
+	cs.Logger.Info("DKG: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
+	if err := dealer.VerifyMessage(*dkgMsg); err != nil {
+		cs.Logger.Info("DKG: can't verify message:", "error", err.Error())
+		return
+	}
+	cs.Logger.Info("DKG: message verified")
+
 	fromAddr := crypto.Address(msg.Addr).String()
 
 	var err error
@@ -117,7 +126,7 @@ func (cs *ConsensusState) startDKGRound() error {
 	dealer, ok := cs.dkgRoundToDealer[cs.dkgRoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", cs.dkgRoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator.GetPubKey(), cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
 		cs.dkgRoundToDealer[cs.dkgRoundID] = dealer
 		return dealer.start()
 	}
@@ -145,10 +154,11 @@ func (cs *ConsensusState) slashDKGLosers(losers []*types.Validator) {
 }
 
 type DKGDealer struct {
-	sendMsgCb  func(*types.DKGData)
-	validators *types.ValidatorSet
-	addrBytes  []byte
-	logger     log.Logger
+	sendMsgCb     func(*types.DKGData)
+	validators    *types.ValidatorSet
+	privValidator types.PrivValidator
+	addrBytes     []byte
+	logger        log.Logger
 
 	participantID int
 	roundID       int
@@ -171,14 +181,15 @@ type DKGDealer struct {
 	losers []crypto.Address
 }
 
-func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) *DKGDealer {
+func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValidator, sendMsgCb func(*types.DKGData), logger log.Logger) *DKGDealer {
 	return &DKGDealer{
-		validators: validators,
-		addrBytes:  pubKey.Address().Bytes(),
-		sendMsgCb:  sendMsgCb,
-		logger:     logger,
-		suiteG1:    bn256.NewSuiteG1(),
-		suiteG2:    bn256.NewSuiteG2(),
+		validators:    validators,
+		addrBytes:     privValidator.GetPubKey().Address().Bytes(),
+		privValidator: privValidator,
+		sendMsgCb:     sendMsgCb,
+		logger:        logger,
+		suiteG1:       bn256.NewSuiteG1(),
+		suiteG2:       bn256.NewSuiteG2(),
 
 		deals: make(map[string]*dkg.Deal),
 	}
@@ -199,13 +210,48 @@ func (m *DKGDealer) start() error {
 	}
 
 	m.logger.Info("DKG: sending pub key", "key", m.pubKey.String())
-	m.sendMsgCb(&types.DKGData{
+	if err := m.sendSignedMsg(&types.DKGData{
 		Type:    types.DKGPubKey,
 		RoundID: m.roundID,
 		Addr:    m.addrBytes,
 		Data:    buf.Bytes(),
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to sign message: %v", err)
+	}
 
+	return nil
+}
+
+func (m *DKGDealer) sendSignedMsg(data *types.DKGData) error {
+	if err := m.Sign(data); err != nil {
+		return err
+	}
+	m.logger.Info("DKG: msg signed with signature", "signature", hex.EncodeToString(data.Signature))
+	m.sendMsgCb(data)
+	return nil
+}
+
+// Sign sign message by dealer's secret key
+func (m *DKGDealer) Sign(data *types.DKGData) error {
+	return m.privValidator.SignDKGData(data)
+}
+
+// VerifyMessage verify message by signature
+func (m *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
+	var (
+		signBytes []byte
+		err       error
+	)
+	_, validator := m.validators.GetByAddress(msg.Data.Addr)
+	if validator == nil {
+		return fmt.Errorf("can't find validator by address: %s", msg.Data.GetAddrString())
+	}
+	if signBytes, err = msg.Data.SignBytes(); err != nil {
+		return err
+	}
+	if !validator.PubKey.VerifyBytes(signBytes, msg.Data.Signature) {
+		return fmt.Errorf("invalid DKG message signature: %s", hex.EncodeToString(msg.Data.Signature))
+	}
 	return nil
 }
 
@@ -295,6 +341,7 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 	}
 	m.logger.Info("DKG: sending deals")
 
+	// It's needed for DistKeyGenerator and for binary search in array
 	sort.Sort(m.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(m.suiteG2, m.secKey, m.pubKeys.GetPKs(), (m.validators.Size()*2)/3)
 	if err != nil {
@@ -320,13 +367,15 @@ func (m *DKGDealer) sendDeals() (err error, ready bool) {
 		if err := enc.Encode(deal); err != nil {
 			return fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err), true
 		}
-		m.sendMsgCb(&types.DKGData{
+		if err := m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGDeal,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
 			Data:    buf.Bytes(),
 			ToIndex: toIndex,
-		})
+		}); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -383,12 +432,14 @@ func (m *DKGDealer) processDeals() (err error, ready bool) {
 		if err := enc.Encode(resp); err != nil {
 			return fmt.Errorf("failed to encode response: %v", err), true
 		}
-		m.sendMsgCb(&types.DKGData{
+		if err := m.sendSignedMsg(&types.DKGData{
 			Type:    types.DKGResponse,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
 			Data:    buf.Bytes(),
-		})
+		}); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -453,6 +504,7 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 			if justification == nil {
 				return nil
 			}
+
 			var (
 				buf = bytes.NewBuffer(nil)
 				enc = gob.NewEncoder(buf)
@@ -468,7 +520,9 @@ func (m *DKGDealer) processResponses() (err error, ready bool) {
 			return err, true
 		}
 
-		m.sendMsgCb(msg)
+		if err := m.sendSignedMsg(msg); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
@@ -545,13 +599,15 @@ func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	if err := enc.Encode(commits); err != nil {
 		return fmt.Errorf("failed to encode response: %v", err), true
 	}
-	m.sendMsgCb(&types.DKGData{
+	if err := m.sendSignedMsg(&types.DKGData{
 		Type:        types.DKGCommits,
 		RoundID:     m.roundID,
 		Addr:        m.addrBytes,
 		Data:        buf.Bytes(),
 		NumEntities: len(commits.Commitments),
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to sign message: %v", err), true
+	}
 
 	return nil, true
 }
@@ -614,7 +670,9 @@ func (m *DKGDealer) processCommits() (err error, ready bool) {
 	}
 	if !alreadyFinished {
 		for _, msg := range messages {
-			m.sendMsgCb(msg)
+			if err := m.sendSignedMsg(msg); err != nil {
+				return fmt.Errorf("failed to sign message: %v", err), true
+			}
 		}
 	}
 
@@ -673,7 +731,9 @@ func (m *DKGDealer) processComplaints() (err error, ready bool) {
 				msg.Data = buf.Bytes()
 			}
 		}
-		m.sendMsgCb(msg)
+		if err := m.sendSignedMsg(msg); err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return nil, true
