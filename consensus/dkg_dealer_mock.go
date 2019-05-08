@@ -72,3 +72,43 @@ func (m *DKGMockDontSendOneDeal) GetDeals() ([]*types.DKGData, error) {
 
 	return deals, err
 }
+
+
+type DKGMockDontSendAnyDeal struct {
+	Dealer
+}
+
+func NewDKGMockDealerAnyDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyDeal{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+}
+
+func (m *DKGMockDontSendAnyDeal) Start() error {
+	err := m.Dealer.Start()
+	if err != nil {
+		return err
+	}
+	m.GenerateTransitions()
+	return nil
+}
+
+func (m *DKGMockDontSendAnyDeal) GenerateTransitions() {
+	m.Dealer.SetTransitions([]transition{
+		// Phase I
+		m.SendDeals,
+		m.Dealer.ProcessDeals,
+		m.Dealer.ProcessResponses,
+		m.Dealer.ProcessJustifications,
+		// Phase II
+		m.Dealer.ProcessCommits,
+		m.Dealer.ProcessComplaints,
+		m.Dealer.ProcessReconstructCommits,
+	})
+}
+
+func (m *DKGMockDontSendAnyDeal) SendDeals() (err error, ready bool) {
+	if !m.Dealer.IsReady() {
+		return nil, false
+	}
+
+	return nil, true
+}
