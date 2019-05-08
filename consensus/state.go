@@ -1740,9 +1740,7 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	var randomData []byte
 	var err error
 	if type_ == types.PrecommitType {
-		cs.Logger.Error("!!!", "verifier", cs.dkg.Verifier())
 		randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
-		fmt.Println("!!! random for", header.String(), randomData, cs.getPreviousBlock().Header.RandomData)
 		if err != nil || len(randomData) == 0 {
 			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
 				"type", type_, "hash", hash, "header", header, "random", randomData)

@@ -75,7 +75,7 @@ func (m *DKGDealer) Start() error {
 	}
 
 	m.logger.Info("dkgState: sending pub key", "key", m.pubKey.String())
-	m.sendMsgCb(&types.DKGData{
+	m.SendMsgCb(&types.DKGData{
 		Type:    types.DKGPubKey,
 		RoundID: m.roundID,
 		Addr:    m.addrBytes,
@@ -176,7 +176,7 @@ func (m *DKGDealer) SendDeals() (err error, ready bool) {
 
 	dealMessages, err := m.GetDeals()
 	for _, dealMsg := range dealMessages {
-		m.sendMsgCb(dealMsg)
+		m.SendMsgCb(dealMsg)
 	}
 
 	m.logger.Info("dkgState: sending deals", "deals", len(dealMessages))
@@ -217,7 +217,7 @@ func (m *DKGDealer) GetDeals() ([]*types.DKGData, error) {
 		)
 
 		if err := enc.Encode(deal); err != nil {
-			return nil, fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err)
+			return dealMessages, fmt.Errorf("failed to encode deal #%d: %v", deal.Index, err)
 		}
 
 		dealMessage := &types.DKGData{
@@ -266,24 +266,44 @@ func (m *DKGDealer) HandleDKGDeal(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) ProcessDeals() (err error, ready bool) {
-	if len(m.deals) < m.validators.Size()-1 {
+	if !m.IsDealsReady() {
 		return nil, false
 	}
 	m.logger.Info("dkgState: processing deals")
 
+	responseMessages, err := m.GetResponses()
+	for _, responseMsg := range responseMessages {
+		m.SendMsgCb(responseMsg)
+	}
+
+	if err != nil {
+		return err, true
+	}
+
+	return nil, true
+}
+
+func (m *DKGDealer) IsDealsReady() bool {
+	return len(m.deals) >= m.validators.Size()-1
+}
+
+func (m *DKGDealer) GetResponses() ([]*types.DKGData, error) {
+	var messages []*types.DKGData
+
 	for _, deal := range m.deals {
 		resp, err := m.instance.ProcessDeal(deal)
 		if err != nil {
-			return fmt.Errorf("failed to ProcessDeal: %v", err), true
+			return messages, fmt.Errorf("failed to ProcessDeal: %v", err)
 		}
 		var (
 			buf = bytes.NewBuffer(nil)
 			enc = gob.NewEncoder(buf)
 		)
 		if err := enc.Encode(resp); err != nil {
-			return fmt.Errorf("failed to encode response: %v", err), true
+			return messages, fmt.Errorf("failed to encode response: %v", err)
 		}
-		m.sendMsgCb(&types.DKGData{
+
+		messages = append(messages, &types.DKGData{
 			Type:    types.DKGResponse,
 			RoundID: m.roundID,
 			Addr:    m.addrBytes,
@@ -291,7 +311,7 @@ func (m *DKGDealer) ProcessDeals() (err error, ready bool) {
 		})
 	}
 
-	return nil, true
+	return messages, nil
 }
 
 func (m *DKGDealer) HandleDKGResponse(msg *types.DKGData) error {
@@ -360,7 +380,7 @@ func (m *DKGDealer) ProcessResponses() (err error, ready bool) {
 			return err, true
 		}
 
-		m.sendMsgCb(msg)
+		m.SendMsgCb(msg)
 	}
 
 	return nil, true
@@ -437,7 +457,7 @@ func (m *DKGDealer) ProcessJustifications() (err error, ready bool) {
 	if err := enc.Encode(commits); err != nil {
 		return fmt.Errorf("failed to encode response: %v", err), true
 	}
-	m.sendMsgCb(&types.DKGData{
+	m.SendMsgCb(&types.DKGData{
 		Type:        types.DKGCommits,
 		RoundID:     m.roundID,
 		Addr:        m.addrBytes,
@@ -506,7 +526,7 @@ func (m *DKGDealer) ProcessCommits() (err error, ready bool) {
 	}
 	if !alreadyFinished {
 		for _, msg := range messages {
-			m.sendMsgCb(msg)
+			m.SendMsgCb(msg)
 		}
 	}
 
@@ -565,7 +585,7 @@ func (m *DKGDealer) ProcessComplaints() (err error, ready bool) {
 				msg.Data = buf.Bytes()
 			}
 		}
-		m.sendMsgCb(msg)
+		m.SendMsgCb(msg)
 	}
 
 	return nil, true
@@ -687,6 +707,8 @@ type Dealer interface {
 	GetDeals() ([]*types.DKGData, error)
 	HandleDKGDeal(msg *types.DKGData) error
 	ProcessDeals() (err error, ready bool)
+	IsDealsReady() bool
+	GetResponses() ([]*types.DKGData, error)
 	HandleDKGResponse(msg *types.DKGData) error
 	ProcessResponses() (err error, ready bool)
 	HandleDKGJustification(msg *types.DKGData) error
