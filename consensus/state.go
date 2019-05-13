@@ -338,6 +338,8 @@ func (cs *ConsensusState) OnStart() error {
 
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
+	// Start DKG rounds garbage collector.
+	go cs.dkgRoundsGC()
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access

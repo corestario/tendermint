@@ -623,7 +623,8 @@ type ConsensusConfig struct {
 	PeerQueryMaj23SleepDuration time.Duration `mapstructure:"peer_query_maj23_sleep_duration"`
 
 	// Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
-	BlockTimeIota time.Duration `mapstructure:"blocktime_iota"`
+	BlockTimeIota   time.Duration `mapstructure:"blocktime_iota"`
+	DKGRoundTimeout time.Duration `mapstructure:"dkg_round_timeout"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service
@@ -643,6 +644,7 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		PeerGossipSleepDuration:     100 * time.Millisecond,
 		PeerQueryMaj23SleepDuration: 2000 * time.Millisecond,
 		BlockTimeIota:               1000 * time.Millisecond,
+		DKGRoundTimeout:             120 * time.Second,
 	}
 }
 
@@ -660,6 +662,7 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
 	cfg.BlockTimeIota = 10 * time.Millisecond
+	cfg.DKGRoundTimeout = 120 * time.Second
 	return cfg
 }
 

@@ -358,7 +358,7 @@ const (
 type DKGData struct {
 	Type        DKGDataType
 	Addr        []byte
-	RoundID     int
+	RoundID     uint64
 	Data        []byte // Data is going to keep serialized kyber objects.
 	ToIndex     int    // ID of the participant for whom the message is; might be not set
 	NumEntities int    // Number of sub-entities in the Data array, sometimes required for unmarshaling.

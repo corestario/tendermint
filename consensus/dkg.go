@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
+	"time"
 
 	"reflect"
 	"sync"
@@ -23,6 +25,7 @@ const (
 	BlocksAhead = 20 // Agree to swap verifier after around this number of blocks.
 	//DefaultDKGNumBlocks sets how often node should make DKG(in blocks)
 	DefaultDKGNumBlocks = 100
+	DKGRoundGCTime = time.Second * 10
 )
 
 var (
@@ -182,6 +185,27 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	dkg.changeHeight = (height + BlocksAhead) - ((height + BlocksAhead) % 5)
 	dkg.evsw.FireEvent(types.EventDKGSuccessful, dkg.changeHeight)
 
+}
+
+func (cs *ConsensusState) dkgRoundsGC() {
+	ticker := time.NewTicker(DKGRoundGCTime)
+	defer ticker.Stop()
+
+	for {
+		// No need to add a context for cancelling this routine (ConsensusState itself doesn't
+		// have a stopper).
+		select {
+		case <-ticker.C:
+			for roundID, dealer := range cs.dkgRoundToDealer {
+				if time.Now().Sub(dealer.ts) > cs.config.DKGRoundTimeout {
+					cs.mtx.Lock()
+					cs.dkgRoundToDealer[roundID] = nil
+					cs.mtx.Unlock()
+					cs.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+				}
+			}
+		}
+	}
 }
 
 func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
