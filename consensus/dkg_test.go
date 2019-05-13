@@ -22,6 +22,22 @@ func init() {
 const blocksToWait = 12
 const timeToWait = 2 * blocksToWait * time.Second
 
+var DKGEvents = []string{
+	types.EventDKGStart,
+	types.EventDKGSuccessful,
+	types.EventDKGStart,
+	types.EventDKGPubKeyReceived,
+	types.EventDKGDealsProcessed,
+	types.EventDKGResponsesProcessed,
+	types.EventDKGJustificationsProcessed,
+	types.EventDKGInstanceCertified,
+	types.EventDKGCommitsProcessed,
+	types.EventDKGComplaintProcessed,
+	types.EventDKGReconstructCommitsProcessed,
+	types.EventDKGSuccessful,
+	types.EventDKGKeyChange,
+}
+
 func TestByzantineDKG(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
@@ -42,6 +58,7 @@ func TestByzantineDKG(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -53,9 +70,7 @@ func TestByzantineDKG(t *testing.T) {
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
 		conR.SetLogger(logger.With("validator", i))
 		conR.SetEventBus(eventBus)
-		conR.conS.evsw.AddListenerForEvent(strconv.Itoa(i), types.EventDKGKeyChange, func(data events.EventData) {
-
-		})
+		handlers[i].Subscribe(conR.conS.evsw)
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
 
@@ -117,6 +132,11 @@ func TestByzantineDKG(t *testing.T) {
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
 
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] == 0 {
+			t.Fatal("Node ", i, "hasn't finished dkg")
+		}
+	}
 	fmt.Println("************************************ All is done")
 }
 
@@ -141,6 +161,8 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
+
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -155,6 +177,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
+		handlers[i].Subscribe(conR.conS.evsw)
 
 		reactors[i] = conRI
 	}
@@ -214,10 +237,16 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
 
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
+	}
 	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontAnyDeals(t *testing.T) {
+	t.SkipNow()
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyDeal})
@@ -704,4 +733,38 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 	}
 
 	fmt.Println("************************************ All is done")
+}
+
+func MakeNDKGEventHandlers(n int) []*dkgEventHandler {
+	eh := make([]*dkgEventHandler, n)
+	for i := 0; i < n; i++ {
+		eh[i] = NewDkgEventHandler("handler_" + strconv.Itoa(i))
+	}
+	return eh
+}
+func NewDkgEventHandler(name string) *dkgEventHandler {
+	return &dkgEventHandler{
+		Name:     name,
+		Counter:  make(map[string]int, 0),
+		Handlers: make(map[string]events.EventCallback, 0),
+	}
+}
+
+type dkgEventHandler struct {
+	Name     string
+	Counter  map[string]int
+	Handlers map[string]events.EventCallback
+}
+
+func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
+	for _, e := range DKGEvents {
+		event := e
+		evsw.AddListenerForEvent(eh.Name, e, func(data events.EventData) {
+			eh.Counter[event]++
+			if h, ok := eh.Handlers[e]; ok {
+				h(data)
+			}
+		})
+	}
+
 }

@@ -1,19 +1,19 @@
 package consensus
 
 import (
-	"fmt"
-
 	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
 )
 
 type DKGMockDontSendOneDeal struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerNoDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendOneDeal{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerNoDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendOneDeal{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendOneDeal) Start() error {
@@ -40,7 +40,7 @@ func (m *DKGMockDontSendOneDeal) GenerateTransitions() {
 }
 
 func (m *DKGMockDontSendOneDeal) SendDeals() (error, bool) {
-	fmt.Println("+++++++++++++++ 1")
+	m.logger.Info("+++++++++++++++ 1")
 	if !m.Dealer.IsReady() {
 		return nil, false
 	}
@@ -53,7 +53,7 @@ func (m *DKGMockDontSendOneDeal) SendDeals() (error, bool) {
 		m.Dealer.SendMsgCb(msg)
 	}
 
-	fmt.Println("dkgState: sending deals", "deals", len(messages))
+	m.logger.Info("dkgState: sending deals", "deals", len(messages))
 
 	return nil, true
 }
@@ -67,13 +67,13 @@ func (m *DKGMockDontSendOneDeal) GetDeals() ([]*types.DKGData, error) {
 	return deals, err
 }
 
-
 type DKGMockDontSendAnyDeal struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerAnyDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyDeal{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerAnyDeal(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyDeal{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendAnyDeal) Start() error {
@@ -104,7 +104,7 @@ func (m *DKGMockDontSendAnyDeal) SendDeals() (error, bool) {
 		return nil, false
 	}
 
-	fmt.Println("dkgState: sending deals", "deals", 0)
+	m.logger.Info("dkgState: sending deals", "deals", 0)
 
 	return nil, true
 }

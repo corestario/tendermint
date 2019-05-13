@@ -26,10 +26,22 @@ const (
 	EventValidBlock          = "ValidBlock"
 	EventValidatorSetUpdates = "ValidatorSetUpdates"
 	EventVote                = "Vote"
-	EventDKGData             = "DKGData"
-	EventDKGStart            = "DKGStart"
-	EventDKGSuccessful       = "DKGSuccessful"
-	EventDKGKeyChange        = "DKGKeyChange"
+)
+
+//DKG events
+const (
+	EventDKGData                        = "DKGData"
+	EventDKGStart                       = "DKGStart"
+	EventDKGPubKeyReceived              = "DKGPubKeyReceived"
+	EventDKGDealsProcessed              = "DKGDealsProcessed"
+	EventDKGResponsesProcessed          = "DKGResponsesProcessed"
+	EventDKGJustificationsProcessed     = "DKGJustificationsProcessed"
+	EventDKGInstanceCertified           = "DKGInstanceCertified"
+	EventDKGCommitsProcessed            = "DKGCommitsProcessed"
+	EventDKGComplaintProcessed          = "DKGComplaintProcessed"
+	EventDKGReconstructCommitsProcessed = "DKGReconstructCommitsProcessed"
+	EventDKGSuccessful                  = "DKGSuccessful"
+	EventDKGKeyChange                   = "DKGKeyChange"
 )
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -100,7 +100,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	dealer, ok := dkg.dkgRoundToDealer[msg.RoundID]
 	if !ok {
 		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.Logger)
+		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.evsw, dkg.Logger)
 		dkg.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.Start(); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
@@ -172,7 +172,7 @@ func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet, pubKey crypto
 	dealer, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
 	if !ok {
 		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", dkg.dkgRoundID)
-		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.Logger)
+		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.evsw, dkg.Logger)
 		dkg.dkgRoundToDealer[dkg.dkgRoundID] = dealer
 		dkg.evsw.FireEvent(types.EventDKGStart, dkg.dkgRoundID)
 		return dealer.Start()

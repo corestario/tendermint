@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
 	"go.dedis.ch/kyber"
@@ -50,6 +51,7 @@ type Dealer interface {
 
 type DKGDealer struct {
 	sendMsgCb  func(*types.DKGData)
+	eventFirer events.Fireable
 	validators *types.ValidatorSet
 	addrBytes  []byte
 	logger     log.Logger
@@ -75,13 +77,14 @@ type DKGDealer struct {
 	losers []crypto.Address
 }
 
-type DKGDealerConstructor func(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer
+type DKGDealerConstructor func(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer
 
-func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
+func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
 	return &DKGDealer{
 		validators: validators,
 		addrBytes:  pubKey.Address().Bytes(),
 		sendMsgCb:  sendMsgCb,
+		eventFirer: eventFirer,
 		logger:     logger,
 		suiteG1:    bn256.NewSuiteG1(),
 		suiteG2:    bn256.NewSuiteG2(),
@@ -204,6 +207,7 @@ func (d *DKGDealer) SendDeals() (err error, ready bool) {
 	if !d.IsReady() {
 		return nil, false
 	}
+	d.eventFirer.FireEvent(types.EventDKGPubKeyReceived, nil)
 
 	messages, err := d.GetDeals()
 	for _, msg := range messages {
@@ -297,7 +301,7 @@ func (d *DKGDealer) ProcessDeals() (err error, ready bool) {
 		return nil, false
 	}
 	d.logger.Info("dkgState: processing deals")
-
+	d.logger.Info("**Deals", "ln", len(d.deals))
 	responseMessages, err := d.GetResponses()
 	for _, responseMsg := range responseMessages {
 		d.SendMsgCb(responseMsg)
@@ -333,6 +337,7 @@ func (d *DKGDealer) GetResponses() ([]*types.DKGData, error) {
 			Data:    buf.Bytes(),
 		})
 	}
+	d.eventFirer.FireEvent(types.EventDKGDealsProcessed, d.roundID)
 
 	return messages, nil
 }
@@ -365,6 +370,7 @@ func (d *DKGDealer) ProcessResponses() (err error, ready bool) {
 	if !d.IsResponsesReady() {
 		return nil, false
 	}
+	d.logger.Info("*Resp", "len", d.responses)
 	d.logger.Info("dkgState: processing responses")
 
 	messages, err := d.GetJustifications()
@@ -420,8 +426,10 @@ func (d *DKGDealer) GetJustifications() ([]*types.DKGData, error) {
 		}
 
 		msg.Data = justificationBytes
+		messages = append(messages, msg)
 	}
 
+	d.eventFirer.FireEvent(types.EventDKGResponsesProcessed, d.roundID)
 	return messages, nil
 }
 
@@ -463,10 +471,12 @@ func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
 			d.logger.Info("dkgState: empty justification, everything is o.k.")
 		}
 	}
+	d.eventFirer.FireEvent(types.EventDKGJustificationsProcessed, d.roundID)
 
 	if !d.instance.Certified() {
 		return errors.New("instance is not certified"), true
 	}
+	d.eventFirer.FireEvent(types.EventDKGInstanceCertified, d.roundID)
 
 	qual := d.instance.QUAL()
 	d.logger.Info("dkgState: got the QUAL set", "qual", qual)
@@ -563,6 +573,8 @@ func (d *DKGDealer) ProcessCommits() (err error, ready bool) {
 		}
 		messages = append(messages, msg)
 	}
+	d.eventFirer.FireEvent(types.EventDKGCommitsProcessed, d.roundID)
+
 	if !alreadyFinished {
 		for _, msg := range messages {
 			d.SendMsgCb(msg)
@@ -626,7 +638,7 @@ func (d *DKGDealer) ProcessComplaints() (err error, ready bool) {
 		}
 		d.SendMsgCb(msg)
 	}
-
+	d.eventFirer.FireEvent(types.EventDKGComplaintProcessed, d.roundID)
 	return nil, true
 }
 
@@ -662,6 +674,7 @@ func (d *DKGDealer) ProcessReconstructCommits() (err error, ready bool) {
 			return fmt.Errorf("failed to ProcessReconstructCommits: %v", err), true
 		}
 	}
+	d.eventFirer.FireEvent(types.EventDKGReconstructCommitsProcessed, d.roundID)
 
 	if !d.instance.Finished() {
 		return errors.New("dkgState round is finished, but dkgState instance is not ready"), true

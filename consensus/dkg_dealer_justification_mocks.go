@@ -1,19 +1,19 @@
 package consensus
 
 import (
-	"fmt"
-
 	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
 )
 
 type DKGMockDontSendOneJustification struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendOneJustification) Start() error {
@@ -52,7 +52,7 @@ func (m *DKGMockDontSendOneJustification) ProcessResponses() (error, bool) {
 		m.Dealer.SendMsgCb(msg)
 	}
 
-	fmt.Println("dkgState: sending justifications", "justifications", len(messages))
+	m.logger.Info("dkgState: sending justifications", "justifications", len(messages))
 
 	return nil, true
 }
@@ -68,10 +68,11 @@ func (m *DKGMockDontSendOneJustification) GetResponses() ([]*types.DKGData, erro
 
 type DKGMockDontSendAnyJustifications struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendAnyJustifications) Start() error {
@@ -102,7 +103,7 @@ func (m *DKGMockDontSendAnyJustifications) ProcessResponses() (error, bool) {
 		return nil, false
 	}
 
-	fmt.Println("dkgState: sending justifications", "justifications", 0)
+	m.logger.Info("dkgState: sending justifications", "justifications", 0)
 
 	return nil, true
 }

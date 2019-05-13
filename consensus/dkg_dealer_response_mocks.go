@@ -1,19 +1,19 @@
 package consensus
 
 import (
-	"fmt"
-
 	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
 )
 
 type DKGMockDontSendOneResponse struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerNoResponse(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendOneResponse{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerNoResponse(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendOneResponse{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendOneResponse) Start() error {
@@ -40,7 +40,7 @@ func (m *DKGMockDontSendOneResponse) GenerateTransitions() {
 }
 
 func (m *DKGMockDontSendOneResponse) ProcessDeals() (error, bool) {
-	fmt.Println("+++++++++++++++ Responses")
+	m.logger.Info("+++++++++++++++ Responses")
 	if !m.Dealer.IsDealsReady() {
 		return nil, false
 	}
@@ -53,7 +53,7 @@ func (m *DKGMockDontSendOneResponse) ProcessDeals() (error, bool) {
 		m.Dealer.SendMsgCb(msg)
 	}
 
-	fmt.Println("dkgState: sending responses", "responses", len(messages))
+	m.logger.Info("dkgState: sending responses", "responses", len(messages))
 
 	return nil, true
 }
@@ -69,10 +69,11 @@ func (m *DKGMockDontSendOneResponse) GetResponses() ([]*types.DKGData, error) {
 
 type DKGMockDontSendAnyResponses struct {
 	Dealer
+	logger log.Logger
 }
 
-func NewDKGMockDealerAnyResponses(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyResponses{NewDKGDealer(validators, pubKey, sendMsgCb, logger)}
+func NewDKGMockDealerAnyResponses(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyResponses{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendAnyResponses) Start() error {
@@ -103,7 +104,7 @@ func (m *DKGMockDontSendAnyResponses) ProcessDeals() (error, bool) {
 		return nil, false
 	}
 
-	fmt.Println("dkgState: sending responses", "responses", 0)
+	m.logger.Info("dkgState: sending responses", "responses", 0)
 
 	return nil, true
 }
