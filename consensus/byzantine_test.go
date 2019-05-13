@@ -29,7 +29,9 @@ func init() {
 func TestByzantine(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil)
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	})
 
 	// give the byzantine validator a normal ticker
 	ticker := NewTimeoutTicker()

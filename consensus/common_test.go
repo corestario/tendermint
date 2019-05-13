@@ -593,7 +593,7 @@ func consensusLogger() log.Logger {
 	}).With("module", "consensus")
 }
 
-func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, configOpts ...func(*cfg.Config)) []*ConsensusState {
+func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, verifierFunc func(string, int) types.Verifier, configOpts ...func(*cfg.Config)) []*ConsensusState {
 	genDoc, privVals := randGenesisDoc(nValidators, false, 30)
 	css := make([]*ConsensusState, nValidators)
 	logger := consensusLogger()
@@ -616,9 +616,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		// verifier := types.NewTestBLSVerifierByID(testName, i, 3, 4)
-		verifier := &types.MockVerifier{}
-
+		verifier := verifierFunc(testName, i)
 		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i))
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))

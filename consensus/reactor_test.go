@@ -87,7 +87,9 @@ func stopConsensusNet(logger log.Logger, reactors []*ConsensusReactor, eventBuse
 // Ensure a testnet makes blocks
 func TestReactorBasic(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil)
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	})
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, N)
 	defer stopConsensusNet(log.TestingLogger(), reactors, eventBuses)
 	// wait till everyone makes the first new block
@@ -149,7 +151,6 @@ func TestReactorWithEvidence(t *testing.T) {
 
 		// Make ConsensusState
 		blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-
 
 		evsw := events.NewEventSwitch()
 		consensusLogger := log.TestingLogger().With("module", "consensus")
@@ -223,7 +224,9 @@ func (m *mockEvidencePool) Update(block *types.Block, state sm.State) {
 // Ensure a testnet makes blocks when there are txs
 func TestReactorCreatesBlockWhenEmptyBlocksFalse(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil,
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	},
 		func(c *cfg.Config) {
 			c.Consensus.CreateEmptyBlocks = false
 		})
@@ -244,7 +247,9 @@ func TestReactorCreatesBlockWhenEmptyBlocksFalse(t *testing.T) {
 // Test we record stats about votes and block parts from other peers.
 func TestReactorRecordsVotesAndBlockParts(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil)
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	})
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, N)
 	defer stopConsensusNet(log.TestingLogger(), reactors, eventBuses)
 
@@ -268,7 +273,9 @@ func TestReactorRecordsVotesAndBlockParts(t *testing.T) {
 func TestReactorVotingPowerChange(t *testing.T) {
 	nVals := 4
 	logger := log.TestingLogger()
-	css := randConsensusNet(nVals, "consensus_voting_power_changes_test", newMockTickerFunc(true), newPersistentKVStore, nil)
+	css := randConsensusNet(nVals, "consensus_voting_power_changes_test", newMockTickerFunc(true), newPersistentKVStore, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	})
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, nVals)
 	defer stopConsensusNet(logger, reactors, eventBuses)
 
@@ -427,7 +434,9 @@ func TestReactorValidatorSetChanges(t *testing.T) {
 // Check we can make blocks with skip_timeout_commit=false
 func TestReactorWithTimeoutCommit(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_with_timeout_commit_test", newMockTickerFunc(false), newCounter, nil)
+	css := randConsensusNet(N, "consensus_reactor_with_timeout_commit_test", newMockTickerFunc(false), newCounter, nil, func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	})
 	// override default SkipTimeoutCommit == true for tests
 	for i := 0; i < N; i++ {
 		css[i].config.SkipTimeoutCommit = false
