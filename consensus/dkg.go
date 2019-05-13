@@ -49,7 +49,7 @@ func (cs *ConsensusState) handleDKGShare(mi msgInfo) {
 	dealer, ok := cs.dkgRoundToDealer[msg.RoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger, msg.RoundID-1)
 		cs.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.start(); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", cs.dkgRoundID, err))
@@ -126,7 +126,7 @@ func (cs *ConsensusState) startDKGRound() error {
 	dealer, ok := cs.dkgRoundToDealer[cs.dkgRoundID]
 	if !ok {
 		cs.Logger.Info("DKG: dealer not found, creating a new dealer", "round_id", cs.dkgRoundID)
-		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger)
+		dealer = NewDKGDealer(cs.Validators, cs.privValidator, cs.sendDKGMessage, cs.Logger, cs.dkgRoundID-1)
 		cs.dkgRoundToDealer[cs.dkgRoundID] = dealer
 		return dealer.start()
 	}
@@ -181,7 +181,7 @@ type DKGDealer struct {
 	losers []crypto.Address
 }
 
-func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValidator, sendMsgCb func(*types.DKGData), logger log.Logger) *DKGDealer {
+func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValidator, sendMsgCb func(*types.DKGData), logger log.Logger, previousRound int) *DKGDealer {
 	return &DKGDealer{
 		validators:    validators,
 		addrBytes:     privValidator.GetPubKey().Address().Bytes(),
@@ -190,6 +190,8 @@ func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValida
 		logger:        logger,
 		suiteG1:       bn256.NewSuiteG1(),
 		suiteG2:       bn256.NewSuiteG2(),
+
+		roundID: previousRound,
 
 		deals: make(map[string]*dkg.Deal),
 	}
