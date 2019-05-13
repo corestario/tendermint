@@ -27,8 +27,6 @@ func init() {
 // Byzantine validator refuses to prevote.
 // Heal partition and ensure A sees the commit
 func TestByzantine(t *testing.T) {
-	t.SkipNow()
-
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
 	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil)

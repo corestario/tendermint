@@ -20,6 +20,7 @@ import (
 
 type Dealer interface {
 	Start() error
+	GetState() DealerState
 	Transit() error
 	ResetDKGData()
 	GenerateTransitions()
@@ -41,6 +42,8 @@ type Dealer interface {
 	GetJustifications() ([]*types.DKGData, error)
 	HandleDKGCommit(msg *types.DKGData) error
 	ProcessCommits() (err error, ready bool)
+	IsJustificationsReady() bool
+	GetCommits() (*dkg.SecretCommits, error)
 	HandleDKGComplaint(msg *types.DKGData) error
 	ProcessComplaints() (err error, ready bool)
 	HandleDKGReconstructCommit(msg *types.DKGData) error
@@ -50,14 +53,11 @@ type Dealer interface {
 }
 
 type DKGDealer struct {
-	sendMsgCb  func(*types.DKGData)
+	DealerState
 	eventFirer events.Fireable
-	validators *types.ValidatorSet
-	addrBytes  []byte
-	logger     log.Logger
 
-	participantID int
-	roundID       int
+	sendMsgCb func(*types.DKGData)
+	logger    log.Logger
 
 	pubKey      kyber.Point
 	secKey      kyber.Scalar
@@ -77,17 +77,27 @@ type DKGDealer struct {
 	losers []crypto.Address
 }
 
+type DealerState struct {
+	validators *types.ValidatorSet
+	addrBytes  []byte
+
+	participantID int
+	roundID       int
+}
+
 type DKGDealerConstructor func(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer
 
 func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
 	return &DKGDealer{
-		validators: validators,
-		addrBytes:  pubKey.Address().Bytes(),
-		sendMsgCb:  sendMsgCb,
+		DealerState: DealerState{
+			validators: validators,
+			addrBytes:  pubKey.Address().Bytes(),
+		},
+		sendMsgCb: sendMsgCb,
 		eventFirer: eventFirer,
-		logger:     logger,
-		suiteG1:    bn256.NewSuiteG1(),
-		suiteG2:    bn256.NewSuiteG2(),
+		logger:    logger,
+		suiteG1:   bn256.NewSuiteG1(),
+		suiteG2:   bn256.NewSuiteG2(),
 
 		deals:          make(map[string]*dkg.Deal),
 		justifications: make(map[string]*dkg.Justification),
@@ -117,6 +127,10 @@ func (d *DKGDealer) Start() error {
 	})
 
 	return nil
+}
+
+func (d *DKGDealer) GetState() DealerState {
+	return d.DealerState
 }
 
 func (d *DKGDealer) Transit() error {
@@ -456,16 +470,47 @@ func (d *DKGDealer) HandleDKGJustification(msg *types.DKGData) error {
 }
 
 func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
-	if len(d.justifications) < d.validators.Size() {
+	if !d.IsJustificationsReady() {
 		return nil, false
 	}
 	d.logger.Info("dkgState: processing justifications")
 
+	commits, err := d.GetCommits()
+	if err != nil {
+		return err, true
+	}
+
+	var (
+		buf = bytes.NewBuffer(nil)
+		enc = gob.NewEncoder(buf)
+	)
+	if err := enc.Encode(commits); err != nil {
+		return fmt.Errorf("failed to encode response: %v", err), true
+	}
+
+	message := &types.DKGData{
+		Type:        types.DKGCommits,
+		RoundID:     d.roundID,
+		Addr:        d.addrBytes,
+		Data:        buf.Bytes(),
+		NumEntities: len(commits.Commitments),
+	}
+
+	d.SendMsgCb(message)
+
+	return nil, true
+}
+
+func (d *DKGDealer) IsJustificationsReady() bool {
+	return len(d.justifications) >= d.validators.Size()
+}
+
+func (d DKGDealer) GetCommits() (*dkg.SecretCommits, error) {
 	for _, justification := range d.justifications {
 		if justification != nil {
 			d.logger.Info("dkgState: processing non-empty justification", "from", justification.Index)
 			if err := d.instance.ProcessJustification(justification); err != nil {
-				return fmt.Errorf("failed to ProcessJustification: %v", err), true
+				return nil, fmt.Errorf("failed to ProcessJustification: %v", err)
 			}
 		} else {
 			d.logger.Info("dkgState: empty justification, everything is o.k.")
@@ -474,7 +519,7 @@ func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
 	d.eventFirer.FireEvent(types.EventDKGJustificationsProcessed, d.roundID)
 
 	if !d.instance.Certified() {
-		return errors.New("instance is not certified"), true
+		return nil, errors.New("instance is not certified")
 	}
 	d.eventFirer.FireEvent(types.EventDKGInstanceCertified, d.roundID)
 
@@ -492,29 +537,15 @@ func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
 			}
 		}
 
-		return errors.New("some of participants failed to complete phase I"), true
+		return nil, errors.New("some of participants failed to complete phase I")
 	}
 
 	commits, err := d.instance.SecretCommits()
 	if err != nil {
-		return fmt.Errorf("failed to get commits: %v", err), true
+		return nil, fmt.Errorf("failed to get commits: %v", err)
 	}
-	var (
-		buf = bytes.NewBuffer(nil)
-		enc = gob.NewEncoder(buf)
-	)
-	if err := enc.Encode(commits); err != nil {
-		return fmt.Errorf("failed to encode response: %v", err), true
-	}
-	d.SendMsgCb(&types.DKGData{
-		Type:        types.DKGCommits,
-		RoundID:     d.roundID,
-		Addr:        d.addrBytes,
-		Data:        buf.Bytes(),
-		NumEntities: len(commits.Commitments),
-	})
 
-	return nil, true
+	return commits, nil
 }
 
 //////////////////////////////////////////////////////////////////////////////
