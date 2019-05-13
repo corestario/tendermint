@@ -16,6 +16,7 @@ import (
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
+	"go.dedis.ch/kyber"
 )
 
 // TODO: implement round timeouts.
@@ -43,6 +44,7 @@ type dkgState struct {
 	dkgRoundID       int
 	dkgNumBlocks     int64
 	newDKGDealer     DKGDealerConstructor
+	privValidator	 types.PrivValidator
 
 	Logger log.Logger
 	evsw   events.EventSwitch
@@ -82,6 +84,10 @@ func WithLogger(l log.Logger) DKGOption {
 	return func(d *dkgState) { d.Logger = l }
 }
 
+func WithPVKey(pv types.PrivValidator) DKGOption {
+	return func(d *dkgState) { d.privValidator = pv }
+}
+
 func WithDKGDealerConstructor(dealer DKGDealerConstructor) DKGOption {
 	return func(d *dkgState) {
 		if dealer == nil {
@@ -105,7 +111,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	dealer, ok := dkg.dkgRoundToDealer[msg.RoundID]
 	if !ok {
 		dkg.Logger.Info("dkgState: dealer not found, creating a new dealer", "round_id", msg.RoundID)
-		dealer = dkg.newDKGDealer(validators, pubKey, dkg.sendDKGMessage, dkg.evsw, dkg.Logger)
+		dealer = dkg.newDKGDealer(validators, dkg., dkg.sendDKGMessage, dkg.evsw, dkg.Logger)
 		dkg.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.Start(); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
