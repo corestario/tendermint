@@ -201,14 +201,6 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	return added, nil
 }
 
-// GetVotes returns all votes in a voteSet, including nil ones (beware!).
-func (voteSet *VoteSet) GetVotes() []*Vote {
-	voteSet.mtx.Lock()
-	defer voteSet.mtx.Unlock()
-
-	return voteSet.votes
-}
-
 // Returns (vote, true) if vote exists for valIndex and blockKey.
 func (voteSet *VoteSet) getVote(valIndex int, blockKey string) (vote *Vote, ok bool) {
 	if existing := voteSet.votes[valIndex]; existing != nil && existing.BlockID.Key() == blockKey {
@@ -549,12 +541,11 @@ func (voteSet *VoteSet) MakeCommit() *Commit {
 	}
 
 	// For every validator, get the precommit
-	votesCopy := make([]*Vote, len(voteSet.votes))
-	copy(votesCopy, voteSet.votes)
-	return &Commit{
-		BlockID:    *voteSet.maj23,
-		Precommits: votesCopy,
+	commitSigs := make([]*CommitSig, len(voteSet.votes))
+	for i, v := range voteSet.votes {
+		commitSigs[i] = v.CommitSig()
 	}
+	return NewCommit(*voteSet.maj23, commitSigs)
 }
 
 //--------------------------------------------------------------------------------

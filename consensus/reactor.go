@@ -264,8 +264,6 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
-		case *DKGDataMessage:
-			conR.conS.dkgMsgQueue <- msgInfo{Msg: msg, PeerID: ""}
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -385,10 +383,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		func(data tmevents.EventData) {
 			conR.broadcastHasVoteMessage(data.(*types.Vote))
 		})
-	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
-		func(data tmevents.EventData) {
-			conR.broadcastDKGDataMessage(data.(*types.DKGData))
-		})
+
 }
 
 func (conR *ConsensusReactor) unsubscribeFromBroadcastEvents() {
@@ -439,11 +434,6 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 			}
 		}
 	*/
-}
-
-// Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastDKGDataMessage(data *types.DKGData) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&DKGDataMessage{Data: data}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -906,7 +896,7 @@ type PeerState struct {
 	peer   p2p.Peer
 	logger log.Logger
 
-	mtx   sync.Mutex             `json:"-"`           // NOTE: Modify below using setters, never directly.
+	mtx   sync.Mutex             // NOTE: Modify below using setters, never directly.
 	PRS   cstypes.PeerRoundState `json:"round_state"` // Exposed.
 	Stats *peerStateStats        `json:"stats"`       // Exposed.
 }
@@ -1381,7 +1371,6 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1470,18 +1459,6 @@ func (m *NewValidBlockMessage) String() string {
 }
 
 //-------------------------------------
-
-type DKGDataMessage struct {
-	Data *types.DKGData
-}
-
-func (m *DKGDataMessage) ValidateBasic() error {
-	return nil
-}
-
-func (m *DKGDataMessage) String() string {
-	return fmt.Sprintf("[Proposal %+v]", m.Data)
-}
 
 // ProposalMessage is sent when a new block is proposed.
 type ProposalMessage struct {

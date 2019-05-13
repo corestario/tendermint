@@ -26,6 +26,7 @@ import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	"github.com/tendermint/tendermint/libs/log"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
@@ -117,15 +118,17 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 }
 
 // MetricsProvider returns a consensus, p2p and mempool Metrics.
-type MetricsProvider func() (*cs.Metrics, *p2p.Metrics, *mempl.Metrics, *sm.Metrics)
+type MetricsProvider func(chainID string) (*cs.Metrics, *p2p.Metrics, *mempl.Metrics, *sm.Metrics)
 
 // DefaultMetricsProvider returns Metrics build using Prometheus client library
 // if Prometheus is enabled. Otherwise, it returns no-op Metrics.
 func DefaultMetricsProvider(config *cfg.InstrumentationConfig) MetricsProvider {
-	return func() (*cs.Metrics, *p2p.Metrics, *mempl.Metrics, *sm.Metrics) {
+	return func(chainID string) (*cs.Metrics, *p2p.Metrics, *mempl.Metrics, *sm.Metrics) {
 		if config.Prometheus {
-			return cs.PrometheusMetrics(config.Namespace), p2p.PrometheusMetrics(config.Namespace),
-				mempl.PrometheusMetrics(config.Namespace), sm.PrometheusMetrics(config.Namespace)
+			return cs.PrometheusMetrics(config.Namespace, "chain_id", chainID),
+				p2p.PrometheusMetrics(config.Namespace, "chain_id", chainID),
+				mempl.PrometheusMetrics(config.Namespace, "chain_id", chainID),
+				sm.PrometheusMetrics(config.Namespace, "chain_id", chainID)
 		}
 		return cs.NopMetrics(), p2p.NopMetrics(), mempl.NopMetrics(), sm.NopMetrics()
 	}
@@ -176,6 +179,7 @@ func NewNode(config *cfg.Config,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
 	logger log.Logger) (*Node, error) {
+
 	// Get BlockStore
 	blockStoreDB, err := dbProvider(&DBContext{"blockstore", config})
 	if err != nil {
@@ -214,11 +218,51 @@ func NewNode(config *cfg.Config,
 		return nil, fmt.Errorf("Error starting proxy app connections: %v", err)
 	}
 
+	// EventBus and IndexerService must be started before the handshake because
+	// we might need to index the txs of the replayed block as this might not have happened
+	// when the node stopped last time (i.e. the node stopped after it saved the block
+	// but before it indexed the txs, or, endblocker panicked)
+	eventBus := types.NewEventBus()
+	eventBus.SetLogger(logger.With("module", "events"))
+
+	err = eventBus.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	// Transaction indexing
+	var txIndexer txindex.TxIndexer
+	switch config.TxIndex.Indexer {
+	case "kv":
+		store, err := dbProvider(&DBContext{"tx_index", config})
+		if err != nil {
+			return nil, err
+		}
+		if config.TxIndex.IndexTags != "" {
+			txIndexer = kv.NewTxIndex(store, kv.IndexTags(splitAndTrimEmpty(config.TxIndex.IndexTags, ",", " ")))
+		} else if config.TxIndex.IndexAllTags {
+			txIndexer = kv.NewTxIndex(store, kv.IndexAllTags())
+		} else {
+			txIndexer = kv.NewTxIndex(store)
+		}
+	default:
+		txIndexer = &null.TxIndex{}
+	}
+
+	indexerService := txindex.NewIndexerService(txIndexer, eventBus)
+	indexerService.SetLogger(logger.With("module", "txindex"))
+
+	err = indexerService.Start()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
 	consensusLogger := logger.With("module", "consensus")
 	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
 	handshaker.SetLogger(consensusLogger)
+	handshaker.SetEventBus(eventBus)
 	if err := handshaker.Handshake(proxyApp); err != nil {
 		return nil, fmt.Errorf("Error during handshake: %v", err)
 	}
@@ -273,7 +317,7 @@ func NewNode(config *cfg.Config,
 		consensusLogger.Info("This node is not a validator", "addr", addr, "pubKey", pubKey)
 	}
 
-	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider()
+	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(
@@ -302,8 +346,7 @@ func NewNode(config *cfg.Config,
 		return nil, err
 	}
 	evidenceLogger := logger.With("module", "evidence")
-	evidenceStore := evidence.NewEvidenceStore(evidenceDB)
-	evidencePool := evidence.NewEvidencePool(stateDB, evidenceStore)
+	evidencePool := evidence.NewEvidencePool(stateDB, evidenceDB)
 	evidencePool.SetLogger(evidenceLogger)
 	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
@@ -319,25 +362,8 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
-	fmt.Println("load bls from", config.BLSKeyFile())
-	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
-	}
-
-	keypair, err := blsShare.Deserialize()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keypair: %v", err)
-	}
-	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
-
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
-
 	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
+	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	// Make ConsensusReactor
@@ -349,10 +375,7 @@ func NewNode(config *cfg.Config,
 		mempool,
 		evidencePool,
 		cs.StateMetrics(csMetrics),
-		cs.WithVerifier(verifier),
-		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
 	)
-
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
@@ -360,34 +383,9 @@ func NewNode(config *cfg.Config,
 	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 
-	eventBus := types.NewEventBus()
-	eventBus.SetLogger(logger.With("module", "events"))
-
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
-
-	// Transaction indexing
-	var txIndexer txindex.TxIndexer
-	switch config.TxIndex.Indexer {
-	case "kv":
-		store, err := dbProvider(&DBContext{"tx_index", config})
-		if err != nil {
-			return nil, err
-		}
-		if config.TxIndex.IndexTags != "" {
-			txIndexer = kv.NewTxIndex(store, kv.IndexTags(splitAndTrimEmpty(config.TxIndex.IndexTags, ",", " ")))
-		} else if config.TxIndex.IndexAllTags {
-			txIndexer = kv.NewTxIndex(store, kv.IndexAllTags())
-		} else {
-			txIndexer = kv.NewTxIndex(store)
-		}
-	default:
-		txIndexer = &null.TxIndex{}
-	}
-
-	indexerService := txindex.NewIndexerService(txIndexer, eventBus)
-	indexerService.SetLogger(logger.With("module", "txindex"))
 
 	p2pLogger := logger.With("module", "p2p")
 	nodeInfo, err := makeNodeInfo(
@@ -491,7 +489,7 @@ func NewNode(config *cfg.Config,
 	addrBook := pex.NewAddrBook(config.P2P.AddrBookFile(), config.P2P.AddrBookStrict)
 
 	// Add ourselves to addrbook to prevent dialing ourselves
-	addrBook.AddOurAddress(nodeInfo.NetAddress())
+	addrBook.AddOurAddress(sw.NetAddress())
 
 	addrBook.SetLogger(p2pLogger.With("book", config.P2P.AddrBookFile()))
 	if config.P2P.PexReactor {
@@ -551,11 +549,6 @@ func (n *Node) OnStart() error {
 		time.Sleep(genTime.Sub(now))
 	}
 
-	err := n.eventBus.Start()
-	if err != nil {
-		return err
-	}
-
 	// Add private IDs to addrbook to block those peers being added
 	n.addrBook.AddPrivateIDs(splitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
 
@@ -599,8 +592,7 @@ func (n *Node) OnStart() error {
 		}
 	}
 
-	// start tx indexer
-	return n.indexerService.Start()
+	return nil
 }
 
 // OnStop stops the Node. It implements cmn.Service.
@@ -667,6 +659,7 @@ func (n *Node) ConfigureRPC() {
 	rpccore.SetConsensusReactor(n.consensusReactor)
 	rpccore.SetEventBus(n.eventBus)
 	rpccore.SetLogger(n.Logger.With("module", "rpc"))
+	rpccore.SetConfig(*n.config.RPC)
 }
 
 func (n *Node) startRPC() ([]net.Listener, error) {
@@ -684,14 +677,30 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 	for i, listenAddr := range listenAddrs {
 		mux := http.NewServeMux()
 		rpcLogger := n.Logger.With("module", "rpc-server")
-		wm := rpcserver.NewWebsocketManager(rpccore.Routes, coreCodec, rpcserver.EventSubscriber(n.eventBus))
-		wm.SetLogger(rpcLogger.With("protocol", "websocket"))
+		wmLogger := rpcLogger.With("protocol", "websocket")
+		wm := rpcserver.NewWebsocketManager(rpccore.Routes, coreCodec,
+			rpcserver.OnDisconnect(func(remoteAddr string) {
+				err := n.eventBus.UnsubscribeAll(context.Background(), remoteAddr)
+				if err != nil && err != tmpubsub.ErrSubscriptionNotFound {
+					wmLogger.Error("Failed to unsubscribe addr from events", "addr", remoteAddr, "err", err)
+				}
+			}))
+		wm.SetLogger(wmLogger)
 		mux.HandleFunc("/websocket", wm.WebsocketHandler)
 		rpcserver.RegisterRPCFuncs(mux, rpccore.Routes, coreCodec, rpcLogger)
 
+		config := rpcserver.DefaultConfig()
+		config.MaxOpenConnections = n.config.RPC.MaxOpenConnections
+		// If necessary adjust global WriteTimeout to ensure it's greater than
+		// TimeoutBroadcastTxCommit.
+		// See https://github.com/tendermint/tendermint/issues/3435
+		if config.WriteTimeout <= n.config.RPC.TimeoutBroadcastTxCommit {
+			config.WriteTimeout = n.config.RPC.TimeoutBroadcastTxCommit + 1*time.Second
+		}
+
 		listener, err := rpcserver.Listen(
 			listenAddr,
-			rpcserver.Config{MaxOpenConnections: n.config.RPC.MaxOpenConnections},
+			config,
 		)
 		if err != nil {
 			return nil, err
@@ -706,20 +715,33 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 			})
 			rootHandler = corsMiddleware.Handler(mux)
 		}
+		if n.config.RPC.IsTLSEnabled() {
+			go rpcserver.StartHTTPAndTLSServer(
+				listener,
+				rootHandler,
+				n.config.RPC.CertFile(),
+				n.config.RPC.KeyFile(),
+				rpcLogger,
+				config,
+			)
+		} else {
+			go rpcserver.StartHTTPServer(
+				listener,
+				rootHandler,
+				rpcLogger,
+				config,
+			)
+		}
 
-		go rpcserver.StartHTTPServer(
-			listener,
-			rootHandler,
-			rpcLogger,
-		)
 		listeners[i] = listener
 	}
 
 	// we expose a simplified api over grpc for convenience to app devs
 	grpcListenAddr := n.config.RPC.GRPCListenAddress
 	if grpcListenAddr != "" {
-		listener, err := rpcserver.Listen(
-			grpcListenAddr, rpcserver.Config{MaxOpenConnections: n.config.RPC.GRPCMaxOpenConnections})
+		config := rpcserver.DefaultConfig()
+		config.MaxOpenConnections = n.config.RPC.MaxOpenConnections
+		listener, err := rpcserver.Listen(grpcListenAddr, config)
 		if err != nil {
 			return nil, err
 		}
@@ -800,6 +822,11 @@ func (n *Node) GenesisDoc() *types.GenesisDoc {
 // ProxyApp returns the Node's AppConns, representing its connections to the ABCI application.
 func (n *Node) ProxyApp() proxy.AppConns {
 	return n.proxyApp
+}
+
+// Config returns the Node's config.
+func (n *Node) Config() *cfg.Config {
+	return n.config
 }
 
 //------------------------------------------------------------------------------
@@ -918,7 +945,7 @@ func createAndStartPrivValidatorSocketClient(
 		)
 	}
 
-	pvsc := privval.NewSocketVal(logger.With("module", "privval"), listener)
+	pvsc := privval.NewSignerValidatorEndpoint(logger.With("module", "privval"), listener)
 	if err := pvsc.Start(); err != nil {
 		return nil, errors.Wrap(err, "failed to start private validator")
 	}

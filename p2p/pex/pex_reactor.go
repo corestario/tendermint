@@ -167,7 +167,7 @@ func (r *PEXReactor) AddPeer(p Peer) {
 		}
 	} else {
 		// inbound peer is its own source
-		addr := p.NodeInfo().NetAddress()
+		addr := p.SocketAddr()
 		src := addr
 
 		// add to book. dont RequestAddrs right away because
@@ -309,7 +309,7 @@ func (r *PEXReactor) ReceiveAddrs(addrs []*p2p.NetAddress, src Peer) error {
 	}
 	r.requestsSent.Delete(id)
 
-	srcAddr := src.NodeInfo().NetAddress()
+	srcAddr := src.SocketAddr()
 	for _, netAddr := range addrs {
 		// Validate netAddr. Disconnect from a peer if it sends us invalid data.
 		if netAddr == nil {
@@ -471,7 +471,11 @@ func (r *PEXReactor) dialPeer(addr *p2p.NetAddress) {
 	attempts, lastDialed := r.dialAttemptsInfo(addr)
 
 	if attempts > maxAttemptsToDial {
-		r.Logger.Error("Reached max attempts to dial", "addr", addr, "attempts", attempts)
+		// Do not log the message if the addr gets readded.
+		if attempts+1 == maxAttemptsToDial {
+			r.Logger.Info("Reached max attempts to dial", "addr", addr, "attempts", attempts)
+			r.attemptsToDial.Store(addr.DialString(), _attemptsToDial{attempts + 1, time.Now()})
+		}
 		r.book.MarkBad(addr)
 		return
 	}
@@ -612,10 +616,9 @@ func (of oldestFirst) Less(i, j int) bool { return of[i].LastAttempt.Before(of[j
 // getPeersToCrawl returns addresses of potential peers that we wish to validate.
 // NOTE: The status information is ordered as described above.
 func (r *PEXReactor) getPeersToCrawl() []crawlPeerInfo {
-	var of oldestFirst
-
 	// TODO: be more selective
 	addrs := r.book.ListOfKnownAddresses()
+	of := make(oldestFirst, 0, len(addrs))
 	for _, addr := range addrs {
 		if len(addr.ID()) == 0 {
 			continue // dont use peers without id

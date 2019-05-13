@@ -2,10 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"html/template"
-	"os"
-
-	"encoding/json"
 
 	"github.com/spf13/cobra"
 	cfg "github.com/tendermint/tendermint/config"
@@ -53,28 +49,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
-	// todo what should we do if bls key not exsists
-	blsKeyFile := config.BLSKeyFile()
-	if cmn.FileExists(blsKeyFile) {
-		logger.Info("Found node key", "path", blsKeyFile)
-	} else {
-		f, err := os.Create(blsKeyFile)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		share, ok := types.TestnetShares[config.NodeID]
-		if !ok {
-			return fmt.Errorf("node id #%d is unexpected", config.NodeID)
-		}
-		err = json.NewEncoder(f).Encode(share)
-		if err != nil {
-			return err
-		}
-
-		logger.Info("Generated node key", "path", blsKeyFile)
-	}
-
 	// genesis file
 	genFile := config.GenesisFile()
 	if cmn.FileExists(genFile) {
@@ -92,12 +66,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 			Power:   10,
 		}}
 
-		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
-		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
-		genDoc.BLSThreshold = 2
-		genDoc.BLSNumShares = 4
-		genDoc.DKGNumBlocks = 1000
-
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
 		}
@@ -106,64 +74,3 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 	return nil
 }
-
-type Nodes struct {
-	Nodes []Node
-}
-
-type Node struct {
-	StartPort int
-	EndPort   int
-	IP        int
-}
-
-func writeDockerCompose(nValidators int, p2pPort int) error {
-	startIP := 2
-
-	nodes := make([]Node, nValidators)
-	for i := range nodes {
-		nodes[i] = Node{
-			StartPort: p2pPort + 2*i,
-			EndPort:   p2pPort + 2*i + 1,
-			IP:        startIP + i,
-		}
-	}
-
-	composeTmpl := template.Must(template.New("docker-compose").Parse(templ))
-
-	f, err := os.Create("docker-compose.yml")
-	if err != nil {
-		return err
-	}
-
-	return composeTmpl.Execute(f, Nodes{nodes})
-}
-
-const templ = `version: '3'
-
-services:{{range $i, $e := .Nodes}}
-  node{{$i}}:
-    container_name: node{{$i}}
-    image: "tendermint/localnode"
-    ports:
-      - "{{.StartPort}}-{{.EndPort}}:26656-26657"
-    environment:
-      - ID={{$i}}
-      - LOG=tendermint.log
-    volumes:
-      - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
-    networks:
-      localnet:
-        ipv4_address: 192.167.10.{{.IP}}
-{{end}}
-networks:
-  localnet:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      -
-        subnet: 192.167.10.0/16
-
-`

@@ -11,9 +11,9 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	abci "github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
 
 	cfg "github.com/tendermint/tendermint/config"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	nm "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
@@ -64,14 +64,17 @@ func makePathname() string {
 }
 
 func randPort() int {
-	return int(cmn.RandUint16()/2 + 10000)
+	port, err := cmn.GetFreePort()
+	if err != nil {
+		panic(err)
+	}
+	return port
 }
 
 func makeAddrs() (string, string, string) {
-	start := randPort()
-	return fmt.Sprintf("tcp://0.0.0.0:%d", start),
-		fmt.Sprintf("tcp://0.0.0.0:%d", start+1),
-		fmt.Sprintf("tcp://0.0.0.0:%d", start+2)
+	return fmt.Sprintf("tcp://0.0.0.0:%d", randPort()),
+		fmt.Sprintf("tcp://0.0.0.0:%d", randPort()),
+		fmt.Sprintf("tcp://0.0.0.0:%d", randPort())
 }
 
 // GetConfig returns a config for the test cases as a singleton
@@ -113,6 +116,14 @@ func StartTendermint(app abci.Application) *nm.Node {
 	return node
 }
 
+// StopTendermint stops a test tendermint server, waits until it's stopped and
+// cleans up test/config files.
+func StopTendermint(node *nm.Node) {
+	node.Stop()
+	node.Wait()
+	os.RemoveAll(node.Config().RootDir)
+}
+
 // NewTendermint creates a new tendermint server and sleeps forever
 func NewTendermint(app abci.Application) *nm.Node {
 	// Create & start node
@@ -123,12 +134,10 @@ func NewTendermint(app abci.Application) *nm.Node {
 	pvKeyStateFile := config.PrivValidatorStateFile()
 	pv := privval.LoadOrGenFilePV(pvKeyFile, pvKeyStateFile)
 	papp := proxy.NewLocalClientCreator(app)
-
 	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
 	if err != nil {
 		panic(err)
 	}
-
 	node, err := nm.NewNode(config, pv, nodeKey, papp,
 		nm.DefaultGenesisDocProviderFunc(config),
 		nm.DefaultDBProvider,

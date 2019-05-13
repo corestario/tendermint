@@ -69,18 +69,6 @@ func (bs *BlockStore) LoadBlock(height int64) *types.Block {
 		// block. So, make sure meta is only saved after blocks are saved.
 		panic(cmn.ErrorWrap(err, "Error reading block"))
 	}
-
-	// A block is split into parts during propose step, while the random number is generated on commit
-	// and stored in the block header, which is stored separately from block parts.
-	//
-	// The problem is that, the block which is transferred to the application via ABCI's BeginBlock
-	// method won't contain the generated random by the time the block is loaded,
-	// so here the block's random is filled with block's meta random
-	//
-	// holy cow, I'm not sure if it's actually ok to do so
-	block.RandomData = blockMeta.Header.RandomData
-	block.RandomHash = blockMeta.Header.RandomHash
-
 	return block
 }
 

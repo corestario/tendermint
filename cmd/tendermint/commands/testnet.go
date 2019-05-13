@@ -18,11 +18,10 @@ import (
 )
 
 var (
-	nValidators     int
-	nDeadValidators int
-	nNonValidators  int
-	outputDir       string
-	nodeDirPrefix   string
+	nValidators    int
+	nNonValidators int
+	outputDir      string
+	nodeDirPrefix  string
 
 	populatePersistentPeers bool
 	hostnamePrefix          string
@@ -37,8 +36,6 @@ const (
 func init() {
 	TestnetFilesCmd.Flags().IntVar(&nValidators, "v", 4,
 		"Number of validators to initialize the testnet with")
-	TestnetFilesCmd.Flags().IntVar(&nDeadValidators, "d", 0,
-		"Number of 'dead' validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().IntVar(&nNonValidators, "n", 0,
 		"Number of non-validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().StringVar(&outputDir, "o", "./mytestnet",
@@ -76,9 +73,9 @@ Example:
 
 func testnetFiles(cmd *cobra.Command, args []string) error {
 	config := cfg.DefaultConfig()
-	genVals := make([]types.GenesisValidator, nValidators+nDeadValidators)
+	genVals := make([]types.GenesisValidator, nValidators)
 
-	for i := 0; i < nValidators+nDeadValidators; i++ {
+	for i := 0; i < nValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", nodeDirPrefix, i)
 		nodeDir := filepath.Join(outputDir, nodeDirName)
 		config.SetRoot(nodeDir)
@@ -94,7 +91,6 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		config.NodeID = i
 		initFilesWithConfig(config)
 
 		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
@@ -110,10 +106,16 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < nNonValidators; i++ {
-		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators+nDeadValidators))
+		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators))
 		config.SetRoot(nodeDir)
 
 		err := os.MkdirAll(filepath.Join(nodeDir, "config"), nodeDirPerm)
+		if err != nil {
+			_ = os.RemoveAll(outputDir)
+			return err
+		}
+
+		err = os.MkdirAll(filepath.Join(nodeDir, "data"), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(outputDir)
 			return err
@@ -124,17 +126,13 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 
 	// Generate genesis doc from generated validators
 	genDoc := &types.GenesisDoc{
-		GenesisTime:     tmtime.Now(),
-		ChainID:         "chain-" + cmn.RandStr(6),
-		Validators:      genVals,
-		BLSMasterPubKey: types.TestnetMasterPubKey,
-		BLSThreshold:    3,
-		BLSNumShares:    4,
-		DKGNumBlocks:    1000,
+		GenesisTime: tmtime.Now(),
+		ChainID:     "chain-" + cmn.RandStr(6),
+		Validators:  genVals,
 	}
 
 	// Write genesis file.
-	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		if err := genDoc.SaveAs(filepath.Join(nodeDir, config.BaseConfig.Genesis)); err != nil {
 			_ = os.RemoveAll(outputDir)
@@ -153,14 +151,10 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			_ = os.RemoveAll(outputDir)
 			return err
 		}
-
-		if err := writeDockerCompose(nValidators, p2pPort); err != nil {
-			return err
-		}
 	}
 
 	// Overwrite default config.
-	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		config.P2P.AddrBookStrict = false
@@ -172,7 +166,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		cfg.WriteConfigFile(filepath.Join(nodeDir, "config", "config.toml"), config)
 	}
 
-	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators+nDeadValidators)
+	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators)
 	return nil
 }
 
@@ -195,8 +189,8 @@ func hostnameOrIP(i int) string {
 }
 
 func persistentPeersString(config *cfg.Config) (string, error) {
-	persistentPeers := make([]string, nValidators+nNonValidators+nDeadValidators)
-	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
+	persistentPeers := make([]string, nValidators+nNonValidators)
+	for i := 0; i < nValidators+nNonValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		nodeKey, err := p2p.LoadNodeKey(config.NodeKeyFile())

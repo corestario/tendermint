@@ -2,15 +2,16 @@ package config
 
 import (
 	"bytes"
-	"os"
+	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"text/template"
 
-	"encoding/json"
-
 	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/types"
 )
+
+// DefaultDirPerm is the default permissions used when creating directories.
+const DefaultDirPerm = 0700
 
 var configTemplate *template.Template
 
@@ -26,13 +27,13 @@ func init() {
 // EnsureRoot creates the root, config, and data directories if they don't exist,
 // and panics if it fails.
 func EnsureRoot(rootDir string) {
-	if err := cmn.EnsureDir(rootDir, 0700); err != nil {
+	if err := cmn.EnsureDir(rootDir, DefaultDirPerm); err != nil {
 		cmn.PanicSanity(err.Error())
 	}
-	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultConfigDir), 0700); err != nil {
+	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultConfigDir), DefaultDirPerm); err != nil {
 		cmn.PanicSanity(err.Error())
 	}
-	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultDataDir), 0700); err != nil {
+	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultDataDir), DefaultDirPerm); err != nil {
 		cmn.PanicSanity(err.Error())
 	}
 
@@ -164,6 +165,33 @@ unsafe = {{ .RPC.Unsafe }}
 # 1024 - 40 - 10 - 50 = 924 = ~900
 max_open_connections = {{ .RPC.MaxOpenConnections }}
 
+# Maximum number of unique clientIDs that can /subscribe
+# If you're using /broadcast_tx_commit, set to the estimated maximum number
+# of broadcast_tx_commit calls per block.
+max_subscription_clients = {{ .RPC.MaxSubscriptionClients }}
+
+# Maximum number of unique queries a given client can /subscribe to
+# If you're using GRPC (or Local RPC client) and /broadcast_tx_commit, set to
+# the estimated # maximum number of broadcast_tx_commit calls per block.
+max_subscriptions_per_client = {{ .RPC.MaxSubscriptionsPerClient }}
+
+# How long to wait for a tx to be committed during /broadcast_tx_commit.
+# WARNING: Using a value larger than 10s will result in increasing the
+# global HTTP write timeout, which applies to all connections and endpoints.
+# See https://github.com/tendermint/tendermint/issues/3435
+timeout_broadcast_tx_commit = "{{ .RPC.TimeoutBroadcastTxCommit }}"
+
+# The name of a file containing certificate that is used to create the HTTPS server.
+# If the certificate is signed by a certificate authority,
+# the certFile should be the concatenation of the server's certificate, any intermediates,
+# and the CA's certificate.
+# NOTE: both tls_cert_file and tls_key_file must be present for Tendermint to create HTTPS server. Otherwise, HTTP server is run.
+tls_cert_file = "{{ .RPC.TLSCertFile }}"
+
+# The name of a file containing matching private key that is used to create the HTTPS server.
+# NOTE: both tls_cert_file and tls_key_file must be present for Tendermint to create HTTPS server. Otherwise, HTTP server is run.
+tls_key_file = "{{ .RPC.TLSKeyFile }}"
+
 ##### peer to peer configuration options #####
 [p2p]
 
@@ -236,10 +264,15 @@ recheck = {{ .Mempool.Recheck }}
 broadcast = {{ .Mempool.Broadcast }}
 wal_dir = "{{ js .Mempool.WalPath }}"
 
-# size of the mempool
+# Maximum number of transactions in the mempool
 size = {{ .Mempool.Size }}
 
-# size of the cache (used to filter transactions we saw earlier)
+# Limit the total size of all txs in the mempool.
+# This only accounts for raw transactions (e.g. given 1MB transactions and
+# max_txs_bytes=5MB, mempool will only accept 5 transactions).
+max_txs_bytes = {{ .Mempool.MaxTxsBytes }}
+
+# Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = {{ .Mempool.CacheSize }}
 
 ##### consensus configuration options #####
@@ -265,9 +298,6 @@ create_empty_blocks_interval = "{{ .Consensus.CreateEmptyBlocksInterval }}"
 # Reactor sleep duration parameters
 peer_gossip_sleep_duration = "{{ .Consensus.PeerGossipSleepDuration }}"
 peer_query_maj23_sleep_duration = "{{ .Consensus.PeerQueryMaj23SleepDuration }}"
-
-# Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
-blocktime_iota = "{{ .Consensus.BlockTimeIota }}"
 
 ##### transactions indexer configuration options #####
 [tx_index]
@@ -320,29 +350,21 @@ namespace = "{{ .Instrumentation.Namespace }}"
 /****** these are for test settings ***********/
 
 func ResetTestRoot(testName string) *Config {
-	rootDir := os.ExpandEnv("$HOME/.tendermint_test")
-	rootDir = filepath.Join(rootDir, testName)
-	// Remove ~/.tendermint_test_bak
-	if cmn.FileExists(rootDir + "_bak") {
-		if err := os.RemoveAll(rootDir + "_bak"); err != nil {
-			cmn.PanicSanity(err.Error())
-		}
+	return ResetTestRootWithChainID(testName, "")
+}
+
+func ResetTestRootWithChainID(testName string, chainID string) *Config {
+	// create a unique, concurrency-safe test directory under os.TempDir()
+	rootDir, err := ioutil.TempDir("", fmt.Sprintf("%s-%s_", chainID, testName))
+	if err != nil {
+		panic(err)
 	}
-	// Move ~/.tendermint_test to ~/.tendermint_test_bak
-	if cmn.FileExists(rootDir) {
-		if err := os.Rename(rootDir, rootDir+"_bak"); err != nil {
-			cmn.PanicSanity(err.Error())
-		}
+	// ensure config and data subdirs are created
+	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultConfigDir), DefaultDirPerm); err != nil {
+		panic(err)
 	}
-	// Create new dir
-	if err := cmn.EnsureDir(rootDir, 0700); err != nil {
-		cmn.PanicSanity(err.Error())
-	}
-	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultConfigDir), 0700); err != nil {
-		cmn.PanicSanity(err.Error())
-	}
-	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultDataDir), 0700); err != nil {
-		cmn.PanicSanity(err.Error())
+	if err := cmn.EnsureDir(filepath.Join(rootDir, defaultDataDir), DefaultDirPerm); err != nil {
+		panic(err)
 	}
 
 	baseConfig := DefaultBaseConfig()
@@ -350,35 +372,29 @@ func ResetTestRoot(testName string) *Config {
 	genesisFilePath := filepath.Join(rootDir, baseConfig.Genesis)
 	privKeyFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorKey)
 	privStateFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorState)
-	BLSShareFilePath := filepath.Join(rootDir, baseConfig.BLSKeyFile())
 
 	// Write default config file if missing.
 	if !cmn.FileExists(configFilePath) {
 		writeDefaultConfigFile(configFilePath)
 	}
 	if !cmn.FileExists(genesisFilePath) {
+		if chainID == "" {
+			chainID = "tendermint_test"
+		}
+		testGenesis := fmt.Sprintf(testGenesisFmt, chainID)
 		cmn.MustWriteFile(genesisFilePath, []byte(testGenesis), 0644)
 	}
 	// we always overwrite the priv val
 	cmn.MustWriteFile(privKeyFilePath, []byte(testPrivValidatorKey), 0644)
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
 
-	b, err := json.Marshal(types.BLSShareJSON{
-		Pub:  types.DefaultBLSVerifierPubKey,
-		Priv: types.DefaultBLSVerifierPrivKey,
-	})
-	if err != nil {
-		panic(err)
-	}
-	cmn.MustWriteFile(BLSShareFilePath, b, 0644)
-
 	config := TestConfig().SetRoot(rootDir)
 	return config
 }
 
-var testGenesis = `{
+var testGenesisFmt = `{
   "genesis_time": "2018-10-10T08:20:13.695936996Z",
-  "chain_id": "tendermint_test",
+  "chain_id": "%s",
   "validators": [
     {
       "pub_key": {
@@ -389,18 +405,7 @@ var testGenesis = `{
       "name": ""
     }
   ],
-  "app_hash": "",
-  "bls_threshold": "1",
-  "bls_num_shares": "4",
-  "bls_master_pub_key": "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD/hv+EAAH/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/Q",
-  "bls_share": {
-    "pub": "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/QAA==",
-    "priv": "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIghVFMQNE4GNFCGPpzYXJ8lqUnHA0IlIefA3j+lvDdoUYA",
-    "id": "0"
-  },
-  "bls_others": {
-    "CC479BCC141F91A565E9CF06840E149DB14079FA": "0"
-  }
+  "app_hash": ""
 }`
 
 var testPrivValidatorKey = `{

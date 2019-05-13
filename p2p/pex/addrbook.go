@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -369,6 +370,10 @@ func (a *addrBook) GetSelection() []*p2p.NetAddress {
 	return allAddr[:numAddresses]
 }
 
+func percentageOfNum(p, n int) int {
+	return int(math.Round((float64(p) / float64(100)) * float64(n)))
+}
+
 // GetSelectionWithBias implements AddrBook.
 // It randomly selects some addresses (old & new). Suitable for peer-exchange protocols.
 // Must never return a nil address.
@@ -401,70 +406,11 @@ func (a *addrBook) GetSelectionWithBias(biasTowardsNewAddrs int) []*p2p.NetAddre
 		bookSize*getSelectionPercent/100)
 	numAddresses = cmn.MinInt(maxGetSelection, numAddresses)
 
-	selection := make([]*p2p.NetAddress, numAddresses)
-
-	oldBucketToAddrsMap := make(map[int]map[string]struct{})
-	var oldIndex int
-	newBucketToAddrsMap := make(map[int]map[string]struct{})
-	var newIndex int
-
-	selectionIndex := 0
-ADDRS_LOOP:
-	for selectionIndex < numAddresses {
-		pickFromOldBucket := int((float64(selectionIndex)/float64(numAddresses))*100) >= biasTowardsNewAddrs
-		pickFromOldBucket = (pickFromOldBucket && a.nOld > 0) || a.nNew == 0
-		bucket := make(map[string]*knownAddress)
-
-		// loop until we pick a random non-empty bucket
-		for len(bucket) == 0 {
-			if pickFromOldBucket {
-				oldIndex = a.rand.Intn(len(a.bucketsOld))
-				bucket = a.bucketsOld[oldIndex]
-			} else {
-				newIndex = a.rand.Intn(len(a.bucketsNew))
-				bucket = a.bucketsNew[newIndex]
-			}
-		}
-
-		// pick a random index
-		randIndex := a.rand.Intn(len(bucket))
-
-		// loop over the map to return that index
-		var selectedAddr *p2p.NetAddress
-		for _, ka := range bucket {
-			if randIndex == 0 {
-				selectedAddr = ka.Addr
-				break
-			}
-			randIndex--
-		}
-
-		// if we have selected the address before, restart the loop
-		// otherwise, record it and continue
-		if pickFromOldBucket {
-			if addrsMap, ok := oldBucketToAddrsMap[oldIndex]; ok {
-				if _, ok = addrsMap[selectedAddr.String()]; ok {
-					continue ADDRS_LOOP
-				}
-			} else {
-				oldBucketToAddrsMap[oldIndex] = make(map[string]struct{})
-			}
-			oldBucketToAddrsMap[oldIndex][selectedAddr.String()] = struct{}{}
-		} else {
-			if addrsMap, ok := newBucketToAddrsMap[newIndex]; ok {
-				if _, ok = addrsMap[selectedAddr.String()]; ok {
-					continue ADDRS_LOOP
-				}
-			} else {
-				newBucketToAddrsMap[newIndex] = make(map[string]struct{})
-			}
-			newBucketToAddrsMap[newIndex][selectedAddr.String()] = struct{}{}
-		}
-
-		selection[selectionIndex] = selectedAddr
-		selectionIndex++
-	}
-
+	// number of new addresses that, if possible, should be in the beginning of the selection
+	// if there are no enough old addrs, will choose new addr instead.
+	numRequiredNewAdd := cmn.MaxInt(percentageOfNum(biasTowardsNewAddrs, numAddresses), numAddresses-a.nOld)
+	selection := a.randomPickAddresses(bucketTypeNew, numRequiredNewAdd)
+	selection = append(selection, a.randomPickAddresses(bucketTypeOld, numAddresses-len(selection))...)
 	return selection
 }
 
@@ -701,6 +647,44 @@ func (a *addrBook) addAddress(addr, src *p2p.NetAddress) error {
 	bucket := a.calcNewBucket(addr, src)
 	a.addToNewBucket(ka, bucket)
 	return nil
+}
+
+func (a *addrBook) randomPickAddresses(bucketType byte, num int) []*p2p.NetAddress {
+	var buckets []map[string]*knownAddress
+	switch bucketType {
+	case bucketTypeNew:
+		buckets = a.bucketsNew
+	case bucketTypeOld:
+		buckets = a.bucketsOld
+	default:
+		panic("unexpected bucketType")
+	}
+	total := 0
+	for _, bucket := range buckets {
+		total = total + len(bucket)
+	}
+	addresses := make([]*knownAddress, 0, total)
+	for _, bucket := range buckets {
+		for _, ka := range bucket {
+			addresses = append(addresses, ka)
+		}
+	}
+	selection := make([]*p2p.NetAddress, 0, num)
+	chosenSet := make(map[string]bool, num)
+	rand.Shuffle(total, func(i, j int) {
+		addresses[i], addresses[j] = addresses[j], addresses[i]
+	})
+	for _, addr := range addresses {
+		if chosenSet[addr.Addr.String()] {
+			continue
+		}
+		chosenSet[addr.Addr.String()] = true
+		selection = append(selection, addr.Addr)
+		if len(selection) >= num {
+			return selection
+		}
+	}
+	return selection
 }
 
 // Make space in the new buckets by expiring the really bad entries.
