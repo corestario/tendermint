@@ -55,6 +55,30 @@ func (sc *RemoteSignerClient) GetPubKey() crypto.PubKey {
 	return sc.consensusPubKey
 }
 
+// SignDKGData implements PrivValidator
+func (sc *RemoteSignerClient) SignDKGData(data *types.DKGData) error {
+	err := writeMsg(sc.conn, &SignDKGDataRequest{DKGData: data})
+	if err != nil {
+		return err
+	}
+
+	res, err := readMsg(sc.conn)
+	if err != nil {
+		return err
+	}
+
+	resp, ok := res.(*SignedDKGDataResponse)
+	if !ok {
+		return ErrUnexpectedResponse
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	*data = *resp.DKGData
+
+	return nil
+}
+
 // not thread-safe (only called on startup).
 func getPubKey(conn net.Conn) (crypto.PubKey, error) {
 	err := writeMsg(conn, &PubKeyRequest{})
@@ -176,10 +200,19 @@ type SignVoteRequest struct {
 	Vote *types.Vote
 }
 
+type SignDKGDataRequest struct {
+	DKGData *types.DKGData
+}
+
 // SignedVoteResponse is a PrivValidatorSocket message containing a signed vote along with a potenial error message.
 type SignedVoteResponse struct {
 	Vote  *types.Vote
 	Error *RemoteSignerError
+}
+
+type SignedDKGDataResponse struct {
+	DKGData *types.DKGData
+	Error   *RemoteSignerError
 }
 
 // SignProposalRequest is a PrivValidatorSocket message containing a Proposal.

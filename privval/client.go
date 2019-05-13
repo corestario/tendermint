@@ -94,6 +94,13 @@ func (sc *SocketVal) SignVote(chainID string, vote *types.Vote) error {
 	return sc.signer.SignVote(chainID, vote)
 }
 
+// SignDKGData implements PrivValidator
+func (sc *SocketVal) SignDKGData(data *types.DKGData) error {
+	sc.mtx.RLock()
+	defer sc.mtx.RUnlock()
+	return sc.signer.SignDKGData(data)
+}
+
 // SignProposal implements PrivValidator.
 func (sc *SocketVal) SignProposal(chainID string, proposal *types.Proposal) error {
 	sc.mtx.RLock()

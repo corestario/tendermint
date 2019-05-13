@@ -361,6 +361,21 @@ type DKGData struct {
 	Data        []byte // Data is going to keep serialized kyber objects.
 	ToIndex     int    // ID of the participant for whom the message is; might be not set
 	NumEntities int    // Number of sub-entities in the Data array, sometimes required for unmarshaling.
+
+	//Signature for verifying data
+	Signature []byte
+}
+
+func (m DKGData) SignBytes() ([]byte, error) {
+	var (
+		sb  []byte
+		err error
+	)
+	m.Signature = nil
+	if sb, err = cdc.MarshalBinaryLengthPrefixed(m); err != nil {
+		return nil, err
+	}
+	return sb, nil
 }
 
 func (m *DKGData) GetAddrString() string {
