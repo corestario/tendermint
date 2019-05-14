@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 
+	"encoding/hex"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
@@ -16,6 +17,7 @@ import (
 	"go.dedis.ch/kyber/share"
 	dkg "go.dedis.ch/kyber/share/dkg/rabin"
 	vss "go.dedis.ch/kyber/share/vss/rabin"
+	"math"
 )
 
 type Dealer interface {
@@ -49,14 +51,15 @@ type Dealer interface {
 	HandleDKGReconstructCommit(msg *types.DKGData) error
 	ProcessReconstructCommits() (err error, ready bool)
 	GetVerifier() (types.Verifier, error)
-	SendMsgCb(*types.DKGData)
+	SendMsgCb(*types.DKGData) error
+	VerifyMessage(msg DKGDataMessage) error
 }
 
 type DKGDealer struct {
 	DealerState
 	eventFirer events.Fireable
 
-	sendMsgCb func(*types.DKGData)
+	sendMsgCb func(*types.DKGData) error
 	logger    log.Logger
 
 	pubKey      kyber.Point
@@ -69,7 +72,7 @@ type DKGDealer struct {
 	pubKeys            PKStore
 	deals              map[string]*dkg.Deal
 	responses          []*dkg.Response
-	justifications     map[string]*dkg.Justification
+	justifications     []*dkg.Justification
 	commits            []*dkg.SecretCommits
 	complaints         []*dkg.ComplaintCommits
 	reconstructCommits []*dkg.ReconstructCommits
@@ -85,22 +88,21 @@ type DealerState struct {
 	roundID       int
 }
 
-type DKGDealerConstructor func(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer
+type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer
 
-func NewDKGDealer(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
+func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
 	return &DKGDealer{
 		DealerState: DealerState{
 			validators: validators,
-			addrBytes:  pubKey.Address().Bytes(),
+			addrBytes:  pv.GetPubKey().Address().Bytes(),
 		},
-		sendMsgCb: sendMsgCb,
+		sendMsgCb:  sendMsgCb,
 		eventFirer: eventFirer,
-		logger:    logger,
-		suiteG1:   bn256.NewSuiteG1(),
-		suiteG2:   bn256.NewSuiteG2(),
+		logger:     logger,
+		suiteG1:    bn256.NewSuiteG1(),
+		suiteG2:    bn256.NewSuiteG2(),
 
-		deals:          make(map[string]*dkg.Deal),
-		justifications: make(map[string]*dkg.Justification),
+		deals: make(map[string]*dkg.Deal),
 	}
 }
 
@@ -108,6 +110,7 @@ func (d *DKGDealer) Start() error {
 	d.roundID++
 	d.secKey = d.suiteG2.Scalar().Pick(d.suiteG2.RandomStream())
 	d.pubKey = d.suiteG2.Point().Mul(d.secKey, nil)
+
 	d.GenerateTransitions()
 
 	var (
@@ -119,12 +122,15 @@ func (d *DKGDealer) Start() error {
 	}
 
 	d.logger.Info("dkgState: sending pub key", "key", d.pubKey.String())
-	d.SendMsgCb(&types.DKGData{
+	err := d.SendMsgCb(&types.DKGData{
 		Type:    types.DKGPubKey,
 		RoundID: d.roundID,
 		Addr:    d.addrBytes,
 		Data:    buf.Bytes(),
 	})
+	if err != nil {
+		return fmt.Errorf("failed to sign message: %v", err)
+	}
 
 	return nil
 }
@@ -225,7 +231,10 @@ func (d *DKGDealer) SendDeals() (err error, ready bool) {
 
 	messages, err := d.GetDeals()
 	for _, msg := range messages {
-		d.SendMsgCb(msg)
+		err := d.SendMsgCb(msg)
+		if err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	d.logger.Info("dkgState: sending deals", "deals", len(messages))
@@ -238,6 +247,7 @@ func (d *DKGDealer) IsReady() bool {
 }
 
 func (d *DKGDealer) GetDeals() ([]*types.DKGData, error) {
+	// It's needed for DistKeyGenerator and for binary search in array
 	sort.Sort(d.pubKeys)
 	dkgInstance, err := dkg.NewDistKeyGenerator(d.suiteG2, d.secKey, d.pubKeys.GetPKs(), (d.validators.Size()*2)/3)
 	if err != nil {
@@ -245,6 +255,7 @@ func (d *DKGDealer) GetDeals() ([]*types.DKGData, error) {
 	}
 	d.instance = dkgInstance
 
+	// We have N - 1 deals produced here (here and below N stands for the number of validators).
 	deals, err := d.instance.Deals()
 	if err != nil {
 		return nil, fmt.Errorf("failed to populate deals: %v", err)
@@ -292,6 +303,7 @@ func (d *DKGDealer) HandleDKGDeal(msg *types.DKGData) error {
 		return fmt.Errorf("failed to decode deal: %v", err)
 	}
 
+	// We expect to keep N - 1 deals (we don't care about the deals sent to other participants).
 	if d.participantID != msg.ToIndex {
 		d.logger.Debug("dkgState: rejecting deal (intended for another participant)", "intended", msg.ToIndex)
 		return nil
@@ -318,7 +330,11 @@ func (d *DKGDealer) ProcessDeals() (err error, ready bool) {
 	d.logger.Info("**Deals", "ln", len(d.deals))
 	responseMessages, err := d.GetResponses()
 	for _, responseMsg := range responseMessages {
-		d.SendMsgCb(responseMsg)
+		err := d.SendMsgCb(responseMsg)
+		if err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
+
 	}
 
 	return err, true
@@ -331,6 +347,7 @@ func (d *DKGDealer) IsDealsReady() bool {
 func (d *DKGDealer) GetResponses() ([]*types.DKGData, error) {
 	var messages []*types.DKGData
 
+	// Each deal produces a response for the deal's issuer (that makes N - 1 responses).
 	for _, deal := range d.deals {
 		resp, err := d.instance.ProcessDeal(deal)
 		if err != nil {
@@ -365,6 +382,10 @@ func (d *DKGDealer) HandleDKGResponse(msg *types.DKGData) error {
 		return fmt.Errorf("failed to decode deal: %v", err)
 	}
 
+	// Unlike the procedure for deals, with responses we do care about other
+	// participants state of affairs. All responses sent make N * (N - 1) responses,
+	// but we skip the responses produced by  ourselves, which gives
+	// N * (N - 1) - (N - 1) responses, which gives (N - 1) ^ 2 responses.
 	if uint32(d.participantID) == resp.Response.Index {
 		d.logger.Debug("dkgState: skipping response")
 		return nil
@@ -384,19 +405,20 @@ func (d *DKGDealer) ProcessResponses() (err error, ready bool) {
 	if !d.IsResponsesReady() {
 		return nil, false
 	}
-	d.logger.Info("*Resp", "len", d.responses)
-	d.logger.Info("dkgState: processing responses")
 
 	messages, err := d.GetJustifications()
 	for _, msg := range messages {
-		d.SendMsgCb(msg)
+		err := d.SendMsgCb(msg)
+		if err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
 	}
 
 	return err, true
 }
 
 func (d *DKGDealer) IsResponsesReady() bool {
-	return len(d.responses) >= (d.validators.Size()-1)*(d.validators.Size()-1)
+	return len(d.responses) >= int(math.Pow(float64(d.validators.Size()-1), 2))
 }
 
 func (d *DKGDealer) processResponse(resp *dkg.Response) ([]byte, error) {
@@ -433,13 +455,17 @@ func (d *DKGDealer) GetJustifications() ([]*types.DKGData, error) {
 			Addr:    d.addrBytes,
 		}
 
-		// In this call we might or might not put a justification to msg.Data.
+		// Each of (N - 1) ^ 2 received response generates a (possibly nil) justification.
+		// Nil justifications (and other nil messages) are used to avoid having timeouts
+		// (i.e., this allows us to know exactly how many messages should be received to
+		// proceed). This might be changed in the future.
 		justificationBytes, err := d.processResponse(resp)
 		if err != nil {
 			return messages, err
 		}
 
 		msg.Data = justificationBytes
+		// We will nave N * (N - 1) ^ 2 justifications. This looks rather bad, actually
 		messages = append(messages, msg)
 	}
 
@@ -457,10 +483,7 @@ func (d *DKGDealer) HandleDKGJustification(msg *types.DKGData) error {
 		}
 	}
 
-	if _, exists := d.justifications[msg.GetAddrString()]; exists {
-		return nil
-	}
-	d.justifications[msg.GetAddrString()] = justification
+	d.justifications = append(d.justifications, justification)
 
 	if err := d.Transit(); err != nil {
 		return fmt.Errorf("failed to Transit: %v", err)
@@ -496,13 +519,17 @@ func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
 		NumEntities: len(commits.Commitments),
 	}
 
-	d.SendMsgCb(message)
+	err = d.SendMsgCb(message)
+	if err != nil {
+		return fmt.Errorf("failed to sign message: %v", err), true
+	}
 
 	return nil, true
 }
 
 func (d *DKGDealer) IsJustificationsReady() bool {
-	return len(d.justifications) >= d.validators.Size()
+	// N * (N - 1) ^ 2.
+	return len(d.justifications) >= d.validators.Size()*int(math.Pow(float64(d.validators.Size()-1), 2))
 }
 
 func (d DKGDealer) GetCommits() (*dkg.SecretCommits, error) {
@@ -608,7 +635,11 @@ func (d *DKGDealer) ProcessCommits() (err error, ready bool) {
 
 	if !alreadyFinished {
 		for _, msg := range messages {
-			d.SendMsgCb(msg)
+			err := d.SendMsgCb(msg)
+			if err != nil {
+				return fmt.Errorf("failed to sign message: %v", err), true
+			}
+
 		}
 	}
 
@@ -667,7 +698,11 @@ func (d *DKGDealer) ProcessComplaints() (err error, ready bool) {
 				msg.Data = buf.Bytes()
 			}
 		}
-		d.SendMsgCb(msg)
+		err := d.SendMsgCb(msg)
+		if err != nil {
+			return fmt.Errorf("failed to sign message: %v", err), true
+		}
+
 	}
 	d.eventFirer.FireEvent(types.EventDKGComplaintProcessed, d.roundID)
 	return nil, true
@@ -737,8 +772,27 @@ func (d *DKGDealer) GetVerifier() (types.Verifier, error) {
 	return types.NewBLSVerifier(masterPubKey, newShare, t, n), nil
 }
 
-func (d *DKGDealer) SendMsgCb(msg *types.DKGData) {
-	d.sendMsgCb(msg)
+// VerifyMessage verify message by signature
+func (d *DKGDealer) VerifyMessage(msg DKGDataMessage) error {
+	var (
+		signBytes []byte
+		err       error
+	)
+	_, validator := d.validators.GetByAddress(msg.Data.Addr)
+	if validator == nil {
+		return fmt.Errorf("can't find validator by address: %s", msg.Data.GetAddrString())
+	}
+	if signBytes, err = msg.Data.SignBytes(); err != nil {
+		return err
+	}
+	if !validator.PubKey.VerifyBytes(signBytes, msg.Data.Signature) {
+		return fmt.Errorf("invalid DKG message signature: %s", hex.EncodeToString(msg.Data.Signature))
+	}
+	return nil
+}
+
+func (d *DKGDealer) SendMsgCb(msg *types.DKGData) error {
+	return d.sendMsgCb(msg)
 }
 
 type PK2Addr struct {

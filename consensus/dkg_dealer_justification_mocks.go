@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -12,8 +11,8 @@ type DKGMockDontSendOneJustification struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendOneJustification) Start() error {
@@ -71,8 +70,8 @@ type DKGMockDontSendAnyJustifications struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendAnyJustifications) Start() error {

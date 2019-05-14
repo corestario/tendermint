@@ -6,7 +6,6 @@ import (
 	"fmt"
 	dkg "go.dedis.ch/kyber/share/dkg/rabin"
 
-	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -16,8 +15,8 @@ type DKGMockDontSendOneCommit struct {
 	Dealer
 }
 
-func NewDKGMockDealerNoCommit(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendOneCommit{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger)}
+func NewDKGMockDealerNoCommit(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendOneCommit{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger)}
 }
 
 func (m *DKGMockDontSendOneCommit) Start() error {
@@ -90,8 +89,8 @@ type DKGMockDontSendAnyCommits struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyCommits(validators *types.ValidatorSet, pubKey crypto.PubKey, sendMsgCb func(*types.DKGData), eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyCommits{NewDKGDealer(validators, pubKey, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerAnyCommits(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+	return &DKGMockDontSendAnyCommits{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
 }
 
 func (m *DKGMockDontSendAnyCommits) Start() error {

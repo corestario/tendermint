@@ -343,7 +343,13 @@ func NewNode(config *cfg.Config,
 
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	dkg := cs.NewDKG(evsw, cs.WithVerifier(verifier), cs.WithDKGNumBlocks(genDoc.DKGNumBlocks), cs.WithLogger(consensusLogger.With("dkg")))
+	dkg := cs.NewDKG(
+		evsw,
+		cs.WithVerifier(verifier),
+		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
+		cs.WithLogger(consensusLogger.With("dkg")),
+		cs.WithPVKey(privValidator))
+
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
 		state.Copy(),
