@@ -172,11 +172,11 @@ type DKGDealer struct {
 
 	pubKeys            PKStore
 	deals              map[string]*dkg.Deal
-	responses          []*dkg.Response
-	justifications     []*dkg.Justification
-	commits            []*dkg.SecretCommits
-	complaints         []*dkg.ComplaintCommits
-	reconstructCommits []*dkg.ReconstructCommits
+	responses          *messageStore
+	justifications     *messageStore
+	commits            *messageStore
+	complaints         *messageStore
+	reconstructCommits *messageStore
 
 	losers []crypto.Address
 }
@@ -191,7 +191,12 @@ func NewDKGDealer(validators *types.ValidatorSet, privValidator types.PrivValida
 		suiteG1:       bn256.NewSuiteG1(),
 		suiteG2:       bn256.NewSuiteG2(),
 
-		deals: make(map[string]*dkg.Deal),
+		deals:              make(map[string]*dkg.Deal),
+		responses:          newMessageStore(validators.Size() - 1),
+		justifications:     newMessageStore(int(math.Pow(float64(validators.Size()-1), 2))),
+		commits:            newMessageStore(1),
+		complaints:         newMessageStore(1),
+		reconstructCommits: newMessageStore(1),
 	}
 }
 
@@ -465,7 +470,7 @@ func (m *DKGDealer) handleDKGResponse(msg *types.DKGData) error {
 
 	m.logger.Info("DKG: response is intended for us, storing")
 
-	m.responses = append(m.responses, resp)
+	m.responses.add(msg.GetAddrString(), resp)
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
 	}
@@ -475,53 +480,56 @@ func (m *DKGDealer) handleDKGResponse(msg *types.DKGData) error {
 
 func (m *DKGDealer) processResponses() (err error, ready bool) {
 	// We expect
-	if len(m.responses) < int(math.Pow(float64(m.validators.Size()-1), 2)) {
+	if m.responses.messagesCount < int(math.Pow(float64(m.validators.Size()-1), 2)) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing responses")
 
-	for _, resp := range m.responses {
-		var msg = &types.DKGData{
-			Type:    types.DKGJustification,
-			RoundID: m.roundID,
-			Addr:    m.addrBytes,
-		}
-
-		// In this call we might or might not put a justification to msg.Data.
-		err := func() error {
-			if resp.Response.Approved {
-				m.logger.Info("DKG: deal is approved", "to", resp.Index, "from", resp.Response.Index)
+	for _, peerResponses := range m.responses.data {
+		for _, response := range peerResponses {
+			resp := response.(*dkg.Response)
+			var msg = &types.DKGData{
+				Type:    types.DKGJustification,
+				RoundID: m.roundID,
+				Addr:    m.addrBytes,
 			}
 
-			// Each of (N - 1) ^ 2 received response generates a (possibly nil) justification.
-			// Nil justifications (and other nil messages) are used to avoid having timeouts
-			// (i.e., this allows us to know exactly how many messages should be received to
-			// proceed). This might be changed in the future.
-			justification, err := m.instance.ProcessResponse(resp)
-			if err != nil {
-				return fmt.Errorf("failed to ProcessResponse: %v", err)
-			}
-			if justification == nil {
+			// In this call we might or might not put a justification to msg.Data.
+			err := func() error {
+				if resp.Response.Approved {
+					m.logger.Info("DKG: deal is approved", "to", resp.Index, "from", resp.Response.Index)
+				}
+
+				// Each of (N - 1) ^ 2 received response generates a (possibly nil) justification.
+				// Nil justifications (and other nil messages) are used to avoid having timeouts
+				// (i.e., this allows us to know exactly how many messages should be received to
+				// proceed). This might be changed in the future.
+				justification, err := m.instance.ProcessResponse(resp)
+				if err != nil {
+					return fmt.Errorf("failed to ProcessResponse: %v", err)
+				}
+				if justification == nil {
+					return nil
+				}
+
+				var (
+					buf = bytes.NewBuffer(nil)
+					enc = gob.NewEncoder(buf)
+				)
+				if err := enc.Encode(justification); err != nil {
+					return fmt.Errorf("failed to encode response: %v", err)
+				}
+				msg.Data = buf.Bytes()
+
 				return nil
+			}()
+			if err != nil {
+				return err, true
 			}
 
-			var (
-				buf = bytes.NewBuffer(nil)
-				enc = gob.NewEncoder(buf)
-			)
-			if err := enc.Encode(justification); err != nil {
-				return fmt.Errorf("failed to encode response: %v", err)
+			if err := m.sendSignedMsg(msg); err != nil {
+				return fmt.Errorf("failed to sign message: %v", err), true
 			}
-			msg.Data = buf.Bytes()
-
-			return nil
-		}()
-		if err != nil {
-			return err, true
-		}
-
-		if err := m.sendSignedMsg(msg); err != nil {
-			return fmt.Errorf("failed to sign message: %v", err), true
 		}
 	}
 
@@ -540,7 +548,7 @@ func (m *DKGDealer) handleDKGJustification(msg *types.DKGData) error {
 
 	// We will nave N * (N - 1) ^ 2 justifications. This looks rather bad,
 	// actually.
-	m.justifications = append(m.justifications, justification)
+	m.justifications.add(msg.GetAddrString(), justification)
 
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
@@ -551,19 +559,22 @@ func (m *DKGDealer) handleDKGJustification(msg *types.DKGData) error {
 
 func (m *DKGDealer) processJustifications() (err error, ready bool) {
 	// N * (N - 1) ^ 2.
-	if len(m.justifications) < m.validators.Size()*int(math.Pow(float64(m.validators.Size()-1), 2)) {
+	if m.justifications.messagesCount < m.validators.Size()*int(math.Pow(float64(m.validators.Size()-1), 2)) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing justifications")
 
-	for _, justification := range m.justifications {
-		if justification != nil {
-			m.logger.Info("DKG: processing non-empty justification", "from", justification.Index)
-			if err := m.instance.ProcessJustification(justification); err != nil {
-				return fmt.Errorf("failed to ProcessJustification: %v", err), true
+	for _, peerJustifications := range m.justifications.data {
+		for _, just := range peerJustifications {
+			justification := just.(*dkg.Justification)
+			if justification != nil {
+				m.logger.Info("DKG: processing non-empty justification", "from", justification.Index)
+				if err := m.instance.ProcessJustification(justification); err != nil {
+					return fmt.Errorf("failed to ProcessJustification: %v", err), true
+				}
+			} else {
+				m.logger.Info("DKG: empty justification, everything is o.k.")
 			}
-		} else {
-			m.logger.Info("DKG: empty justification, everything is o.k.")
 		}
 	}
 
@@ -627,7 +638,7 @@ func (m *DKGDealer) handleDKGCommit(msg *types.DKGData) error {
 	if err := dec.Decode(commits); err != nil {
 		return fmt.Errorf("failed to decode commit: %v", err)
 	}
-	m.commits = append(m.commits, commits)
+	m.commits.add(msg.GetAddrString(), commits)
 
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
@@ -637,36 +648,39 @@ func (m *DKGDealer) handleDKGCommit(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processCommits() (err error, ready bool) {
-	if len(m.commits) < len(m.instance.QUAL()) {
+	if m.commits.messagesCount < len(m.instance.QUAL()) {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing commits")
 
 	var alreadyFinished = true
 	var messages []*types.DKGData
-	for _, commits := range m.commits {
-		var msg = &types.DKGData{
-			Type:    types.DKGComplaint,
-			RoundID: m.roundID,
-			Addr:    m.addrBytes,
-		}
-		complaint, err := m.instance.ProcessSecretCommits(commits)
-		if err != nil {
-			return fmt.Errorf("failed to ProcessSecretCommits: %v", err), true
-		}
-		if complaint != nil {
-			alreadyFinished = false
-			var (
-				buf = bytes.NewBuffer(nil)
-				enc = gob.NewEncoder(buf)
-			)
-			if err := enc.Encode(complaint); err != nil {
-				return fmt.Errorf("failed to encode response: %v", err), true
+	for _, commitsFromAddr := range m.commits.data {
+		for _, c := range commitsFromAddr {
+			commits := c.(*dkg.SecretCommits)
+			var msg = &types.DKGData{
+				Type:    types.DKGComplaint,
+				RoundID: m.roundID,
+				Addr:    m.addrBytes,
 			}
-			msg.Data = buf.Bytes()
-			msg.NumEntities = len(complaint.Deal.Commitments)
+			complaint, err := m.instance.ProcessSecretCommits(commits)
+			if err != nil {
+				return fmt.Errorf("failed to ProcessSecretCommits: %v", err), true
+			}
+			if complaint != nil {
+				alreadyFinished = false
+				var (
+					buf = bytes.NewBuffer(nil)
+					enc = gob.NewEncoder(buf)
+				)
+				if err := enc.Encode(complaint); err != nil {
+					return fmt.Errorf("failed to encode response: %v", err), true
+				}
+				msg.Data = buf.Bytes()
+				msg.NumEntities = len(complaint.Deal.Commitments)
+			}
+			messages = append(messages, msg)
 		}
-		messages = append(messages, msg)
 	}
 	if !alreadyFinished {
 		for _, msg := range messages {
@@ -694,7 +708,7 @@ func (m *DKGDealer) handleDKGComplaint(msg *types.DKGData) error {
 		}
 	}
 
-	m.complaints = append(m.complaints, complaint)
+	m.complaints.add(msg.GetAddrString(), complaint)
 
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
@@ -704,35 +718,38 @@ func (m *DKGDealer) handleDKGComplaint(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processComplaints() (err error, ready bool) {
-	if len(m.complaints) < len(m.instance.QUAL())-1 {
+	if m.complaints.messagesCount < len(m.instance.QUAL())-1 {
 		return nil, false
 	}
 	m.logger.Info("DKG: processing commits")
 
-	for _, complaint := range m.complaints {
-		var msg = &types.DKGData{
-			Type:    types.DKGReconstructCommit,
-			RoundID: m.roundID,
-			Addr:    m.addrBytes,
-		}
-		if complaint != nil {
-			reconstructionMsg, err := m.instance.ProcessComplaintCommits(complaint)
-			if err != nil {
-				return fmt.Errorf("failed to ProcessComplaintCommits: %v", err), true
+	for _, peerComplaints := range m.complaints.data {
+		for _, c := range peerComplaints {
+			complaint := c.(*dkg.ComplaintCommits)
+			var msg = &types.DKGData{
+				Type:    types.DKGReconstructCommit,
+				RoundID: m.roundID,
+				Addr:    m.addrBytes,
 			}
-			if reconstructionMsg != nil {
-				var (
-					buf = bytes.NewBuffer(nil)
-					enc = gob.NewEncoder(buf)
-				)
-				if err := enc.Encode(complaint); err != nil {
-					return fmt.Errorf("failed to encode response: %v", err), true
+			if complaint != nil {
+				reconstructionMsg, err := m.instance.ProcessComplaintCommits(complaint)
+				if err != nil {
+					return fmt.Errorf("failed to ProcessComplaintCommits: %v", err), true
 				}
-				msg.Data = buf.Bytes()
+				if reconstructionMsg != nil {
+					var (
+						buf = bytes.NewBuffer(nil)
+						enc = gob.NewEncoder(buf)
+					)
+					if err := enc.Encode(complaint); err != nil {
+						return fmt.Errorf("failed to encode response: %v", err), true
+					}
+					msg.Data = buf.Bytes()
+				}
 			}
-		}
-		if err := m.sendSignedMsg(msg); err != nil {
-			return fmt.Errorf("failed to sign message: %v", err), true
+			if err := m.sendSignedMsg(msg); err != nil {
+				return fmt.Errorf("failed to sign message: %v", err), true
+			}
 		}
 	}
 
@@ -749,7 +766,7 @@ func (m *DKGDealer) handleDKGReconstructCommit(msg *types.DKGData) error {
 		}
 	}
 
-	m.reconstructCommits = append(m.reconstructCommits, rc)
+	m.reconstructCommits.add(msg.GetAddrString(), rc)
 
 	if err := m.transit(); err != nil {
 		return fmt.Errorf("failed to transit: %v", err)
@@ -759,16 +776,19 @@ func (m *DKGDealer) handleDKGReconstructCommit(msg *types.DKGData) error {
 }
 
 func (m *DKGDealer) processReconstructCommits() (err error, ready bool) {
-	if len(m.reconstructCommits) < len(m.instance.QUAL())-1 {
+	if m.reconstructCommits.messagesCount < len(m.instance.QUAL())-1 {
 		return nil, false
 	}
 
-	for _, rc := range m.reconstructCommits {
-		if rc == nil {
-			continue
-		}
-		if err := m.instance.ProcessReconstructCommits(rc); err != nil {
-			return fmt.Errorf("failed to ProcessReconstructCommits: %v", err), true
+	for _, peerReconstructCommits := range m.reconstructCommits.data {
+		for _, reconstructCommit := range peerReconstructCommits {
+			rc := reconstructCommit.(*dkg.ReconstructCommits)
+			if rc == nil {
+				continue
+			}
+			if err := m.instance.ProcessReconstructCommits(rc); err != nil {
+				return fmt.Errorf("failed to ProcessReconstructCommits: %v", err), true
+			}
 		}
 	}
 
@@ -836,4 +856,33 @@ type transition func() (error, bool)
 type Justification struct {
 	Void          bool
 	Justification *dkg.Justification
+}
+
+// messageStore is used to store only required number of messages from every peer
+type messageStore struct {
+	// Common number of messages of the same type from peers
+	messagesCount int
+
+	// Max number of messages of the same type from one peer per round
+	maxMessagesFromPeer int
+
+	// Map which store messages. Key is a peer's address, value is data
+	data map[string][]interface{}
+}
+
+func newMessageStore(n int) *messageStore {
+	return &messageStore{
+		maxMessagesFromPeer: n,
+		data:                make(map[string][]interface{}),
+	}
+}
+
+func (ms *messageStore) add(addr string, val interface{}) {
+	data := ms.data[addr]
+	if len(data) == ms.maxMessagesFromPeer {
+		return
+	}
+	data = append(data, val)
+	ms.data[addr] = data
+	ms.messagesCount++
 }
