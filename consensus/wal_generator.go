@@ -76,8 +76,8 @@ func WALGenerateNBlocks(wr io.Writer, numBlocks int) (err error) {
 
 
 	evsw := events.NewEventSwitch()
-	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(logger.With("dkg")))
-	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg))
+	dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, 1)("wal_generator", 0)), WithLogger(logger.With("dkg")))
+	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg), WithEVSW(evsw))
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)
 	if privValidator != nil {

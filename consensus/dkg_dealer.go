@@ -349,6 +349,8 @@ func (d *DKGDealer) GetResponses() ([]*types.DKGData, error) {
 
 	// Each deal produces a response for the deal's issuer (that makes N - 1 responses).
 	for _, deal := range d.deals {
+		fmt.Println("!!!!!!!!!!", len(d.deals), deal)
+
 		resp, err := d.instance.ProcessDeal(deal)
 		if err != nil {
 			return messages, fmt.Errorf("failed to ProcessDeal: %v", err)

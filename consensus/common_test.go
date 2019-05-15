@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"sync"
 	"testing"
@@ -243,8 +244,8 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
 //-------------------------------------------------------------------------------
 // consensus states
 
-func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application) *ConsensusState {
-	return newConsensusStateWithConfig(config, state, pv, app, &types.MockVerifier{}, nil)
+func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier) *ConsensusState {
+	return newConsensusStateWithConfig(config, state, pv, app, verifier, nil)
 }
 
 func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, newDealer DKGDealerConstructor) *ConsensusState {
@@ -307,7 +308,10 @@ func randConsensusState(nValidators int) (*ConsensusState, []*validatorStub) {
 
 	vss := make([]*validatorStub, nValidators)
 
-	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true))
+	pc, _, _, _ := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+
+	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetVerifier(1, nValidators)(details.Name(), 0))
 
 	for i := 0; i < nValidators; i++ {
 		vss[i] = NewValidatorStub(privVals[i], i)
@@ -604,24 +608,29 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 	}
 
 	for i := 0; i < nValidators; i++ {
-		stateDB := dbm.NewMemDB() // each state needs its own db
-		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
-		thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
-		thisConfig.NodeID = i
-		for _, opt := range configOpts {
-			opt(thisConfig)
-		}
-		ensureDir(filepath.Dir(thisConfig.Consensus.WalFile()), 0700) // dir for wal
-		app := appFunc()
-		vals := types.TM2PB.ValidatorUpdates(state.Validators)
-		app.InitChain(abci.RequestInitChain{Validators: vals})
-
-		verifier := verifierFunc(testName, i)
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i))
-		css[i].SetTimeoutTicker(tickerFunc())
-		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
+		consensusNode(genDoc, testName, i, configOpts, appFunc, verifierFunc, css, privVals, dkgFunc, tickerFunc, logger)
 	}
 	return css
+}
+
+func consensusNode(genDoc *types.GenesisDoc, testName string, i int, configOpts []func(*cfg.Config), appFunc func() abci.Application, getVerifier verifierFunc, css []*ConsensusState, privVals []types.PrivValidator, dkgFunc func(int) DKGDealerConstructor, tickerFunc func() TimeoutTicker, logger log.Logger) {
+	stateDB := dbm.NewMemDB()
+	// each state needs its own db
+	state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+	thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
+	thisConfig.NodeID = i
+	for _, opt := range configOpts {
+		opt(thisConfig)
+	}
+	ensureDir(filepath.Dir(thisConfig.Consensus.WalFile()), 0700)
+	// dir for wal
+	app := appFunc()
+	vals := types.TM2PB.ValidatorUpdates(state.Validators)
+	app.InitChain(abci.RequestInitChain{Validators: vals})
+	verifier := getVerifier(testName, i)
+	css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i))
+	css[i].SetTimeoutTicker(tickerFunc())
+	css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 }
 
 // nPeers = nValidators + nNotValidator
@@ -629,14 +638,20 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 	genDoc, privVals := randGenesisDoc(nValidators, false, testMinPower)
 	css := make([]*ConsensusState, nPeers)
 	logger := consensusLogger()
+
+	pc, _, _, _ := runtime.Caller(1)
+	details := runtime.FuncForPC(pc)
+
 	for i := 0; i < nPeers; i++ {
 		stateDB := dbm.NewMemDB() // each state needs its own db
 		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
 		thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
 		ensureDir(filepath.Dir(thisConfig.Consensus.WalFile()), 0700) // dir for wal
 		var privVal types.PrivValidator
+		var verifier types.Verifier
 		if i < nValidators {
 			privVal = privVals[i]
+			verifier = GetVerifier(1, nValidators)(details.Name(), i)
 		} else {
 			tempKeyFile, err := ioutil.TempFile("", "priv_validator_key_")
 			if err != nil {
@@ -648,13 +663,14 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 			}
 
 			privVal = privval.GenFilePV(tempKeyFile.Name(), tempStateFile.Name())
+			verifier = &types.MockVerifier{}
 		}
 
 		app := appFunc()
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{}, nil)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, verifier, NewDKGDealer)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
