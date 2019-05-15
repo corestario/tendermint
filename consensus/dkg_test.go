@@ -245,7 +245,6 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 }
 
 func TestByzantineDKGDontAnyDeals(t *testing.T) {
-	t.SkipNow()
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
