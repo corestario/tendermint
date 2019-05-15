@@ -311,7 +311,7 @@ func randConsensusState(nValidators int) (*ConsensusState, []*validatorStub) {
 	pc, _, _, _ := runtime.Caller(1)
 	details := runtime.FuncForPC(pc)
 
-	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetVerifier(1, nValidators)(details.Name(), 0))
+	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetMockVerifier()(details.Name(), 0))
 
 	for i := 0; i < nValidators; i++ {
 		vss[i] = NewValidatorStub(privVals[i], i)
