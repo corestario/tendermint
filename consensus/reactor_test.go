@@ -327,7 +327,6 @@ func TestReactorVotingPowerChange(t *testing.T) {
 }
 
 func TestReactorValidatorSetChanges(t *testing.T) {
-	t.SkipNow()
 	nPeers := 7
 	nVals := 4
 	css := randConsensusNetWithPeers(nVals, nPeers, "consensus_val_set_changes_test", newMockTickerFunc(true), newPersistentKVStore)
@@ -447,6 +446,7 @@ func waitForAndValidateBlock(t *testing.T, n int, activeVals map[string]struct{}
 	timeoutWaitGroup(t, n, func(j int) {
 		css[j].Logger.Debug("waitForAndValidateBlock")
 		newBlockI, ok := <-eventChans[j]
+		css[j].Logger.Debug("waitForAndValidateBlock X", "ok", ok, "block", newBlockI)
 		if !ok {
 			return
 		}
@@ -487,6 +487,8 @@ func waitForAndValidateBlockWithTx(t *testing.T, n int, activeVals map[string]st
 			if ntxs == len(txs) {
 				break BLOCK_TX_LOOP
 			}
+
+			time.Sleep(100*time.Millisecond)
 		}
 
 	}, css)

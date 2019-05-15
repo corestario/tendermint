@@ -331,7 +331,7 @@ func NewTestBLSVerifierByID(id string, i, t, n int) *BLSVerifier {
 type MockVerifier struct{}
 
 func (m *MockVerifier) Sign(data []byte) ([]byte, error) {
-	return data, nil
+	return []byte{0}, nil
 }
 func (m *MockVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
 	return nil
