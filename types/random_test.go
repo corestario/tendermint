@@ -67,7 +67,7 @@ func TestDumpLoad(t *testing.T) {
 }
 
 func TestRecover(t *testing.T) {
-	testCases := []struct{t, n int} {
+	testCases := []struct{ t, n int }{
 		{1, 1},
 		{1, 4},
 		{2, 4},
@@ -165,39 +165,4 @@ func TestRecover2of4(t *testing.T) {
 	if err := bls.Verify(suite, pubKey.Commit(), msg, aggrSig); err != nil {
 		t.Errorf("verify: %v", err)
 	}
-}
-
-func TestRecover3of4(t *testing.T) {
-	var (
-		pubKey, _ = LoadPubKey(DefaultBLSVerifierMasterPubKey, 4)
-		msg       = []byte(InitialRandomData)
-		suite     = bn256.NewSuite()
-	)
-
-	for i := 0; i < 4; i++ {
-		var shares []*BLSShare
-		for j := i; j < 4; j++ {
-			var sigs [][]byte
-			share, _ := TestnetShares[j].Deserialize()
-			shares = append(shares, share)
-			for k := range shares {
-				sig, err := tbls.Sign(suite, shares[k].Priv, msg)
-				if err != nil {
-					t.Fatal(err)
-				}
-				sigs = append(sigs, sig)
-				aggrSig, err := tbls.Recover(suite, pubKey, msg, sigs, 1, 4)
-				if err != nil {
-					t.Errorf("aggr sign: %v", err)
-					return
-				}
-
-				if err := bls.Verify(suite, pubKey.Commit(), msg, aggrSig); err != nil {
-					t.Errorf("verify: %v", err)
-				}
-			}
-		}
-
-	}
-
 }

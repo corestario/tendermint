@@ -20,7 +20,7 @@ import (
 // TODO: implement tests.
 
 const (
-	BlocksAhead         = 20 // Agree to swap verifier after around this number of blocks.
+	BlocksAhead = 20 // Agree to swap verifier after around this number of blocks.
 	//DefaultDKGNumBlocks sets how often node should make DKG(in blocks)
 	DefaultDKGNumBlocks = 100
 )
@@ -62,7 +62,7 @@ func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 	}
 
 	if dkg.dkgNumBlocks == 0 {
-		dkg.dkgNumBlocks = 1 // We do not want to panic if the value is not provided.
+		dkg.dkgNumBlocks = DefaultDKGNumBlocks // We do not want to panic if the value is not provided.
 	}
 
 	return dkg
