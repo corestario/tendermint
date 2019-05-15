@@ -20,7 +20,9 @@ import (
 // TODO: implement tests.
 
 const (
-	BlocksAhead = 20 // Agree to swap verifier after around this number of blocks.
+	BlocksAhead         = 20 // Agree to swap verifier after around this number of blocks.
+	//DefaultDKGNumBlocks sets how often node should make DKG(in blocks)
+	DefaultDKGNumBlocks = 100
 )
 
 var (
@@ -52,6 +54,7 @@ func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
 		dkgRoundToDealer: make(map[int]Dealer),
 		newDKGDealer:     NewDKGDealer,
+		dkgNumBlocks:     DefaultDKGNumBlocks,
 	}
 
 	for _, option := range options {
