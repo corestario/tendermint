@@ -222,3 +222,21 @@ func (dkg *dkgState) MsgQueue() chan msgInfo {
 func (dkg *dkgState) Verifier() types.Verifier {
 	return dkg.verifier
 }
+
+func (dkg *dkgState) SetVerifier(v types.Verifier) {
+	dkg.verifier = v
+}
+
+type verifierFunc func(s string, i int) types.Verifier
+
+func GetVerifier(T, N int) verifierFunc {
+	return func(s string, i int) types.Verifier {
+		return types.NewTestBLSVerifierByID(s, i, T, N)
+	}
+}
+
+func GetMockVerifier() verifierFunc {
+	return func(s string, i int) types.Verifier {
+		return new(types.MockVerifier)
+	}
+}

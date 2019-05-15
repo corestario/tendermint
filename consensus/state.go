@@ -140,6 +140,7 @@ type ConsensusState struct {
 type DKG interface {
 	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
 	CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator)
+	SetVerifier(verifier types.Verifier)
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
 }
@@ -281,6 +282,10 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()
 	cs.timeoutTicker = timeoutTicker
 	cs.mtx.Unlock()
+}
+
+func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
+	cs.dkg.SetVerifier(verifier)
 }
 
 // LoadCommit loads the commit for a given height.

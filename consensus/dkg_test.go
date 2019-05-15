@@ -11,7 +11,6 @@ import (
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
-	"reflect"
 	"strconv"
 )
 
@@ -42,9 +41,7 @@ func TestByzantineDKG(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -109,9 +106,9 @@ func TestByzantineDKG(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -129,8 +126,7 @@ func TestByzantineDKG(t *testing.T) {
 	case <-done:
 	case <-tick.C:
 		for i, reactor := range reactors {
-			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
-			t.Log(fmt.Sprintf("%v", reactor))
+			t.Log("Consensus Reactor", "index", i, "reactor", reactor)
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
@@ -140,7 +136,6 @@ func TestByzantineDKG(t *testing.T) {
 			t.Fatal("Node ", i, "hasn't finished dkg")
 		}
 	}
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontSendOneDeal(t *testing.T) {
@@ -148,9 +143,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -217,9 +210,9 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -248,7 +241,6 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 			t.Fatal("Node ", i, "must be failed")
 		}
 	}
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontAnyDeals(t *testing.T) {
@@ -257,9 +249,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -323,9 +313,9 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -343,13 +333,10 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	case <-done:
 	case <-tick.C:
 		for i, reactor := range reactors {
-			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
-			t.Log(fmt.Sprintf("%v", reactor))
+			t.Log("Consensus Reactor", "index", i, "reactor", reactor)
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontSendOneResponse(t *testing.T) {
@@ -357,9 +344,7 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoResponse})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -423,13 +408,12 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 	for i := 0; i < N; i++ {
 		go func(j int) {
 			n := 0
-			for i := range eventChans[j] {
-				logger.Info("***got ", "node", j, "name", reflect.TypeOf(i).Name())
+			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -452,8 +436,6 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontAnyResponses(t *testing.T) {
@@ -461,9 +443,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyResponses})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -527,9 +507,9 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -552,8 +532,6 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontSendOneJustification(t *testing.T) {
@@ -561,9 +539,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoJustification})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -627,9 +603,9 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -652,8 +628,6 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontAnyJustifications(t *testing.T) {
@@ -661,9 +635,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyJustifications})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -727,9 +699,9 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -752,8 +724,6 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontSendOneCommit(t *testing.T) {
@@ -761,9 +731,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoCommit})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -827,9 +795,9 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -852,8 +820,6 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func TestByzantineDKGDontAnyCommits(t *testing.T) {
@@ -861,9 +827,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyCommits})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, func(s string, i int) types.Verifier {
-		return types.NewTestBLSVerifierByID(s, i, T, N)
-	})
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -927,9 +891,9 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 			for range eventChans[j] {
 				wg.Done()
 				n++
-				fmt.Printf("Validator %d got block %d of %d\n", j, n, blocksToWait)
+				logger.Info("Validator got block", "validatorIndex", j, "blockNumber", n, "totalBlocks", blocksToWait)
 				if n == blocksToWait {
-					fmt.Printf("Validator %d got all %d blocks", j, n)
+					logger.Info("Validator got all blocks", "validatorIndex", j, "totalBlocks", n)
 					break
 				}
 			}
@@ -952,8 +916,6 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
-
-	fmt.Println("************************************ All is done")
 }
 
 func MakeNDKGEventHandlers(n int) []*dkgEventHandler {
@@ -987,5 +949,4 @@ func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
 			}
 		})
 	}
-
 }
