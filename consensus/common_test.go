@@ -37,7 +37,7 @@ import (
 
 const (
 	testSubscriber   = "test-client"
-	testDKGNumBlocks = 10
+	testDKGNumBlocks = 100
 )
 
 // genesis, chain_id, priv_val
@@ -704,13 +704,9 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	sort.Sort(types.PrivValidatorsByAddress(privValidators))
 
 	return &types.GenesisDoc{
-		GenesisTime:     tmtime.Now(),
-		ChainID:         config.ChainID(),
-		Validators:      validators,
-		BLSMasterPubKey: types.DefaultBLSVerifierMasterPubKey,
-		BLSThreshold:    2,
-		BLSNumShares:    4,
-		DKGNumBlocks:    1000,
+		GenesisTime: tmtime.Now(),
+		ChainID:     config.ChainID(),
+		Validators:  validators,
 	}, privValidators
 }
 

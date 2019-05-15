@@ -39,7 +39,6 @@ func (m *DKGMockDontSendOneDeal) GenerateTransitions() {
 }
 
 func (m *DKGMockDontSendOneDeal) SendDeals() (error, bool) {
-	m.logger.Info("+++++++++++++++ 1")
 	if !m.Dealer.IsReady() {
 		return nil, false
 	}

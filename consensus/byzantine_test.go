@@ -185,13 +185,26 @@ func byzantineDecideProposalFunc(t *testing.T, height int64, round int, cs *Cons
 		t.Error(err)
 	}
 
+	// Create a new proposal block from state/txs from the mempool.
+	block2, blockParts2 := cs.createProposalBlock()
+	polRound, propBlockID = cs.ValidRound, types.BlockID{block2.Hash(), blockParts2.Header()}
+	proposal2 := types.NewProposal(height, round, polRound, propBlockID)
+	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal2); err != nil {
+		t.Error(err)
+	}
+
 	block1Hash := block1.Hash()
+	block2Hash := block2.Hash()
 
 	// broadcast conflicting proposals/block parts to peers
 	peers := sw.Peers().List()
 	t.Logf("Byzantine: broadcasting conflicting proposals to %d peers", len(peers))
-	for _, peer := range peers {
-		go sendProposalAndParts(height, round, cs, peer, proposal1, block1Hash, blockParts1)
+	for i, peer := range peers {
+		if i < len(peers)/2 {
+			go sendProposalAndParts(height, round, cs, peer, proposal1, block1Hash, blockParts1)
+		} else {
+			go sendProposalAndParts(height, round, cs, peer, proposal2, block2Hash, blockParts2)
+		}
 	}
 }
 
