@@ -19,7 +19,7 @@ func init() {
 }
 
 const blocksToWait = 12
-const dkgBlock = 10
+const dkgBlock = 5
 const timeToWait = 2 * blocksToWait * time.Second
 
 var DKGEvents = []string{
@@ -271,6 +271,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -285,7 +286,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -344,6 +345,12 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
+
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
+	}
 }
 
 func TestByzantineDKGDontSendOneResponse(t *testing.T) {
@@ -368,6 +375,7 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -384,7 +392,7 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		})
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -445,6 +453,11 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
+	}
 }
 
 func TestByzantineDKGDontAnyResponses(t *testing.T) {
@@ -469,6 +482,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -483,7 +497,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -542,6 +556,11 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
 	}
 }
 
@@ -567,6 +586,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -581,7 +601,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -640,6 +660,13 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+	for i := range handlers {
+		t.Log(i, handlers[i].Counter)
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			//t.Fatal("Node ", i, "must be failed")
+
+		}
 	}
 }
 
@@ -665,6 +692,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -679,7 +707,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -738,6 +766,11 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
 	}
 }
 
@@ -763,6 +796,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -777,7 +811,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -836,6 +870,11 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
 	}
 }
 
@@ -861,6 +900,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 
 	eventChans := make([]chan interface{}, N)
 	reactors := make([]p2p.Reactor, N)
+	handlers := MakeNDKGEventHandlers(N)
 	for i := 0; i < N; i++ {
 		eventBus := css[i].eventBus
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
@@ -875,7 +915,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-
+		handlers[i].Subscribe(conR.conS.evsw)
 		reactors[i] = conRI
 	}
 
@@ -934,6 +974,11 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
 		t.Errorf("Timed out waiting for all validators to commit first block")
+	}
+	for i := range handlers {
+		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
+			t.Fatal("Node ", i, "must be failed")
+		}
 	}
 }
 
