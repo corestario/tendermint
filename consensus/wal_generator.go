@@ -74,7 +74,6 @@ func WALGenerateNBlocks(wr io.Writer, numBlocks int) (err error) {
 	evpool := sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
-
 	evsw := events.NewEventSwitch()
 	dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, 1)("wal_generator", 0)), WithLogger(logger.With("dkg")))
 	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg), WithEVSW(evsw))

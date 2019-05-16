@@ -36,8 +36,8 @@ import (
 )
 
 const (
-	testSubscriber   = "test-client"
-	testDKGNumBlocks = 100
+	testSubscriber       = "test-client"
+	testSkipDKGNumBlocks = 100
 )
 
 // genesis, chain_id, priv_val
@@ -244,16 +244,16 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
 //-------------------------------------------------------------------------------
 // consensus states
 
-func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier) *ConsensusState {
-	return newConsensusStateWithConfig(config, state, pv, app, verifier, nil)
+func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, dkgNumBlocks int64) *ConsensusState {
+	return newConsensusStateWithConfig(config, state, pv, app, verifier, nil, dkgNumBlocks)
 }
 
-func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, newDealer DKGDealerConstructor) *ConsensusState {
+func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, newDealer DKGDealerConstructor, dkgNumBlocks int64) *ConsensusState {
 	blockDB := dbm.NewMemDB()
-	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier, newDealer)
+	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier, newDealer, dkgNumBlocks)
 }
 
-func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier, newDealer DKGDealerConstructor) *ConsensusState {
+func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier, newDealer DKGDealerConstructor, dkgNumBlocks int64) *ConsensusState {
 	// Get BlockStore
 	blockStore := bc.NewBlockStore(blockDB)
 
@@ -278,7 +278,7 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGDealerConstructor(newDealer), WithDKGNumBlocks(testDKGNumBlocks),
+	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGDealerConstructor(newDealer), WithDKGNumBlocks(dkgNumBlocks),
 		WithLogger(consensusLogger.With("state", "dkg")), WithPVKey(pv))
 
 	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
@@ -311,7 +311,7 @@ func randConsensusState(nValidators int) (*ConsensusState, []*validatorStub) {
 	pc, _, _, _ := runtime.Caller(1)
 	details := runtime.FuncForPC(pc)
 
-	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetMockVerifier()(details.Name(), 0))
+	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetMockVerifier()(details.Name(), 0), testSkipDKGNumBlocks)
 
 	for i := 0; i < nValidators; i++ {
 		vss[i] = NewValidatorStub(privVals[i], i)
@@ -597,7 +597,7 @@ func consensusLogger() log.Logger {
 	}).With("module", "consensus")
 }
 
-func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, verifierFunc func(string, int) types.Verifier, configOpts ...func(*cfg.Config)) []*ConsensusState {
+func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker, appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, verifierFunc func(string, int) types.Verifier, dkgNumBlocks int64, configOpts ...func(*cfg.Config)) []*ConsensusState {
 	genDoc, privVals := randGenesisDoc(nValidators, false, 30)
 	css := make([]*ConsensusState, nValidators)
 	logger := consensusLogger()
@@ -608,12 +608,12 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 	}
 
 	for i := 0; i < nValidators; i++ {
-		consensusNode(genDoc, testName, i, configOpts, appFunc, verifierFunc, css, privVals, dkgFunc, tickerFunc, logger)
+		consensusNode(genDoc, testName, i, configOpts, appFunc, verifierFunc, css, privVals, dkgFunc, dkgNumBlocks, tickerFunc, logger)
 	}
 	return css
 }
 
-func consensusNode(genDoc *types.GenesisDoc, testName string, i int, configOpts []func(*cfg.Config), appFunc func() abci.Application, getVerifier verifierFunc, css []*ConsensusState, privVals []types.PrivValidator, dkgFunc func(int) DKGDealerConstructor, tickerFunc func() TimeoutTicker, logger log.Logger) {
+func consensusNode(genDoc *types.GenesisDoc, testName string, i int, configOpts []func(*cfg.Config), appFunc func() abci.Application, getVerifier verifierFunc, css []*ConsensusState, privVals []types.PrivValidator, dkgFunc func(int) DKGDealerConstructor, dkgNumBlocks int64, tickerFunc func() TimeoutTicker, logger log.Logger) {
 	stateDB := dbm.NewMemDB()
 	// each state needs its own db
 	state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
@@ -628,7 +628,7 @@ func consensusNode(genDoc *types.GenesisDoc, testName string, i int, configOpts 
 	vals := types.TM2PB.ValidatorUpdates(state.Validators)
 	app.InitChain(abci.RequestInitChain{Validators: vals})
 	verifier := getVerifier(testName, i)
-	css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i))
+	css[i] = newConsensusStateWithConfig(thisConfig, state, privVals[i], app, verifier, dkgFunc(i), dkgNumBlocks)
 	css[i].SetTimeoutTicker(tickerFunc())
 	css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 }
@@ -664,7 +664,7 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{}, nil)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{}, nil, testSkipDKGNumBlocks)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}

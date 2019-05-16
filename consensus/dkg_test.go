@@ -19,6 +19,7 @@ func init() {
 }
 
 const blocksToWait = 12
+const dkgBlock = 10
 const timeToWait = 2 * blocksToWait * time.Second
 
 var DKGEvents = []string{
@@ -41,7 +42,7 @@ func TestByzantineDKG(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -146,7 +147,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -253,7 +254,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -350,7 +351,7 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoResponse})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -451,7 +452,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyResponses})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -549,7 +550,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoJustification})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -647,7 +648,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyJustifications})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -745,7 +746,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoCommit})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -843,7 +844,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
 	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyCommits})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N))
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
