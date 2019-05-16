@@ -107,7 +107,8 @@ func (m *DKGMockDontSendAnyDeal) SendDeals() (error, bool) {
 	if !m.Dealer.IsReady() {
 		return nil, false
 	}
-
+	//hack. we need it to init dkgInstance into GetDeals
+	m.GetDeals()
 	m.logger.Info("dkgState: sending deals", "deals", 0)
 
 	return nil, true
