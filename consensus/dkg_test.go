@@ -662,10 +662,8 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
 	for i := range handlers {
-		t.Log(i, handlers[i].Counter)
 		if handlers[i].Counter[types.EventDKGSuccessful] > 0 {
-			//t.Fatal("Node ", i, "must be failed")
-
+			t.Fatal("Node ", i, "must be failed")
 		}
 	}
 }

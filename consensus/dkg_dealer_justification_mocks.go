@@ -48,6 +48,8 @@ func (m *DKGMockDontSendOneJustification) ProcessResponses() (error, bool) {
 	if err != nil {
 		return err, true
 	}
+
+	messages=messages[1:]
 	for _, msg := range messages {
 		if err = m.Dealer.SendMsgCb(msg); err != nil {
 			return err, true
