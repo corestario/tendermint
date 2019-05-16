@@ -139,7 +139,7 @@ type ConsensusState struct {
 
 type DKG interface {
 	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
-	CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator)
+	CheckDKGTime(height int64, validators *types.ValidatorSet)
 	SetVerifier(verifier types.Verifier)
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
@@ -451,7 +451,7 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	cs.dkg.CheckDKGTime(cs.Height, cs.Validators, cs.privValidator)
+	cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {

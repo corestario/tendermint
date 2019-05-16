@@ -184,7 +184,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 
 }
 
-func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet, pubKey crypto.PubKey) error {
+func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
 	dkg.dkgRoundID++
 	dkg.Logger.Info("dkgState: starting round", "round_id", dkg.dkgRoundID)
 	dealer, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
@@ -231,7 +231,7 @@ func (dkg *dkgState) slashDKGLosers(losers []*types.Validator) {
 	}
 }
 
-func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet, privateValidator types.PrivValidator) {
+func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet) {
 	if dkg.changeHeight == height {
 		dkg.Logger.Info("dkgState: time to update verifier", dkg.changeHeight, height)
 		dkg.verifier, dkg.nextVerifier = dkg.nextVerifier, nil
@@ -240,7 +240,7 @@ func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet, 
 	}
 
 	if height > 1 && height%dkg.dkgNumBlocks == 0 {
-		if err := dkg.startDKGRound(validators, privateValidator.GetPubKey()); err != nil {
+		if err := dkg.startDKGRound(validators); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
 		}
 	}
