@@ -24,7 +24,6 @@ type Dealer interface {
 	Start() error
 	GetState() DealerState
 	Transit() error
-	ResetDKGData()
 	GenerateTransitions()
 	GetLosers() []*types.Validator
 	HandleDKGPubKey(msg *types.DKGData) error
@@ -153,23 +152,6 @@ func (d *DKGDealer) Transit() error {
 	}
 
 	return nil
-}
-
-func (d *DKGDealer) ResetDKGData() {
-	d.pubKey = nil
-	d.secKey = nil
-	d.suiteG1 = nil
-	d.suiteG2 = nil
-	d.instance = nil
-	d.transitions = nil
-
-	d.pubKeys = nil
-	d.deals = nil
-	d.responses = nil
-	d.justifications = nil
-	d.commits = nil
-	d.complaints = nil
-	d.reconstructCommits = nil
 }
 
 func (d *DKGDealer) GenerateTransitions() {
