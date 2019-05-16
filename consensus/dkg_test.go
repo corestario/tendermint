@@ -1004,9 +1004,9 @@ type dkgEventHandler struct {
 func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
 	for _, e := range DKGEvents {
 		event := e
-		evsw.AddListenerForEvent(eh.Name, e, func(data events.EventData) {
+		evsw.AddListenerForEvent(eh.Name, event, func(data events.EventData) {
 			eh.Counter[event]++
-			if h, ok := eh.Handlers[e]; ok {
+			if h, ok := eh.Handlers[event]; ok {
 				h(data)
 			}
 		})
