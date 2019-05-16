@@ -18,7 +18,7 @@ func init() {
 	config = ResetConfig("consensus_dkg_test")
 }
 
-const blocksToWait = 12
+const blocksToWait = 7
 const dkgBlock = 5
 const timeToWait = 2 * blocksToWait * time.Second
 
