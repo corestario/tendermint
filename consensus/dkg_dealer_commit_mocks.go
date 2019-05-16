@@ -70,9 +70,7 @@ func (m *DKGMockDontSendOneCommit) ProcessJustifications() (err error, ready boo
 		NumEntities: len(commits.Commitments),
 	}
 
-	m.SendMsgCb(message)
-
-	return nil, true
+	return m.SendMsgCb(message), true
 }
 
 func (m *DKGMockDontSendOneCommit) GetCommits() (*dkg.SecretCommits, error) {

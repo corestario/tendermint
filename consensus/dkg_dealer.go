@@ -205,16 +205,19 @@ func (d *DKGDealer) HandleDKGPubKey(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) SendDeals() (err error, ready bool) {
+func (d *DKGDealer) SendDeals() (error, bool) {
 	if !d.IsReady() {
 		return nil, false
 	}
 	d.eventFirer.FireEvent(types.EventDKGPubKeyReceived, nil)
 
 	messages, err := d.GetDeals()
+	if err != nil {
+		return fmt.Errorf("failed to get deals: %v", err), true
+	}
+
 	for _, msg := range messages {
-		err := d.SendMsgCb(msg)
-		if err != nil {
+		if err = d.SendMsgCb(msg); err != nil {
 			return fmt.Errorf("failed to sign message: %v", err), true
 		}
 	}
@@ -304,16 +307,19 @@ func (d *DKGDealer) HandleDKGDeal(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessDeals() (err error, ready bool) {
+func (d *DKGDealer) ProcessDeals() (error, bool) {
 	if !d.IsDealsReady() {
 		return nil, false
 	}
+
 	d.logger.Info("dkgState: processing deals")
-	d.logger.Info("**Deals", "ln", len(d.deals))
 	responseMessages, err := d.GetResponses()
+	if err != nil {
+		return fmt.Errorf("failed to get responses: %v", err), true
+	}
+
 	for _, responseMsg := range responseMessages {
-		err := d.SendMsgCb(responseMsg)
-		if err != nil {
+		if err = d.SendMsgCb(responseMsg); err != nil {
 			return fmt.Errorf("failed to sign message: %v", err), true
 		}
 
@@ -331,8 +337,6 @@ func (d *DKGDealer) GetResponses() ([]*types.DKGData, error) {
 
 	// Each deal produces a response for the deal's issuer (that makes N - 1 responses).
 	for _, deal := range d.deals {
-		fmt.Println("!!!!!!!!!!", len(d.deals), deal)
-
 		resp, err := d.instance.ProcessDeal(deal)
 		if err != nil {
 			return messages, fmt.Errorf("failed to ProcessDeal: %v", err)
@@ -385,15 +389,18 @@ func (d *DKGDealer) HandleDKGResponse(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessResponses() (err error, ready bool) {
+func (d *DKGDealer) ProcessResponses() (error, bool) {
 	if !d.IsResponsesReady() {
 		return nil, false
 	}
 
 	messages, err := d.GetJustifications()
+	if err != nil {
+		return fmt.Errorf("failed to get justifications: %v", err), true
+	}
+
 	for _, msg := range messages {
-		err := d.SendMsgCb(msg)
-		if err != nil {
+		if err = d.SendMsgCb(msg); err != nil {
 			return fmt.Errorf("failed to sign message: %v", err), true
 		}
 	}
@@ -476,7 +483,7 @@ func (d *DKGDealer) HandleDKGJustification(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
+func (d *DKGDealer) ProcessJustifications() (error, bool) {
 	if !d.IsJustificationsReady() {
 		return nil, false
 	}
@@ -491,7 +498,7 @@ func (d *DKGDealer) ProcessJustifications() (err error, ready bool) {
 		buf = bytes.NewBuffer(nil)
 		enc = gob.NewEncoder(buf)
 	)
-	if err := enc.Encode(commits); err != nil {
+	if err = enc.Encode(commits); err != nil {
 		return fmt.Errorf("failed to encode response: %v", err), true
 	}
 
@@ -583,7 +590,7 @@ func (d *DKGDealer) HandleDKGCommit(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessCommits() (err error, ready bool) {
+func (d *DKGDealer) ProcessCommits() (error, bool) {
 	if len(d.commits) < len(d.instance.QUAL()) {
 		return nil, false
 	}
@@ -619,8 +626,7 @@ func (d *DKGDealer) ProcessCommits() (err error, ready bool) {
 
 	if !alreadyFinished {
 		for _, msg := range messages {
-			err := d.SendMsgCb(msg)
-			if err != nil {
+			if err := d.SendMsgCb(msg); err != nil {
 				return fmt.Errorf("failed to sign message: %v", err), true
 			}
 
@@ -654,7 +660,7 @@ func (d *DKGDealer) HandleDKGComplaint(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessComplaints() (err error, ready bool) {
+func (d *DKGDealer) ProcessComplaints() (error, bool) {
 	if len(d.complaints) < len(d.instance.QUAL())-1 {
 		return nil, false
 	}
@@ -676,14 +682,14 @@ func (d *DKGDealer) ProcessComplaints() (err error, ready bool) {
 					buf = bytes.NewBuffer(nil)
 					enc = gob.NewEncoder(buf)
 				)
-				if err := enc.Encode(complaint); err != nil {
+				if err = enc.Encode(complaint); err != nil {
 					return fmt.Errorf("failed to encode response: %v", err), true
 				}
 				msg.Data = buf.Bytes()
 			}
 		}
-		err := d.SendMsgCb(msg)
-		if err != nil {
+
+		if err := d.SendMsgCb(msg); err != nil {
 			return fmt.Errorf("failed to sign message: %v", err), true
 		}
 
@@ -711,7 +717,7 @@ func (d *DKGDealer) HandleDKGReconstructCommit(msg *types.DKGData) error {
 	return nil
 }
 
-func (d *DKGDealer) ProcessReconstructCommits() (err error, ready bool) {
+func (d *DKGDealer) ProcessReconstructCommits() (error, bool) {
 	if len(d.reconstructCommits) < len(d.instance.QUAL())-1 {
 		return nil, false
 	}

@@ -88,11 +88,15 @@ func TestByzantine(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
+		for i, r := range reactors {
 			if rr, ok := r.(*ByzantineReactor); ok {
-				rr.reactor.Switch.Stop()
+				if err := rr.reactor.Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			} else {
-				r.(*ConsensusReactor).Switch.Stop()
+				if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			}
 		}
 	}()

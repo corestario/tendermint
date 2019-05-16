@@ -78,8 +78,10 @@ func TestByzantineDKG(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("reactor closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -134,7 +136,7 @@ func TestByzantineDKG(t *testing.T) {
 	for i := range handlers {
 		t.Log(handlers[i].Counter)
 		if handlers[i].Counter[types.EventDKGSuccessful] == 0 {
-			//t.Fatal("Node ", i, "hasn't finished dkg")
+			t.Fatal("Node ", i, "hasn't finished dkg")
 		}
 	}
 }
@@ -183,8 +185,10 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -285,8 +289,10 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -382,8 +388,10 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -479,8 +487,10 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -575,8 +585,10 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -671,8 +683,10 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -767,8 +781,10 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -863,8 +879,10 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
-			r.(*ConsensusReactor).Switch.Stop()
+		for i, r := range reactors {
+			if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+				logger.Error("event bus closed with error", "index", i, "err", err)
+			}
 		}
 	}()
 
@@ -928,8 +946,8 @@ func MakeNDKGEventHandlers(n int) []*dkgEventHandler {
 func NewDkgEventHandler(name string) *dkgEventHandler {
 	return &dkgEventHandler{
 		Name:     name,
-		Counter:  make(map[string]int, 0),
-		Handlers: make(map[string]events.EventCallback, 0),
+		Counter:  make(map[string]int),
+		Handlers: make(map[string]events.EventCallback),
 	}
 }
 

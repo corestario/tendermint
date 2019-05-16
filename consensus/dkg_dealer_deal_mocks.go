@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"errors"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -48,7 +49,9 @@ func (m *DKGMockDontSendOneDeal) SendDeals() (error, bool) {
 		return err, true
 	}
 	for _, msg := range messages {
-		m.Dealer.SendMsgCb(msg)
+		if err = m.Dealer.SendMsgCb(msg); err != nil {
+			return err, true
+		}
 	}
 
 	m.logger.Info("dkgState: sending deals", "deals", len(messages))
@@ -58,6 +61,9 @@ func (m *DKGMockDontSendOneDeal) SendDeals() (error, bool) {
 
 func (m *DKGMockDontSendOneDeal) GetDeals() ([]*types.DKGData, error) {
 	deals, err := m.Dealer.GetDeals()
+	if len(deals) == 0 {
+		return nil, errors.New("DKGMockDontSendOneDeal got empty Deals")
+	}
 
 	// remove one deal message
 	deals = deals[:len(deals)-1]

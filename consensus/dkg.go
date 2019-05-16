@@ -187,9 +187,9 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
 	dkg.dkgRoundID++
 	dkg.Logger.Info("dkgState: starting round", "round_id", dkg.dkgRoundID)
-	dealer, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
+	_, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
 	if !ok {
-		dealer = dkg.newDKGDealer(validators, dkg.privValidator, dkg.sendSignedDKGMessage, dkg.evsw, dkg.Logger)
+		dealer := dkg.newDKGDealer(validators, dkg.privValidator, dkg.sendSignedDKGMessage, dkg.evsw, dkg.Logger)
 		dkg.dkgRoundToDealer[dkg.dkgRoundID] = dealer
 		dkg.evsw.FireEvent(types.EventDKGStart, dkg.dkgRoundID)
 		return dealer.Start()

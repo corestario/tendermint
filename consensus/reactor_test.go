@@ -75,11 +75,16 @@ func stopConsensusNet(logger log.Logger, reactors []*ConsensusReactor, eventBuse
 	logger.Info("stopConsensusNet", "n", len(reactors))
 	for i, r := range reactors {
 		logger.Info("stopConsensusNet: Stopping ConsensusReactor", "i", i)
-		r.Switch.Stop()
+		if err := r.Switch.Stop(); err != nil {
+			logger.Error("reactor closed with error", "index", i, "err", err)
+		}
 	}
 	for i, b := range eventBuses {
 		logger.Info("stopConsensusNet: Stopping eventBus", "i", i)
-		b.Stop()
+
+		if err := b.Stop(); err != nil {
+			logger.Error("event bus closed with error", "index", i, "err", err)
+		}
 	}
 	logger.Info("stopConsensusNet: DONE", "n", len(reactors))
 }

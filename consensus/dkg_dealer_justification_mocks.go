@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"errors"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -48,7 +49,9 @@ func (m *DKGMockDontSendOneJustification) ProcessResponses() (error, bool) {
 		return err, true
 	}
 	for _, msg := range messages {
-		m.Dealer.SendMsgCb(msg)
+		if err = m.Dealer.SendMsgCb(msg); err != nil {
+			return err, true
+		}
 	}
 
 	m.logger.Info("dkgState: sending justifications", "justifications", len(messages))
@@ -58,6 +61,9 @@ func (m *DKGMockDontSendOneJustification) ProcessResponses() (error, bool) {
 
 func (m *DKGMockDontSendOneJustification) GetResponses() ([]*types.DKGData, error) {
 	responses, err := m.Dealer.GetResponses()
+	if len(responses) == 0 {
+		return nil, errors.New("DKGMockDontSendOneJustification got empty Responses")
+	}
 
 	// remove one response message
 	responses = responses[:len(responses)-1]
