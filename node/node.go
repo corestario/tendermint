@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/events"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -347,8 +348,9 @@ func NewNode(config *cfg.Config,
 		evsw,
 		cs.WithVerifier(verifier),
 		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
-		cs.WithLogger(consensusLogger.With("dkg")),
-		cs.WithPVKey(privValidator))
+		cs.WithLogger(consensusLogger),
+		cs.WithPVKey(privValidator),
+		cs.WithDKGRoundTTL(config.Consensus.DKGRoundTimeout))
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,

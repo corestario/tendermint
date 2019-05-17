@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"strconv"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
-	"strconv"
 )
 
 func init() {
@@ -1013,7 +1014,7 @@ func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
 	}
 }
 
-func createDKGMsg(addr []byte, roundID int, data []byte, toIndex, numEntities int) DKGDataMessage {
+func createDKGMsg(addr []byte, roundID uint64, data []byte, toIndex, numEntities int) DKGDataMessage {
 	return DKGDataMessage{
 		&types.DKGData{
 			Type:        types.DKGDeal,

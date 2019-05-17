@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"encoding/hex"
 	"math"
@@ -53,6 +54,7 @@ type Dealer interface {
 	GetVerifier() (types.Verifier, error)
 	SendMsgCb(*types.DKGData) error
 	VerifyMessage(msg DKGDataMessage) error
+	TS() time.Time
 }
 
 type DKGDealer struct {
@@ -85,7 +87,8 @@ type DealerState struct {
 	addrBytes  []byte
 
 	participantID int
-	roundID       int
+	roundID       uint64
+	ts            time.Time
 }
 
 type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer
@@ -113,6 +116,7 @@ func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMs
 
 func (d *DKGDealer) Start() error {
 	d.roundID++
+	d.ts = time.Now()
 	d.secKey = d.suiteG2.Scalar().Pick(d.suiteG2.RandomStream())
 	d.pubKey = d.suiteG2.Point().Mul(d.secKey, nil)
 
@@ -142,6 +146,10 @@ func (d *DKGDealer) Start() error {
 
 func (d *DKGDealer) GetState() DealerState {
 	return d.DealerState
+}
+
+func (d *DKGDealer) TS() time.Time {
+	return d.ts
 }
 
 func (d *DKGDealer) Transit() error {
