@@ -2,10 +2,11 @@ package consensus
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 
+	"errors"
 	"reflect"
+
 	"sync"
 
 	"github.com/tendermint/tendermint/crypto"
@@ -230,7 +231,6 @@ func (dkg *dkgState) slashDKGLosers(losers []*types.Validator) {
 		dkg.Logger.Info("Slashing validator", loser.Address.String())
 	}
 }
-
 func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet) {
 	if dkg.changeHeight == height {
 		dkg.Logger.Info("dkgState: time to update verifier", dkg.changeHeight, height)
