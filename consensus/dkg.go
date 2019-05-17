@@ -205,11 +205,14 @@ func (dkg *dkgState) StartRoundsGC() {
 		case <-ticker.C:
 			dkg.Logger.Info("dkgState: looking for dead rounds", "active_rounds", len(dkg.dkgRoundToDealer))
 			for roundID, dealer := range dkg.dkgRoundToDealer {
-				if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
-					dkg.mtx.Lock()
-					dkg.dkgRoundToDealer[roundID] = nil
-					dkg.mtx.Unlock()
-					dkg.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+				// TODO: add Deactivate() and IsDeactivated() call to dealer interface.
+				if dealer != nil {
+					if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
+						dkg.mtx.Lock()
+						dkg.dkgRoundToDealer[roundID] = nil
+						dkg.mtx.Unlock()
+						dkg.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+					}
 				}
 			}
 		}
