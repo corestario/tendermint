@@ -3,11 +3,12 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"github.com/tendermint/tendermint/crypto"
 	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/tendermint/tendermint/crypto"
 
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
@@ -143,6 +144,7 @@ type DKG interface {
 	SetVerifier(verifier types.Verifier)
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
+	StartRoundsGC()
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -339,7 +341,7 @@ func (cs *ConsensusState) OnStart() error {
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 	// Start DKG rounds garbage collector.
-	go cs.dkgRoundsGC()
+	go cs.dkg.StartRoundsGC()
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
