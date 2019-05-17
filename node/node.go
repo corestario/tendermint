@@ -348,7 +348,7 @@ func NewNode(config *cfg.Config,
 		evsw,
 		cs.WithVerifier(verifier),
 		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
-		cs.WithLogger(consensusLogger.With("dkg")),
+		cs.WithLogger(consensusLogger),
 		cs.WithPVKey(privValidator),
 		cs.WithDKGRoundTTL(config.Consensus.DKGRoundTimeout))
 

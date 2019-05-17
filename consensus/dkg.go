@@ -197,11 +197,13 @@ func (dkg *dkgState) StartRoundsGC() {
 	ticker := time.NewTicker(DKGRoundGCTime)
 	defer ticker.Stop()
 
+	dkg.Logger.Info("dkgState: starting rounds GC")
 	for {
 		// No need to add a context for cancelling this routine (ConsensusState itself doesn't
 		// have a stopper).
 		select {
 		case <-ticker.C:
+			dkg.Logger.Info("dkgState: looking for dead rounds", "active_rounds", len(dkg.dkgRoundToDealer))
 			for roundID, dealer := range dkg.dkgRoundToDealer {
 				if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
 					dkg.mtx.Lock()
