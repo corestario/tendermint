@@ -1,34 +1,33 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.dedis.ch/kyber/pairing/bn256"
+	"go.dedis.ch/kyber/sign/bls"
+	"go.dedis.ch/kyber/sign/tbls"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"go.dedis.ch/kyber/pairing/bn256"
-	"go.dedis.ch/kyber/sign/bls"
-	"go.dedis.ch/kyber/sign/tbls"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
 func TestDumpLoad(t *testing.T) {
 	var targetDir = filepath.Join(os.TempDir(), "go-bls-test")
-	defer func() {
-		if err := os.RemoveAll(targetDir); err != nil {
-			t.Log(err)
-		}
-	}()
+	if err := os.RemoveAll(targetDir); err != nil {
+		t.Log(err)
+	}
+	t.Log(targetDir)
 
 	if err := os.Mkdir(targetDir, 0777); err != nil {
 		t.Errorf("failed to create test directory: %v", err)
 		return
 	}
 
-	var threshold, numHolders = 10, 16
+	var threshold, numHolders = 1, 4
 	keyring, err := NewBLSKeyring(threshold, numHolders)
 	if err != nil {
 		t.Errorf("failed to generate keyring: %v", err)
@@ -49,7 +48,7 @@ func TestDumpLoad(t *testing.T) {
 		return
 	}
 
-	keyPairBytes, err := ioutil.ReadFile(filepath.Join(targetDir, fmt.Sprintf(storeShare, "5")))
+	keyPairBytes, err := ioutil.ReadFile(filepath.Join(targetDir, fmt.Sprintf(storeShare, "1")))
 	if err != nil {
 		t.Errorf("failed to read keypair file: %v", err)
 		return
@@ -68,28 +67,79 @@ func TestDumpLoad(t *testing.T) {
 }
 
 func TestRecover(t *testing.T) {
-	var (
-		testVerifier = NewTestBLSVerifier("test")
-		msg          = []byte("test")
-	)
-	sign, err := testVerifier.Sign(msg)
-	if err != nil {
-		t.Errorf("failed to sing with test verifier: %v", err)
-		return
+	testCases := []struct{ t, n int }{
+		{1, 1},
+		{1, 4},
+		{2, 4},
+		{3, 4},
+		{4, 4},
 	}
 
-	_, err = testVerifier.Recover(msg, []*Vote{
-		{
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%d of %d", tc.t, tc.n), func(t *testing.T) {
+			testRecover(t, tc.t, tc.n)
+		})
+	}
+}
+
+func testRecover(st *testing.T, t, n int) {
+	var testVerifiers []*BLSVerifier
+	for i := 0; i < n; i++ {
+		testVerifiers = append(testVerifiers, NewTestBLSVerifierByID("TestRecover4", i, t, n))
+	}
+
+	var err error
+	signs := make([][]byte, n)
+	votes := make([]*Vote, n)
+	msg := []byte("test")
+
+	for i := 0; i < n; i++ {
+		signs[i], err = testVerifiers[i].Sign(msg)
+		if err != nil {
+			st.Errorf("failed to sing with test verifier: %v", err)
+			return
+		}
+
+		votes = append(votes, &Vote{
 			BlockID: BlockID{
 				Hash: cmn.HexBytes("text"),
 			},
 			ValidatorAddress: Address("test"),
-			BLSSignature:     sign,
-		},
-	})
-	if err != nil {
-		t.Errorf("failed to sing with test verifier: %v", err)
-		return
+			BLSSignature:     signs[i],
+		})
+
+		for j := 0; j <= i; j++ {
+			if err = testVerifiers[i].VerifyRandomShare("", msg, signs[j]); err != nil {
+				st.Errorf("failed to verify share %d by verifier %d: %v", j, i, err)
+				return
+			}
+		}
+	}
+
+	blsSigns := make([][]byte, n)
+	for i := 0; i < n; i++ {
+		blsSigns[i], err = testVerifiers[i].Recover(msg, votes)
+		if err != nil {
+			st.Errorf("failed to sing with test verifier: %v", err)
+			return
+		}
+
+		if len(blsSigns[i]) == 0 {
+			st.Errorf("failed to sing with test verifier - empty signature: %v", err)
+			return
+		}
+	}
+
+	for i := 1; i < n; i++ {
+		if !bytes.Equal(blsSigns[0], blsSigns[i]) {
+			st.Errorf("different bls signatures 0(%v) and %d(%v)", blsSigns[0], i, blsSigns[i])
+			return
+		}
+
+		if err = testVerifiers[0].VerifyRandomData(msg, blsSigns[i]); err != nil {
+			st.Errorf("failed to verify share %d by verifier 0: %v", i, err)
+			return
+		}
 	}
 }
 

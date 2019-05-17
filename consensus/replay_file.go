@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"io"
 	"os"
 	"strconv"
@@ -136,9 +137,13 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.cs.Stop()
 	pb.cs.Wait()
 
+	evsw := events.NewEventSwitch()
+	consensusLogger := log.TestingLogger().With("module", "consensus")
+	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
-		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithVerifier(&types.MockVerifier{}))
+		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw), WithDKG(dkg))
 	newCS.SetEventBus(pb.cs.eventBus)
+	newCS.SetLogger(consensusLogger)
 	newCS.startForReplay()
 
 	if err := pb.fp.Close(); err != nil {
@@ -340,9 +345,13 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	mempool, evpool := sm.MockMempool{}, sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
+	evsw := events.NewEventSwitch()
+	consensusLogger := log.TestingLogger().With("module", "consensus")
+	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
-		blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
+		blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 
+	consensusState.SetLogger(consensusLogger)
 	consensusState.SetEventBus(eventBus)
 	return consensusState
 }

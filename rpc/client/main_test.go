@@ -1,10 +1,9 @@
 package client_test
 
 import (
+	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
-
-	"github.com/tendermint/tendermint/types"
 
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	nm "github.com/tendermint/tendermint/node"
@@ -17,7 +16,7 @@ func TestMain(m *testing.M) {
 	// start a tendermint node (and kvstore) in the background to test against
 	app := kvstore.NewKVStoreApplication()
 	node = rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(&types.MockVerifier{})
+	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("rpc_client_tests", 0))
 	code := m.Run()
 
 	// and shut down proper at the end

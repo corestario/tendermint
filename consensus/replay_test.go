@@ -56,11 +56,10 @@ func startNewConsensusStateAndWaitForBlock(t *testing.T, lastBlockHeight int64, 
 	logger := log.TestingLogger()
 	state, _ := sm.LoadStateFromDBOrGenesisFile(stateDB, consensusReplayConfig.GenesisFile())
 	privValidator := loadPrivValidator(consensusReplayConfig)
-	cs := newConsensusStateWithConfigAndBlockStore(consensusReplayConfig, state, privValidator, kvstore.NewKVStoreApplication(), blockDB)
+	cs := newConsensusStateWithConfigAndBlockStore(consensusReplayConfig, state, privValidator, kvstore.NewKVStoreApplication(), blockDB, &types.MockVerifier{}, nil, testSkipDKGNumBlocks)
 	cs.SetLogger(logger)
 
 	bytes, _ := ioutil.ReadFile(cs.config.WalFile())
-	// fmt.Printf("====== WAL: \n\r%s\n", bytes)
 	t.Logf("====== WAL: \n\r%X\n", bytes)
 
 	err := cs.Start()
@@ -134,7 +133,7 @@ LOOP:
 		state, _ := sm.MakeGenesisStateFromFile(consensusReplayConfig.GenesisFile())
 		privValidator := loadPrivValidator(consensusReplayConfig)
 		blockDB := dbm.NewMemDB()
-		cs := newConsensusStateWithConfigAndBlockStore(consensusReplayConfig, state, privValidator, kvstore.NewKVStoreApplication(), blockDB)
+		cs := newConsensusStateWithConfigAndBlockStore(consensusReplayConfig, state, privValidator, kvstore.NewKVStoreApplication(), blockDB, GetVerifier(1, 1)("crashWALandCheckLiveness", 0), nil, testSkipDKGNumBlocks)
 		cs.SetLogger(logger)
 
 		// start sending transactions
