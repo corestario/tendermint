@@ -1,4 +1,4 @@
-# Tendermint
+# DGaming Arcade
 
 [Byzantine-Fault Tolerant](https://en.wikipedia.org/wiki/Byzantine_fault_tolerance)
 [State Machines](https://en.wikipedia.org/wiki/State_machine_replication).
@@ -18,31 +18,17 @@ Branch    | Tests | Coverage
 ----------|-------|----------
 dcr-random    | [![CircleCI](https://circleci.com/gh/dgamingfoundation/tendermint/tree/dcr-random.svg?style=svg&circle-token=3f83767e96915a51aee5e7866e3bd6cb9130e9db)](https://circleci.com/gh/dgamingfoundation/tendermint/tree/dcr-random) | 
 
-Tendermint Core is Byzantine Fault Tolerant (BFT) middleware that takes a state transition machine - written in any programming language -
-and securely replicates it on many machines.
+DGaming Arcade is a Tendermint-based Byzantine Fault Tolerant (BFT) middleware that takes a state transition machine - written in any programming language -
+and securely replicates it on many machines. It's got an embedded BLS-based random beacon and built-in off-chain and on-chain DKGs.
 
-For protocol details, see [the specification](/docs/spec).
+For Tendermint protocol details, see [the specification](/docs/spec).
 
-For detailed analysis of the consensus protocol, including safety and liveness proofs,
+For detailed analysis of the Tendermint consensus protocol, including safety and liveness proofs,
 see our recent paper, "[The latest gossip on BFT consensus](https://arxiv.org/abs/1807.04938)".
 
 ## A Note on Production Readiness
 
-While Tendermint is being used in production in private, permissioned
-environments, we are still working actively to harden and audit it in preparation
-for use in public blockchains, such as the [Cosmos Network](https://cosmos.network/).
-We are also still making breaking changes to the protocol and the APIs.
-Thus, we tag the releases as *alpha software*.
-
-In any case, if you intend to run Tendermint in production,
-please [contact us](mailto:partners@tendermint.com) and [join the chat](https://riot.im/app/#/room/#tendermint:matrix.org).
-
-## Security
-
-To report a security vulnerability, see our [bug bounty
-program](https://hackerone.com/tendermint)
-
-For examples of the kinds of bugs we're looking for, see [SECURITY.md](SECURITY.md)
+DGaming Arcade is not production ready, and Tendermint it's based on is already deployed in public networks but not yet battle-tested enough.
 
 ## Minimum requirements
 
@@ -52,7 +38,9 @@ Go version | Go1.11.4 or higher
 
 ## Documentation
 
-Complete documentation can be found on the [website](https://tendermint.com/docs/).
+Complete documentation for Tendermint can be found on the [website](https://tendermint.com/docs/).
+
+DGaming Arcade documentation TBD.
 
 ### Install
 

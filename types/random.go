@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/tendermint/tendermint/crypto"
 
@@ -306,10 +307,31 @@ func NewTestBLSVerifier(addr string) *BLSVerifier {
 	return NewBLSVerifier(pubPoly, sh, t, n)
 }
 
+var blsKeyrings = make(map[string]*BLSKeyring)
+var blsKeyringsLock = new(sync.RWMutex)
+
+func NewTestBLSVerifierByID(id string, i, t, n int) *BLSVerifier {
+	blsKeyringsLock.Lock()
+	defer blsKeyringsLock.Unlock()
+
+	key := fmt.Sprintf("%s%d%d", id, t, n)
+	keyring, ok := blsKeyrings[key]
+	var err error
+	if !ok {
+		keyring, err = NewBLSKeyring(t, n)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create keyring: %v", err))
+		}
+		blsKeyrings[key] = keyring
+	}
+
+	return NewBLSVerifier(keyring.MasterPubKey, keyring.Shares[i], t, n)
+}
+
 type MockVerifier struct{}
 
 func (m *MockVerifier) Sign(data []byte) ([]byte, error) {
-	return data, nil
+	return []byte{0}, nil
 }
 func (m *MockVerifier) VerifyRandomShare(addr string, prevRandomData, currRandomData []byte) error {
 	return nil

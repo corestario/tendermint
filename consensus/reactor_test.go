@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/events"
 	"os"
 	"path"
 	"runtime"
@@ -74,11 +75,16 @@ func stopConsensusNet(logger log.Logger, reactors []*ConsensusReactor, eventBuse
 	logger.Info("stopConsensusNet", "n", len(reactors))
 	for i, r := range reactors {
 		logger.Info("stopConsensusNet: Stopping ConsensusReactor", "i", i)
-		r.Switch.Stop()
+		if err := r.Switch.Stop(); err != nil {
+			logger.Error("reactor closed with error", "index", i, "err", err)
+		}
 	}
 	for i, b := range eventBuses {
 		logger.Info("stopConsensusNet: Stopping eventBus", "i", i)
-		b.Stop()
+
+		if err := b.Stop(); err != nil {
+			logger.Error("event bus closed with error", "index", i, "err", err)
+		}
 	}
 	logger.Info("stopConsensusNet: DONE", "n", len(reactors))
 }
@@ -86,7 +92,7 @@ func stopConsensusNet(logger log.Logger, reactors []*ConsensusReactor, eventBuse
 // Ensure a testnet makes blocks
 func TestReactorBasic(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter)
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, N)
 	defer stopConsensusNet(log.TestingLogger(), reactors, eventBuses)
 	// wait till everyone makes the first new block
@@ -148,8 +154,12 @@ func TestReactorWithEvidence(t *testing.T) {
 
 		// Make ConsensusState
 		blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithVerifier(&types.MockVerifier{}))
-		cs.SetLogger(log.TestingLogger().With("module", "consensus"))
+
+		evsw := events.NewEventSwitch()
+		consensusLogger := log.TestingLogger().With("module", "consensus")
+		dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, nValidators)(testName, i)), WithLogger(consensusLogger.With("state", "dkg")))
+		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+		cs.SetLogger(consensusLogger)
 		cs.SetPrivValidator(pv)
 
 		eventBus := types.NewEventBus()
@@ -217,7 +227,7 @@ func (m *mockEvidencePool) Update(block *types.Block, state sm.State) {
 // Ensure a testnet makes blocks when there are txs
 func TestReactorCreatesBlockWhenEmptyBlocksFalse(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter,
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks,
 		func(c *cfg.Config) {
 			c.Consensus.CreateEmptyBlocks = false
 		})
@@ -238,7 +248,7 @@ func TestReactorCreatesBlockWhenEmptyBlocksFalse(t *testing.T) {
 // Test we record stats about votes and block parts from other peers.
 func TestReactorRecordsVotesAndBlockParts(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter)
+	css := randConsensusNet(N, "consensus_reactor_test", newMockTickerFunc(true), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, N)
 	defer stopConsensusNet(log.TestingLogger(), reactors, eventBuses)
 
@@ -262,7 +272,8 @@ func TestReactorRecordsVotesAndBlockParts(t *testing.T) {
 func TestReactorVotingPowerChange(t *testing.T) {
 	nVals := 4
 	logger := log.TestingLogger()
-	css := randConsensusNet(nVals, "consensus_voting_power_changes_test", newMockTickerFunc(true), newPersistentKVStore)
+
+	css := randConsensusNet(nVals, "consensus_voting_power_changes_test", newMockTickerFunc(true), newPersistentKVStore, nil, GetVerifier(1, 4), testSkipDKGNumBlocks)
 	reactors, eventChans, eventBuses := startConsensusNet(t, css, nVals)
 	defer stopConsensusNet(logger, reactors, eventBuses)
 
@@ -345,25 +356,33 @@ func TestReactorValidatorSetChanges(t *testing.T) {
 	//---------------------------------------------------------------------------
 	logger.Info("---------------------------- Testing adding one validator")
 
+	logger.Info("---00")
 	newValidatorPubKey1 := css[nVals].privValidator.GetPubKey()
+	logger.Info("---01")
 	valPubKey1ABCI := types.TM2PB.PubKey(newValidatorPubKey1)
+	logger.Info("---02")
 	newValidatorTx1 := kvstore.MakeValSetChangeTx(valPubKey1ABCI, testMinPower)
 
 	// wait till everyone makes block 2
 	// ensure the commit includes all validators
 	// send newValTx to change vals in block 3
+	logger.Info("---1")
 	waitForAndValidateBlock(t, nPeers, activeVals, eventChans, css, newValidatorTx1)
+	logger.Info("---2")
 
 	// wait till everyone makes block 3.
 	// it includes the commit for block 2, which is by the original validator set
 	waitForAndValidateBlockWithTx(t, nPeers, activeVals, eventChans, css, newValidatorTx1)
+	logger.Info("---3")
 
 	// wait till everyone makes block 4.
 	// it includes the commit for block 3, which is by the original validator set
 	waitForAndValidateBlock(t, nPeers, activeVals, eventChans, css)
+	logger.Info("---4")
 
 	// the commits for block 4 should be with the updated validator set
 	activeVals[string(newValidatorPubKey1.Address())] = struct{}{}
+	logger.Info("---5")
 
 	// wait till everyone makes block 5
 	// it includes the commit for block 4, which should have the updated validator set
@@ -421,7 +440,7 @@ func TestReactorValidatorSetChanges(t *testing.T) {
 // Check we can make blocks with skip_timeout_commit=false
 func TestReactorWithTimeoutCommit(t *testing.T) {
 	N := 4
-	css := randConsensusNet(N, "consensus_reactor_with_timeout_commit_test", newMockTickerFunc(false), newCounter)
+	css := randConsensusNet(N, "consensus_reactor_with_timeout_commit_test", newMockTickerFunc(false), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
 	// override default SkipTimeoutCommit == true for tests
 	for i := 0; i < N; i++ {
 		css[i].config.SkipTimeoutCommit = false
@@ -440,6 +459,7 @@ func waitForAndValidateBlock(t *testing.T, n int, activeVals map[string]struct{}
 	timeoutWaitGroup(t, n, func(j int) {
 		css[j].Logger.Debug("waitForAndValidateBlock")
 		newBlockI, ok := <-eventChans[j]
+		css[j].Logger.Debug("waitForAndValidateBlock X", "ok", ok, "block", newBlockI)
 		if !ok {
 			return
 		}
@@ -480,6 +500,8 @@ func waitForAndValidateBlockWithTx(t *testing.T, n int, activeVals map[string]st
 			if ntxs == len(txs) {
 				break BLOCK_TX_LOOP
 			}
+
+			time.Sleep(100 * time.Millisecond)
 		}
 
 	}, css)
@@ -497,6 +519,7 @@ func waitForBlockWithUpdatedValsAndValidateIt(t *testing.T, n int, updatedVals m
 				return
 			}
 			newBlock = newBlockI.(types.EventDataNewBlock).Block
+			css[j].Logger.Debug("waitForBlockWithUpdatedValsAndValidateIt: Got block", "height", newBlock.Height, "new", newBlock.LastCommit.Size(), "updated", len(updatedVals))
 			if newBlock.LastCommit.Size() == len(updatedVals) {
 				css[j].Logger.Debug("waitForBlockWithUpdatedValsAndValidateIt: Got block", "height", newBlock.Height)
 				break LOOP

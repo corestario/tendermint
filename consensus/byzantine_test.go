@@ -29,7 +29,7 @@ func init() {
 func TestByzantine(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter)
+	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
 
 	// give the byzantine validator a normal ticker
 	ticker := NewTimeoutTicker()
@@ -88,11 +88,15 @@ func TestByzantine(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
+		for i, r := range reactors {
 			if rr, ok := r.(*ByzantineReactor); ok {
-				rr.reactor.Switch.Stop()
+				if err := rr.reactor.Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			} else {
-				r.(*ConsensusReactor).Switch.Stop()
+				if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			}
 		}
 	}()
@@ -166,7 +170,7 @@ func TestByzantine(t *testing.T) {
 			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
-		t.Fatalf("Timed out waiting for all validators to commit first block")
+		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
 }
 
