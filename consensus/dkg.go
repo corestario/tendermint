@@ -2,10 +2,12 @@ package consensus
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
+	"time"
 
+	"errors"
 	"reflect"
+
 	"sync"
 
 	"github.com/tendermint/tendermint/crypto"
@@ -23,6 +25,8 @@ const (
 	BlocksAhead = 20 // Agree to swap verifier after around this number of blocks.
 	//DefaultDKGNumBlocks sets how often node should make DKG(in blocks)
 	DefaultDKGNumBlocks = 100
+	DKGRoundGCTime      = time.Second * 10
+	DefaultDKGRoundTTL  = time.Second * 120
 )
 
 var (
@@ -38,11 +42,12 @@ type dkgState struct {
 
 	// message queue used for dkgState-related messages.
 	dkgMsgQueue      chan msgInfo
-	dkgRoundToDealer map[int]Dealer
-	dkgRoundID       int
+	dkgRoundToDealer map[uint64]Dealer
+	dkgRoundID       uint64
 	dkgNumBlocks     int64
 	newDKGDealer     DKGDealerConstructor
 	privValidator    types.PrivValidator
+	roundTTL         time.Duration
 
 	Logger log.Logger
 	evsw   events.EventSwitch
@@ -52,9 +57,10 @@ func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 	dkg := &dkgState{
 		evsw:             evsw,
 		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
-		dkgRoundToDealer: make(map[int]Dealer),
+		dkgRoundToDealer: make(map[uint64]Dealer),
 		newDKGDealer:     NewDKGDealer,
 		dkgNumBlocks:     DefaultDKGNumBlocks,
+		roundTTL:         DefaultDKGRoundTTL,
 	}
 
 	for _, option := range options {
@@ -77,6 +83,10 @@ func WithVerifier(verifier types.Verifier) DKGOption {
 
 func WithDKGNumBlocks(numBlocks int64) DKGOption {
 	return func(d *dkgState) { d.dkgNumBlocks = numBlocks }
+}
+
+func WithDKGRoundTTL(timeout time.Duration) DKGOption {
+	return func(d *dkgState) { d.roundTTL = timeout }
 }
 
 func WithLogger(l log.Logger) DKGOption {
@@ -184,6 +194,32 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 
 }
 
+func (dkg *dkgState) StartRoundsGC() {
+	ticker := time.NewTicker(DKGRoundGCTime)
+	defer ticker.Stop()
+
+	dkg.Logger.Info("dkgState: starting rounds GC")
+	for {
+		// No need to add a context for cancelling this routine (ConsensusState itself doesn't
+		// have a stopper).
+		select {
+		case <-ticker.C:
+			dkg.Logger.Info("dkgState: looking for dead rounds", "active_rounds", len(dkg.dkgRoundToDealer))
+			for roundID, dealer := range dkg.dkgRoundToDealer {
+				// TODO: add Deactivate() and IsDeactivated() call to dealer interface.
+				if dealer != nil {
+					if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
+						dkg.mtx.Lock()
+						dkg.dkgRoundToDealer[roundID] = nil
+						dkg.mtx.Unlock()
+						dkg.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+					}
+				}
+			}
+		}
+	}
+}
+
 func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
 	dkg.dkgRoundID++
 	dkg.Logger.Info("dkgState: starting round", "round_id", dkg.dkgRoundID)
@@ -230,7 +266,6 @@ func (dkg *dkgState) slashDKGLosers(losers []*types.Validator) {
 		dkg.Logger.Info("Slashing validator", loser.Address.String())
 	}
 }
-
 func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet) {
 	if dkg.changeHeight == height {
 		dkg.Logger.Info("dkgState: time to update verifier", dkg.changeHeight, height)

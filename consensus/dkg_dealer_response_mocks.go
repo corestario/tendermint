@@ -13,7 +13,7 @@ type DKGMockDontSendOneResponse struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerNoResponse(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+func NewDKGMockDealerNoResponse(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
 	return &DKGMockDontSendOneResponse{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
@@ -77,7 +77,7 @@ type DKGMockDontSendAnyResponses struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyResponses(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+func NewDKGMockDealerAnyResponses(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
 	return &DKGMockDontSendAnyResponses{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 

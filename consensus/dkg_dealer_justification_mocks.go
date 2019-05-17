@@ -13,7 +13,7 @@ type DKGMockDontSendOneJustification struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
 	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
@@ -79,7 +79,7 @@ type DKGMockDontSendAnyJustifications struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
 	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
