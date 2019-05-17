@@ -91,13 +91,14 @@ type DealerState struct {
 	ts            time.Time
 }
 
-type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer
+type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer
 
-func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
 	return &DKGDealer{
 		DealerState: DealerState{
 			validators: validators,
 			addrBytes:  pv.GetPubKey().Address().Bytes(),
+			roundID:    startRound,
 		},
 		sendMsgCb:  sendMsgCb,
 		eventFirer: eventFirer,
@@ -115,7 +116,6 @@ func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMs
 }
 
 func (d *DKGDealer) Start() error {
-	d.roundID++
 	d.ts = time.Now()
 	d.secKey = d.suiteG2.Scalar().Pick(d.suiteG2.RandomStream())
 	d.pubKey = d.suiteG2.Point().Mul(d.secKey, nil)

@@ -1060,11 +1060,13 @@ func TestDKGVerifyMessage(t *testing.T) {
 	validator := types.NewValidator(pubkey, 10)
 	validators := types.NewValidatorSet([]*types.Validator{validator})
 
-	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"))
+	roundID := 1
+
+	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"), roundID)
 	testAddr := []byte("some_test_address")
 	testData := []byte("some_test_data")
 
-	msg := createDKGMsg(testAddr, 1, testData, 1, 1)
+	msg := createDKGMsg(testAddr, roundID, testData, 1, 1)
 	err := privVal.SignDKGData(msg.Data)
 	require.NoError(t, nil, err)
 	require.NoError(t, nil, dealer.VerifyMessage(msg))
