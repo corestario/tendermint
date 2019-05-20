@@ -21,13 +21,16 @@ type Validator struct {
 	ProposerPriority int64 `json:"proposer_priority"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
-	return &Validator{
+func NewValidator(pubKey crypto.PubKey, votingPower int64, isVotingPowerEqual bool) *Validator {
+	v := &Validator{
 		Address:          pubKey.Address(),
 		PubKey:           pubKey,
-		VotingPower:      votingPower,
 		ProposerPriority: 0,
 	}
+	if !isVotingPowerEqual {
+		v.VotingPower = votingPower
+	}
+	return v
 }
 
 // Creates a new copy of the validator so we can mutate ProposerPriority.
@@ -102,6 +105,7 @@ func RandValidator(randPower bool, minPower int64) (*Validator, PrivValidator) {
 		votePower += int64(cmn.RandUint32())
 	}
 	pubKey := privVal.GetPubKey()
-	val := NewValidator(pubKey, votePower)
+	// isVotingPowerEqual set to false for testing
+	val := NewValidator(pubKey, votePower, false)
 	return val, privVal
 }

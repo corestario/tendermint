@@ -15,6 +15,8 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 )
 
+var isVotingPowerEqual = false
+
 func TestMonitorUpdatesNumberOfValidators(t *testing.T) {
 	m := startMonitor(t)
 	defer m.Stop()
@@ -61,7 +63,7 @@ func createValidatorNode(t *testing.T) (n *monitor.Node, emMock *mock.EventMeter
 
 	stubs := make(map[string]interface{})
 	pubKey := ed25519.GenPrivKey().PubKey()
-	stubs["validators"] = ctypes.ResultValidators{BlockHeight: blockHeight, Validators: []*tmtypes.Validator{tmtypes.NewValidator(pubKey, 0)}}
+	stubs["validators"] = ctypes.ResultValidators{BlockHeight: blockHeight, Validators: []*tmtypes.Validator{tmtypes.NewValidator(pubKey, 0, isVotingPowerEqual)}}
 	stubs["status"] = ctypes.ResultStatus{ValidatorInfo: ctypes.ValidatorInfo{PubKey: pubKey}}
 	cdc := amino.NewCodec()
 	rpcClientMock := &mock.RpcClient{Stubs: stubs}

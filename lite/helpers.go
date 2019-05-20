@@ -18,6 +18,8 @@ import (
 // and can optionally extend the validator set later with Extend.
 type privKeys []crypto.PrivKey
 
+var isVotingPowerEqual = false
+
 // genPrivKeys produces an array of private keys to generate commits.
 func genPrivKeys(n int) privKeys {
 	res := make(privKeys, n)
@@ -63,7 +65,8 @@ func (pkz privKeys) ExtendSecp(n int) privKeys {
 func (pkz privKeys) ToValidators(init, inc int64) *types.ValidatorSet {
 	res := make([]*types.Validator, len(pkz))
 	for i, k := range pkz {
-		res[i] = types.NewValidator(k.PubKey(), init+int64(i)*inc)
+		// isVotingPowerEqual set to false, for testing
+		res[i] = types.NewValidator(k.PubKey(), init+int64(i)*inc, isVotingPowerEqual)
 	}
 	return types.NewValidatorSet(res)
 }

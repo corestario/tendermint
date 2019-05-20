@@ -337,7 +337,7 @@ func TestManyValidatorChangesSaveLoad(t *testing.T) {
 func genValSet(size int) *types.ValidatorSet {
 	vals := make([]*types.Validator, size)
 	for i := 0; i < size; i++ {
-		vals[i] = types.NewValidator(ed25519.GenPrivKey().PubKey(), 10)
+		vals[i] = types.NewValidator(ed25519.GenPrivKey().PubKey(), 10, isVotingPowerEqual)
 	}
 	return types.NewValidatorSet(vals)
 }

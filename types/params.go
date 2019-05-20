@@ -36,7 +36,8 @@ type EvidenceParams struct {
 // ValidatorParams restrict the public key types validators can use.
 // NOTE: uses ABCI pubkey naming, not Amino names.
 type ValidatorParams struct {
-	PubKeyTypes []string `json:"pub_key_types"`
+	PubKeyTypes        []string `json:"pub_key_types"`
+	IsVotingPowerEqual bool     `json:"is_voting_power_equal"`
 }
 
 // DefaultConsensusParams returns a default ConsensusParams.
@@ -66,7 +67,7 @@ func DefaultEvidenceParams() EvidenceParams {
 // DefaultValidatorParams returns a default ValidatorParams, which allows
 // only ed25519 pubkeys.
 func DefaultValidatorParams() ValidatorParams {
-	return ValidatorParams{[]string{ABCIPubKeyTypeEd25519}}
+	return ValidatorParams{[]string{ABCIPubKeyTypeEd25519}, false}
 }
 
 func (params *ValidatorParams) IsValidPubkeyType(pubkeyType string) bool {

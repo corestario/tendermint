@@ -39,6 +39,8 @@ var DKGEvents = []string{
 	types.EventDKGKeyChange,
 }
 
+var isVotingPowerEqual = false
+
 func TestByzantineDKG(t *testing.T) {
 	N := 4
 	T := 3
@@ -1057,10 +1059,10 @@ func TestDKGVerifyMessage(t *testing.T) {
 	// pubKey for dealer's address
 	pubkey := privVal.GetPubKey()
 
-	validator := types.NewValidator(pubkey, 10)
+	validator := types.NewValidator(pubkey, 10, isVotingPowerEqual)
 	validators := types.NewValidatorSet([]*types.Validator{validator})
 
-	roundID := 1
+	roundID := uint64(1)
 
 	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"), roundID)
 	testAddr := []byte("some_test_address")

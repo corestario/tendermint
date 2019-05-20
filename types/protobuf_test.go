@@ -16,6 +16,8 @@ import (
 	"github.com/tendermint/tendermint/version"
 )
 
+var isVotingPowerEqual = false
+
 func TestABCIPubKey(t *testing.T) {
 	pkEd := ed25519.GenPrivKey().PubKey()
 	pkSecp := secp256k1.GenPrivKey().PubKey()
@@ -34,9 +36,9 @@ func TestABCIValidators(t *testing.T) {
 	pkEd := ed25519.GenPrivKey().PubKey()
 
 	// correct validator
-	tmValExpected := NewValidator(pkEd, 10)
+	tmValExpected := NewValidator(pkEd, 10, isVotingPowerEqual)
 
-	tmVal := NewValidator(pkEd, 10)
+	tmVal := NewValidator(pkEd, 10, isVotingPowerEqual)
 
 	abciVal := TM2PB.ValidatorUpdate(tmVal)
 	tmVals, err := PB2TM.ValidatorUpdates([]abci.ValidatorUpdate{abciVal})
@@ -150,7 +152,7 @@ func TestABCIEvidence(t *testing.T) {
 	}
 	abciEv := TM2PB.Evidence(
 		ev,
-		NewValidatorSet([]*Validator{NewValidator(pubKey, 10)}),
+		NewValidatorSet([]*Validator{NewValidator(pubKey, 10, isVotingPowerEqual)}),
 		time.Now(),
 	)
 
@@ -177,7 +179,7 @@ func TestABCIValidatorFromPubKeyAndPower(t *testing.T) {
 func TestABCIValidatorWithoutPubKey(t *testing.T) {
 	pkEd := ed25519.GenPrivKey().PubKey()
 
-	abciVal := TM2PB.Validator(NewValidator(pkEd, 10))
+	abciVal := TM2PB.Validator(NewValidator(pkEd, 10, isVotingPowerEqual))
 
 	// pubkey must be nil
 	tmValExpected := abci.Validator{

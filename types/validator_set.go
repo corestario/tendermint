@@ -370,7 +370,7 @@ func (vals *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height i
 		}
 	}
 
-	if talliedVotingPower > vals.TotalVotingPower()*2/3 {
+	if talliedVotingPower > vals.TotalVotingPower()*2/3 || (talliedVotingPower == 0 && vals.totalVotingPower == 0) {
 		return nil
 	}
 	return fmt.Errorf("Invalid commit -- insufficient voting power: got %v, needed %v",
@@ -455,9 +455,11 @@ func (vals *ValidatorSet) VerifyFutureCommit(newSet *ValidatorSet, chainID strin
 		}
 	}
 
-	if oldVotingPower <= oldVals.TotalVotingPower()*2/3 {
-		return cmn.NewError("Invalid commit -- insufficient old voting power: got %v, needed %v",
-			oldVotingPower, oldVals.TotalVotingPower()*2/3+1)
+	if oldVotingPower != 0 && oldVals.TotalVotingPower() != 0 {
+		if oldVotingPower <= oldVals.TotalVotingPower()*2/3 {
+			return cmn.NewError("Invalid commit -- insufficient old voting power: got %v, needed %v",
+				oldVotingPower, oldVals.TotalVotingPower()*2/3+1)
+		}
 	}
 	return nil
 }

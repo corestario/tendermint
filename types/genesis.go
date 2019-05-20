@@ -59,7 +59,7 @@ func (genDoc *GenesisDoc) SaveAs(file string) error {
 func (genDoc *GenesisDoc) ValidatorHash() []byte {
 	vals := make([]*Validator, len(genDoc.Validators))
 	for i, v := range genDoc.Validators {
-		vals[i] = NewValidator(v.PubKey, v.Power)
+		vals[i] = NewValidator(v.PubKey, v.Power, genDoc.ConsensusParams.Validator.IsVotingPowerEqual)
 	}
 	vset := NewValidatorSet(vals)
 	return vset.Hash()
@@ -84,7 +84,7 @@ func (genDoc *GenesisDoc) ValidateAndComplete() error {
 	}
 
 	for i, v := range genDoc.Validators {
-		if v.Power == 0 {
+		if !genDoc.ConsensusParams.Validator.IsVotingPowerEqual && v.Power == 0 {
 			return cmn.NewError("The genesis file cannot contain validators with no voting power: %v", v)
 		}
 		if len(v.Address) > 0 && !bytes.Equal(v.PubKey.Address(), v.Address) {

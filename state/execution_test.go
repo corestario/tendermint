@@ -23,9 +23,10 @@ import (
 )
 
 var (
-	chainID      = "execution_chain"
-	testPartSize = 65536
-	nTxsPerBlock = 10
+	chainID            = "execution_chain"
+	testPartSize       = 65536
+	nTxsPerBlock       = 10
+	isVotingPowerEqual = false
 )
 
 func TestApplyBlock(t *testing.T) {
@@ -159,7 +160,7 @@ func TestValidateValidatorUpdates(t *testing.T) {
 
 	secpKey := secp256k1.GenPrivKey().PubKey()
 
-	defaultValidatorParams := types.ValidatorParams{[]string{types.ABCIPubKeyTypeEd25519}}
+	defaultValidatorParams := types.ValidatorParams{[]string{types.ABCIPubKeyTypeEd25519}, isVotingPowerEqual}
 
 	testCases := []struct {
 		name string
@@ -225,9 +226,9 @@ func TestValidateValidatorUpdates(t *testing.T) {
 
 func TestUpdateValidators(t *testing.T) {
 	pubkey1 := ed25519.GenPrivKey().PubKey()
-	val1 := types.NewValidator(pubkey1, 10)
+	val1 := types.NewValidator(pubkey1, 10, isVotingPowerEqual)
 	pubkey2 := ed25519.GenPrivKey().PubKey()
-	val2 := types.NewValidator(pubkey2, 20)
+	val2 := types.NewValidator(pubkey2, 20, isVotingPowerEqual)
 
 	testCases := []struct {
 		name string
@@ -253,7 +254,7 @@ func TestUpdateValidators(t *testing.T) {
 			types.NewValidatorSet([]*types.Validator{val1}),
 			[]abci.ValidatorUpdate{{PubKey: types.TM2PB.PubKey(pubkey1), Power: 20}},
 
-			types.NewValidatorSet([]*types.Validator{types.NewValidator(pubkey1, 20)}),
+			types.NewValidatorSet([]*types.Validator{types.NewValidator(pubkey1, 20, isVotingPowerEqual)}),
 			false,
 		},
 		{
@@ -280,7 +281,7 @@ func TestUpdateValidators(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			updates, err := types.PB2TM.ValidatorUpdates(tc.abciUpdates)
 			assert.NoError(t, err)
-			err = updateValidators(tc.currentSet, updates)
+			err = updateValidators(tc.currentSet, updates, isVotingPowerEqual)
 			if tc.shouldErr {
 				assert.Error(t, err)
 			} else {

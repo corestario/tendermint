@@ -116,7 +116,7 @@ func BenchmarkValidatorSetCopy(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		privKey := ed25519.GenPrivKey()
 		pubKey := privKey.PubKey()
-		val := NewValidator(pubKey, 0)
+		val := NewValidator(pubKey, 0, isVotingPowerEqual)
 		if !vset.Add(val) {
 			panic("Failed to add validator")
 		}
@@ -284,7 +284,7 @@ func randPubKey() crypto.PubKey {
 func randValidator_(totalVotingPower int64) *Validator {
 	// this modulo limits the ProposerPriority/VotingPower to stay in the
 	// bounds of MaxTotalVotingPower minus the already existing voting power:
-	val := NewValidator(randPubKey(), cmn.RandInt64()%(MaxTotalVotingPower-totalVotingPower))
+	val := NewValidator(randPubKey(), cmn.RandInt64()%(MaxTotalVotingPower-totalVotingPower), isVotingPowerEqual)
 	val.ProposerPriority = cmn.RandInt64() % (MaxTotalVotingPower - totalVotingPower)
 	return val
 }
@@ -545,7 +545,7 @@ func TestSafeSubClip(t *testing.T) {
 func TestValidatorSetVerifyCommit(t *testing.T) {
 	privKey := ed25519.GenPrivKey()
 	pubKey := privKey.PubKey()
-	v1 := NewValidator(pubKey, 1000)
+	v1 := NewValidator(pubKey, 1000, isVotingPowerEqual)
 	vset := NewValidatorSet([]*Validator{v1})
 
 	chainID := "mychainID"

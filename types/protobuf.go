@@ -219,7 +219,8 @@ func (pb2tm) ValidatorUpdates(vals []abci.ValidatorUpdate) ([]*Validator, error)
 		if err != nil {
 			return nil, err
 		}
-		tmVals[i] = NewValidator(pub, v.Power)
+		// isVotingPowerEqual set to false for full coping
+		tmVals[i] = NewValidator(pub, v.Power, false)
 	}
 	return tmVals, nil
 }

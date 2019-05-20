@@ -12,9 +12,11 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 
 	"github.com/tendermint/tendermint/rpc/client"
-	"github.com/tendermint/tendermint/rpc/test"
+	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
 )
+
+var isVotingPowerEqual = false
 
 func getHTTPClient() *client.HTTP {
 	rpcAddr := rpctest.GetConfig().RPC.ListenAddress
@@ -131,7 +133,9 @@ func TestGenesisAndValidators(t *testing.T) {
 		val := vals.Validators[0]
 
 		// make sure the current set is also the genesis set
-		assert.Equal(t, gval.Power, val.VotingPower)
+		if !isVotingPowerEqual {
+			assert.Equal(t, gval.Power, val.VotingPower)
+		}
 		assert.Equal(t, gval.PubKey, val.PubKey)
 	}
 }
