@@ -1,4 +1,4 @@
-package consensus
+package types
 
 import (
 	"fmt"
@@ -55,4 +55,3 @@ func NewKeyStore(db dbm.DB) *KeyStore {
 		currentEpoch: ksJSON.CurrentEpoch,
 	}
 }
-
