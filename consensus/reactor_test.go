@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"os"
 	"path"
 	"runtime"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/events"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -519,6 +520,7 @@ func waitForBlockWithUpdatedValsAndValidateIt(t *testing.T, n int, updatedVals m
 				return
 			}
 			newBlock = newBlockI.(types.EventDataNewBlock).Block
+			fmt.Println("NEXT", css[j].NextValidators, css[j].Validators, "LAST", css[j].LastValidators, "SIZE", newBlock.LastCommit.Size())
 			css[j].Logger.Debug("waitForBlockWithUpdatedValsAndValidateIt: Got block", "height", newBlock.Height, "new", newBlock.LastCommit.Size(), "updated", len(updatedVals))
 			if newBlock.LastCommit.Size() == len(updatedVals) {
 				css[j].Logger.Debug("waitForBlockWithUpdatedValsAndValidateIt: Got block", "height", newBlock.Height)

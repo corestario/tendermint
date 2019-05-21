@@ -654,8 +654,11 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		case msg := <-cs.dkg.MsgQueue():
 			if cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey()) {
 				fmt.Println("It's time for validators update!!!")
-				cs.LastValidators = cs.Validators
-				cs.Validators = cs.NextValidators
+				cs.LastValidators = cs.Validators.Copy()
+				cs.Validators = cs.NextValidators.Copy()
+				cs.state.LastValidators = cs.LastValidators
+				cs.state.Validators = cs.Validators
+				fmt.Println("HOP", "NEXT", cs.NextValidators, cs.Validators, "LAST", cs.LastValidators)
 			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
