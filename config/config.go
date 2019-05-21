@@ -625,9 +625,6 @@ type ConsensusConfig struct {
 	// Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
 	BlockTimeIota   time.Duration `mapstructure:"blocktime_iota"`
 	DKGRoundTimeout time.Duration `mapstructure:"dkg_round_timeout"`
-
-	// Set validator vote power to be equal
-	IsValidatorVotingPowerEqual bool `mapstructure:"is_validator_voting_power_equal"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service
@@ -648,7 +645,6 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		PeerQueryMaj23SleepDuration: 2000 * time.Millisecond,
 		BlockTimeIota:               1000 * time.Millisecond,
 		DKGRoundTimeout:             120 * time.Second,
-		IsValidatorVotingPowerEqual: false,
 	}
 }
 

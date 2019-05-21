@@ -1384,9 +1384,7 @@ func (cs *ConsensusState) recordMetrics(height int64, block *types.Block) {
 		}
 	}
 	cs.metrics.MissingValidators.Set(float64(missingValidators))
-	if !cs.config.IsValidatorVotingPowerEqual {
-		cs.metrics.MissingValidatorsPower.Set(float64(missingValidatorsPower))
-	}
+	cs.metrics.MissingValidatorsPower.Set(float64(missingValidatorsPower))
 	cs.metrics.ByzantineValidators.Set(float64(len(block.Evidence.Evidence)))
 	byzantineValidatorsPower := int64(0)
 	for _, ev := range block.Evidence.Evidence {
@@ -1394,9 +1392,7 @@ func (cs *ConsensusState) recordMetrics(height int64, block *types.Block) {
 			byzantineValidatorsPower += val.VotingPower
 		}
 	}
-	if !cs.config.IsValidatorVotingPowerEqual {
-		cs.metrics.ByzantineValidatorsPower.Set(float64(byzantineValidatorsPower))
-	}
+	cs.metrics.ByzantineValidatorsPower.Set(float64(byzantineValidatorsPower))
 
 	if height > 1 {
 		lastBlockMeta := cs.blockStore.LoadBlockMeta(height - 1)
