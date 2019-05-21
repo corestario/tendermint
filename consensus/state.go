@@ -564,13 +564,14 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 		cs.StartTime = cs.config.Commit(cs.CommitTime)
 	}
 
-	fmt.Println("HUIHIUHIUHIUHIUHIUHIUH")
-	if state.NextValidators != state.Validators {
+	if state.HasValUpdates {
+		fmt.Println("1111111")
 		cs.Logger.Info("!!!!!!!!!!!There is validators update! Starting off-chain DKG round")
 		cs.NextValidators = state.NextValidators
 		cs.dkg.StartDKGRound(cs.NextValidators)
 	}
 
+	cs.Validators = state.Validators
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
@@ -652,6 +653,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		select {
 		case msg := <-cs.dkg.MsgQueue():
 			if cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey()) {
+				fmt.Println("It's time for validators update!!!")
 				cs.LastValidators = cs.Validators
 				cs.Validators = cs.NextValidators
 			}

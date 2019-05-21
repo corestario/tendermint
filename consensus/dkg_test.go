@@ -1060,7 +1060,7 @@ func TestDKGVerifyMessage(t *testing.T) {
 	validator := types.NewValidator(pubkey, 10)
 	validators := types.NewValidatorSet([]*types.Validator{validator})
 
-	roundID := 1
+	roundID := uint64(1)
 
 	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"), roundID)
 	testAddr := []byte("some_test_address")

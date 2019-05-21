@@ -445,6 +445,8 @@ func updateState(
 	validatorUpdates []*types.Validator,
 ) (State, error) {
 
+	hasValUpdates := false
+
 	// Copy the valset so we can apply changes from EndBlock
 	// and update s.LastValidators and s.Validators.
 	nValSet := state.NextValidators.Copy()
@@ -452,6 +454,7 @@ func updateState(
 	// Update the validator set with the latest abciResponses.
 	lastHeightValsChanged := state.LastHeightValidatorsChanged
 	if len(validatorUpdates) > 0 {
+		hasValUpdates = true
 		err := updateValidators(nValSet, validatorUpdates)
 		if err != nil {
 			return state, fmt.Errorf("Error changing validator set: %v", err)
@@ -483,16 +486,18 @@ func updateState(
 	// NOTE: the AppHash has not been populated.
 	// It will be filled on state.Save.
 	return State{
-		Version:                          nextVersion,
-		ChainID:                          state.ChainID,
-		LastBlockHeight:                  header.Height,
-		LastBlockTotalTx:                 state.LastBlockTotalTx + header.NumTxs,
-		LastBlockID:                      blockID,
-		LastBlockTime:                    header.Time,
-		NextValidators:                   nValSet,
-		Validators:                       state.NextValidators.Copy(),
+		Version:          nextVersion,
+		ChainID:          state.ChainID,
+		LastBlockHeight:  header.Height,
+		LastBlockTotalTx: state.LastBlockTotalTx + header.NumTxs,
+		LastBlockID:      blockID,
+		LastBlockTime:    header.Time,
+		NextValidators:   nValSet,
+		//Validators:                       state.NextValidators.Copy(),
+		Validators:                       state.Validators.Copy(),
 		LastValidators:                   state.Validators.Copy(),
 		LastHeightValidatorsChanged:      lastHeightValsChanged,
+		HasValUpdates:                    hasValUpdates,
 		ConsensusParams:                  nextParams,
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
 		LastResultsHash:                  abciResponses.ResultsHash(),
