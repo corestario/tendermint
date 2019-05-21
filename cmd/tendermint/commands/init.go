@@ -97,7 +97,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 		genDoc.BLSThreshold = 2
 		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 1000
-		genDoc.ConsensusParams.Validator.IsVotingPowerEqual = true
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
