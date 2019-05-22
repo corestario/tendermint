@@ -1,6 +1,9 @@
 package types
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/gob"
 	"fmt"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -32,7 +35,22 @@ type KeySetJSON struct {
 }
 
 func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
+	masterKeyBuf := bytes.NewBuffer(nil)
+	masterKeyEnc := gob.NewEncoder(masterKeyBuf)
+	if err := masterKeyEnc.Encode(keySet.MasterPubKey); err != nil {
+		return nil, fmt.Errorf("failed to encode master public key: %v", err)
+	}
 
+	sharesBuf := bytes.NewBuffer(nil)
+	sharesEnc := gob.NewEncoder(sharesBuf)
+	if err := sharesEnc.Encode(keySet.KeyShares); err != nil {
+		return nil, fmt.Errorf("failed to encode public key shares: %v", err)
+	}
+
+	return &KeySetJSON{
+		MasterPubKey: base64.StdEncoding.EncodeToString(masterKeyBuf.Bytes()),
+		KeyShares:    base64.StdEncoding.EncodeToString(sharesBuf.Bytes()),
+	}, nil
 }
 
 func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
