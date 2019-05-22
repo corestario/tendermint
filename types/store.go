@@ -5,18 +5,38 @@ import (
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
+
+	"go.dedis.ch/kyber/share"
 )
 
 //KeyStore is store for dkg-results(BLS-keys)
 type KeyStore struct {
 	db           dbm.DB
-	currentEpoch int64
+	currentEpoch int64 //pointer to the current epoch (last valid keys)
 }
 
 var keyStoreKey = []byte("keyStore")
 
 type KeyStoreStateJSON struct {
 	CurrentEpoch int64 `json:"currentEpoch"`
+}
+
+type KeySet struct {
+	MasterPubKey *share.PubPoly          // Public key used to verify individual and aggregate signatures
+	KeyShares    map[int]*share.PubShare // Mapping from share ID to public key share
+}
+
+type KeySetJSON struct {
+	MasterPubKey string `json:"musterPubKey"`
+	KeyShares    string `json:"keyShares"`
+}
+
+func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
+
+}
+
+func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
+
 }
 
 //Save persists the keyStore state (current epoch) to the database as JSON
