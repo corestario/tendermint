@@ -565,9 +565,9 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 	}
 
 	if state.HasValUpdates {
-		fmt.Println("1111111")
-		cs.Logger.Info("!!!!!!!!!!!There is validators update! Starting off-chain DKG round")
-		cs.NextValidators = state.NextValidators
+		cs.Logger.Info("There is validators update! Starting off-chain DKG round")
+		cs.NextValidators = state.NextValidators.Copy()
+		state.NextValidators = state.Validators.Copy()
 		cs.dkg.StartDKGRound(cs.NextValidators)
 	}
 
@@ -653,12 +653,10 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		select {
 		case msg := <-cs.dkg.MsgQueue():
 			if cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey()) {
-				fmt.Println("It's time for validators update!!!")
-				cs.LastValidators = cs.Validators.Copy()
-				cs.Validators = cs.NextValidators.Copy()
-				cs.state.LastValidators = cs.LastValidators
-				cs.state.Validators = cs.Validators
-				fmt.Println("HOP", "NEXT", cs.NextValidators, cs.Validators, "LAST", cs.LastValidators)
+				if cs.NextValidators != nil && cs.state.ValidatorsAfterOffChainDKG != nil && !bytes.Equal(cs.NextValidators.Hash(), cs.state.ValidatorsAfterOffChainDKG.Hash()) {
+					cs.state.HeightToUpdateValidators = (cs.Height + BlocksAhead) - ((cs.Height + BlocksAhead) % 5)
+					cs.state.ValidatorsAfterOffChainDKG = cs.NextValidators.Copy()
+				}
 			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()

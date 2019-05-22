@@ -463,6 +463,12 @@ func updateState(
 		lastHeightValsChanged = header.Height + 1 + 1
 	}
 
+	if state.HeightToUpdateValidators == header.Height {
+		lastHeightValsChanged = header.Height + 1 + 1
+		nValSet = state.ValidatorsAfterOffChainDKG.Copy()
+		state.ValidatorsAfterOffChainDKG = nil
+	}
+
 	// Update validator proposer priority and set state variables.
 	nValSet.IncrementProposerPriority(1)
 
@@ -486,17 +492,17 @@ func updateState(
 	// NOTE: the AppHash has not been populated.
 	// It will be filled on state.Save.
 	return State{
-		Version:          nextVersion,
-		ChainID:          state.ChainID,
-		LastBlockHeight:  header.Height,
-		LastBlockTotalTx: state.LastBlockTotalTx + header.NumTxs,
-		LastBlockID:      blockID,
-		LastBlockTime:    header.Time,
-		NextValidators:   nValSet,
-		//Validators:                       state.NextValidators.Copy(),
-		Validators:                       state.Validators.Copy(),
+		Version:                          nextVersion,
+		ChainID:                          state.ChainID,
+		LastBlockHeight:                  header.Height,
+		LastBlockTotalTx:                 state.LastBlockTotalTx + header.NumTxs,
+		LastBlockID:                      blockID,
+		LastBlockTime:                    header.Time,
+		NextValidators:                   nValSet,
+		Validators:                       state.NextValidators.Copy(),
 		LastValidators:                   state.Validators.Copy(),
 		LastHeightValidatorsChanged:      lastHeightValsChanged,
+		ValidatorsAfterOffChainDKG:       state.ValidatorsAfterOffChainDKG,
 		HasValUpdates:                    hasValUpdates,
 		ConsensusParams:                  nextParams,
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
