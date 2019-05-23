@@ -135,7 +135,7 @@ func (ks *KeyStore) LoadBLSKey(epoch int64) *BLSKey {
 	if len(bz) == 0 {
 		return nil
 	}
-	blskeyJSON := BLSKeyJSON{}
+	blskeyJSON := &BLSKeyJSON{}
 	err := cdc.UnmarshalBinaryBare(bz, blskeyJSON)
 	if err != nil {
 		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bz))
@@ -148,7 +148,7 @@ func (ks *KeyStore) LoadBLSKey(epoch int64) *BLSKey {
 }
 
 // Save BLSkey to KeyStore
-func (ks *KeyStore) SetBLSKey(blsKey *BLSKey, epoch *int64) error {
+func (ks *KeyStore) SetBLSKey(blsKey *BLSKey, epoch int64) error {
 	blsKeysJSON, err := NewBLSKeyJSON(blsKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to serialize blskey: %X", err))
@@ -157,6 +157,6 @@ func (ks *KeyStore) SetBLSKey(blsKey *BLSKey, epoch *int64) error {
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal bytes: %X", bz))
 	}
-	ks.db.SetSync(CalcEpochKey(*epoch), bz)
+	ks.db.SetSync(CalcEpochKey(epoch), bz)
 	return nil
 }

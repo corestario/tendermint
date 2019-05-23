@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	cfg "github.com/tendermint/tendermint/config"
+	dbm "github.com/tendermint/tendermint/libs/db"
 	"go.dedis.ch/kyber/pairing/bn256"
 )
 
@@ -55,4 +57,30 @@ func (share1 *BLSShare) IsEqual(share2 *BLSShare) bool {
 		return false
 	}
 	return true
+}
+
+func TestSaveLoadBLSKey(t *testing.T) {
+	//set keyStore
+	config := cfg.ResetTestRoot("node_node_test")
+	dbType := dbm.DBBackendType(config.DBBackend)
+	keyStoreDB := dbm.NewDB("keyStore", dbType, config.DBDir())
+	keyStore := NewKeyStore(keyStoreDB)
+
+	//set BLSKey for saving to the keyStore
+	pubPoly, _ := LoadPubKey(TestnetMasterPubKey, 4)
+	share, _ := TestnetShares[0].Deserialize()
+
+	key := &BLSKey{
+		N:            4,
+		MasterPubKey: pubPoly,
+		Share:        share,
+	}
+	//save key
+	keyStore.SetBLSKey(key, 0)
+	//load key
+	loadedKey := keyStore.LoadBLSKey(0)
+
+	if !key.IsEqual(loadedKey) {
+		t.Errorf("Saved and loaded keys are not equal")
+	}
 }
