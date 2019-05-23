@@ -1,11 +1,12 @@
 package types
 
 import (
-	"go.dedis.ch/kyber"
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
 	"fmt"
+
+	"go.dedis.ch/kyber"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
@@ -26,24 +27,40 @@ type KeyStoreStateJSON struct {
 }
 
 type BLSKey struct {
-	N int
-	MasterPubKey *share.PubPoly          // Public key used to verify individual and aggregate signatures
-	Share *BLSShare // Public + private shares
+	N            int
+	MasterPubKey *share.PubPoly // Public key used to verify individual and aggregate signatures
+	Share        *BLSShare      // Public + private shares
 }
 
 type BLSKeyJSON struct {
-	N int `json:"n"`
+	N              int    `json:"n"`
 	MPubKeyCommits string `json:"musterPubKey"`
-	Share      string `json:"share"`
+	PubShare       string `json:"pubShare"`
+	PrivShare      string `json:"privShare"`
 }
 
 func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
+	masterKeyBuf := bytes.NewBuffer(nil)
+	masterKeyEnc := gob.NewEncoder(masterKeyBuf)
+	if err := masterKeyEnc.Encode(keySet.MasterPubKey); err != nil {
+		return nil, fmt.Errorf("failed to encode master public key: %v", err)
+	}
 
+	sharesBuf := bytes.NewBuffer(nil)
+	sharesEnc := gob.NewEncoder(sharesBuf)
+	if err := sharesEnc.Encode(keySet.KeyShares); err != nil {
+		return nil, fmt.Errorf("failed to encode public key shares: %v", err)
+	}
+
+	return &KeySetJSON{
+		MasterPubKey: base64.StdEncoding.EncodeToString(masterKeyBuf.Bytes()),
+		KeyShares:    base64.StdEncoding.EncodeToString(sharesBuf.Bytes()),
+	}, nil
 }
 
 func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
 	bytes := ksJSON.N
-	var N int 
+	var N int
 	err := cdc.UnmarshalJSON(bytes, &N)
 	if err != nil {
 		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bytes))
@@ -54,7 +71,7 @@ func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
 		return nil, fmt.Errorf("failed to base64-decode commits of masterPubKey: %v", err)
 	}
 	MPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
-	MPubKeyCommits := make([]kyber.Point,N)
+	MPubKeyCommits := make([]kyber.Point, N)
 	if err := masterPubDec.Decode(masterPubKey); err != nil {
 		return nil, fmt.Errorf("failed to decode masterPubKey: %v", err)
 	}
