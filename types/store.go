@@ -1,6 +1,10 @@
 package types
 
 import (
+	"go.dedis.ch/kyber"
+	"bytes"
+	"encoding/base64"
+	"encoding/gob"
 	"fmt"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -21,14 +25,16 @@ type KeyStoreStateJSON struct {
 	CurrentEpoch int64 `json:"currentEpoch"`
 }
 
-type KeySet struct {
+type BLSKey struct {
+	N int
 	MasterPubKey *share.PubPoly          // Public key used to verify individual and aggregate signatures
-	KeyShares    map[int]*share.PubShare // Mapping from share ID to public key share
+	Share *BLSShare // Public + private shares
 }
 
-type KeySetJSON struct {
-	MasterPubKey string `json:"musterPubKey"`
-	KeyShares    string `json:"keyShares"`
+type BLSKeyJSON struct {
+	N int `json:"n"`
+	MPubKeyCommits string `json:"musterPubKey"`
+	Share      string `json:"share"`
 }
 
 func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
@@ -36,7 +42,22 @@ func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
 }
 
 func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
+	bytes := ksJSON.N
+	var N int 
+	err := cdc.UnmarshalJSON(bytes, &N)
+	if err != nil {
+		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bytes))
+	}
 
+	masterPubBytes, err := base64.StdEncoding.DecodeString(ksJSON.MPubKeyCommits)
+	if err != nil {
+		return nil, fmt.Errorf("failed to base64-decode commits of masterPubKey: %v", err)
+	}
+	MPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
+	MPubKeyCommits := make([]kyber.Point,N)
+	if err := masterPubDec.Decode(masterPubKey); err != nil {
+		return nil, fmt.Errorf("failed to decode masterPubKey: %v", err)
+	}
 }
 
 //Save persists the keyStore state (current epoch) to the database as JSON
