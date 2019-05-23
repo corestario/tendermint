@@ -75,7 +75,7 @@ func (blsJSON *BLSKeyJSON) Deserialize() (*BLSKey, error) {
 	if err := mPubCommitsDec.Decode(&MPubKeyCommits); err != nil {
 		return nil, fmt.Errorf("failed to decode commits of masterPubKey: %v", err)
 	}
-	MPubKey := share.NewPubPoly(bn256.NewSuite(), nil, MPubKeyCommits)
+	MPubKey := share.NewPubPoly(bn256.NewSuite().G2(), nil, MPubKeyCommits)
 	shareJSON := &BLSShareJSON{blsJSON.PubShare, blsJSON.PrivShare}
 	share, err := shareJSON.Deserialize()
 	if err != nil {
