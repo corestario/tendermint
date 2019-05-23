@@ -11,6 +11,7 @@ import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
 
+	"go.dedis.ch/kyber/pairing/bn256"
 	"go.dedis.ch/kyber/share"
 )
 
@@ -39,7 +40,7 @@ type BLSKeyJSON struct {
 	PrivShare      string `json:"privShare"`
 }
 
-func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
+func NewBLSKeyJSON(keySet KeySet) (*KeySetJSON, error) {
 	masterKeyBuf := bytes.NewBuffer(nil)
 	masterKeyEnc := gob.NewEncoder(masterKeyBuf)
 	if err := masterKeyEnc.Encode(keySet.MasterPubKey); err != nil {
@@ -58,23 +59,27 @@ func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
 	}, nil
 }
 
-func (ksJSON *KeySetJSON) Deserialize() (*KeySet, error) {
-	bytes := ksJSON.N
-	var N int
-	err := cdc.UnmarshalJSON(bytes, &N)
-	if err != nil {
-		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bytes))
-	}
-
-	masterPubBytes, err := base64.StdEncoding.DecodeString(ksJSON.MPubKeyCommits)
+func (blsJSON *BLSKeyJSON) Deserialize() (*BLSKey, error) {
+	masterPubBytes, err := base64.StdEncoding.DecodeString(blsJSON.MPubKeyCommits)
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode commits of masterPubKey: %v", err)
 	}
 	MPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
-	MPubKeyCommits := make([]kyber.Point, N)
-	if err := masterPubDec.Decode(masterPubKey); err != nil {
-		return nil, fmt.Errorf("failed to decode masterPubKey: %v", err)
+	MPubKeyCommits := make([]kyber.Point, blsJSON.N)
+	if err := MPubCommitsDec.Decode(MPubKeyCommits); err != nil {
+		return nil, fmt.Errorf("failed to decode commits of masterPubKey: %v", err)
 	}
+	MPubKey := share.NewPubPoly(bn256.NewSuite(), nil, MPubKeyCommits)
+	shareJSON := &BLSShareJSON{blsJSON.PubShare, blsJSON.PrivShare}
+	share, err := shareJSON.Deserialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize BLSshare: %v", err)
+	}
+	return &BLSKey{
+		N:            blsJSON.N,
+		MasterPubKey: MPubKey,
+		Share:        share,
+	}, nil
 }
 
 //Save persists the keyStore state (current epoch) to the database as JSON
