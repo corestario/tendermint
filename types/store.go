@@ -66,9 +66,13 @@ func (blsJSON *BLSKeyJSON) Deserialize() (*BLSKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64-decode commits of masterPubKey: %v", err)
 	}
-	MPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
+	mPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
 	MPubKeyCommits := make([]kyber.Point, blsJSON.N)
-	if err := MPubCommitsDec.Decode(MPubKeyCommits); err != nil {
+	g2 := bn256.NewSuite().G2()
+	for i := 0; i < blsJSON.N; i++ {
+		MPubKeyCommits[i] = g2.Point()
+	}
+	if err := mPubCommitsDec.Decode(&MPubKeyCommits); err != nil {
 		return nil, fmt.Errorf("failed to decode commits of masterPubKey: %v", err)
 	}
 	MPubKey := share.NewPubPoly(bn256.NewSuite(), nil, MPubKeyCommits)
@@ -145,7 +149,7 @@ func (ks *KeyStore) LoadBLSKey(epoch int64) *BLSKey {
 
 // Save BLSkey to KeyStore
 func (ks *KeyStore) SetBLSKey(blsKey *BLSKey, epoch *int64) error {
-	blsKeysJSON, err := NewBLSKeyJSON(*blsKey)
+	blsKeysJSON, err := NewBLSKeyJSON(blsKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to serialize blskey: %X", err))
 	}

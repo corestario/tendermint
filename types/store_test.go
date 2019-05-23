@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"go.dedis.ch/kyber/pairing/bn256"
@@ -27,6 +28,20 @@ func TestBLSKeySerialization(t *testing.T) {
 	if err2 != nil {
 		t.Errorf("failed to deserialize BLSKeyJSON object: %v", err2)
 		return
+	}
+
+	_, commits1 := key.MasterPubKey.Info()
+	_, commits2 := key2.MasterPubKey.Info()
+
+	for id := range commits1 {
+		fmt.Print(commits1[id])
+		fmt.Printf("\n")
+	}
+	fmt.Print("commits2: \n")
+
+	for id := range commits2 {
+		fmt.Print(commits2[id])
+		fmt.Printf("\n")
 	}
 
 	if !key.IsEqual(key2) {
