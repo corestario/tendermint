@@ -39,22 +39,24 @@ type BLSKeyJSON struct {
 	PrivShare      string `json:"privShare"`
 }
 
-func NewKeySetJSON(keySet KeySet) (*KeySetJSON, error) {
+func NewBLSKeyJSON(key BLSKey) (*BLSKeyJSON, error) {
 	masterKeyBuf := bytes.NewBuffer(nil)
 	masterKeyEnc := gob.NewEncoder(masterKeyBuf)
-	if err := masterKeyEnc.Encode(keySet.MasterPubKey); err != nil {
-		return nil, fmt.Errorf("failed to encode master public key: %v", err)
+	_, commits := key.MasterPubKey.Info()
+	if err := masterKeyEnc.Encode(commits); err != nil {
+		return nil, fmt.Errorf("failed to encode master public key commits: %v", err)
 	}
 
-	sharesBuf := bytes.NewBuffer(nil)
-	sharesEnc := gob.NewEncoder(sharesBuf)
-	if err := sharesEnc.Encode(keySet.KeyShares); err != nil {
-		return nil, fmt.Errorf("failed to encode public key shares: %v", err)
+	shareJSON, err := NewBLSShareJSON(key.Share)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode key share: %v", err)
 	}
 
-	return &KeySetJSON{
-		MasterPubKey: base64.StdEncoding.EncodeToString(masterKeyBuf.Bytes()),
-		KeyShares:    base64.StdEncoding.EncodeToString(sharesBuf.Bytes()),
+	return &BLSKeyJSON{
+		N : key.N,
+		MPubKeyCommits: base64.StdEncoding.EncodeToString(masterKeyBuf.Bytes()),
+		PubShare: shareJSON.Pub,
+		PrivShare: shareJSON.Priv,
 	}, nil
 }
 
