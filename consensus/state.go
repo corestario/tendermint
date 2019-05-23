@@ -145,6 +145,7 @@ type DKG interface {
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
 	StartRoundsGC()
+	StartDKGRound(validators *types.ValidatorSet) error
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -184,7 +185,6 @@ func NewConsensusState(
 	for _, option := range options {
 		option(cs)
 	}
-
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
@@ -288,6 +288,10 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 
 func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
 	cs.dkg.SetVerifier(verifier)
+}
+
+func (cs *ConsensusState) StartDKG() error {
+	return cs.dkg.StartDKGRound(cs.Validators)
 }
 
 // LoadCommit loads the commit for a given height.

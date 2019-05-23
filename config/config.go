@@ -625,6 +625,8 @@ type ConsensusConfig struct {
 	// Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
 	BlockTimeIota   time.Duration `mapstructure:"blocktime_iota"`
 	DKGRoundTimeout time.Duration `mapstructure:"dkg_round_timeout"`
+
+	StartDKGOnChainStart bool `mapstructure:"start_dkg_on_chain_start"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service

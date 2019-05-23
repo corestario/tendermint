@@ -220,7 +220,7 @@ func (dkg *dkgState) StartRoundsGC() {
 	}
 }
 
-func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
+func (dkg *dkgState) StartDKGRound(validators *types.ValidatorSet) error {
 	dkg.dkgRoundID++
 	dkg.Logger.Info("dkgState: starting round", "round_id", dkg.dkgRoundID)
 	_, ok := dkg.dkgRoundToDealer[dkg.dkgRoundID]
@@ -275,7 +275,7 @@ func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet) 
 	}
 
 	if height > 1 && height%dkg.dkgNumBlocks == 0 {
-		if err := dkg.startDKGRound(validators); err != nil {
+		if err := dkg.StartDKGRound(validators); err != nil {
 			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
 		}
 	}

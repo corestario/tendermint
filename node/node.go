@@ -550,6 +550,14 @@ func NewNode(config *cfg.Config,
 		eventBus:         eventBus,
 	}
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
+
+	if config.Consensus.StartDKGOnChainStart && state.LastBlockHeight == 0 {
+		err = node.consensusState.StartDKG()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return node, nil
 }
 
