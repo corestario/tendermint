@@ -120,3 +120,25 @@ func NewKeyStore(db dbm.DB) *KeyStore {
 		currentEpoch: ksJSON.CurrentEpoch,
 	}
 }
+
+func CalcEpochKey(epoch int64) []byte {
+	return []byte(fmt.Sprintf("EP:%v", epoch))
+}
+
+// Load BLSkey from KeyStore
+func (ks *KeyStore) LoadBLSKey(epoch int64) *BLSKey {
+	bz := ks.db.Get(CalcEpochKey(epoch))
+	if len(bz) == 0 {
+		return nil
+	}
+	blskeyJSON := BLSKeyJSON{}
+	err := cdc.UnmarshalJSON(bz, blskeyJSON)
+	if err != nil {
+		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bz))
+	}
+	blsKey, err := blskeyJSON.Deserialize()
+	if err != nil {
+		panic(fmt.Sprintf("failed to deserialize blskey: %X", bz))
+	}
+	return blsKey
+}
