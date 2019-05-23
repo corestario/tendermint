@@ -40,7 +40,7 @@ type BLSKeyJSON struct {
 	PrivShare      string `json:"privShare"`
 }
 
-func NewBLSKeyJSON(key BLSKey) (*BLSKeyJSON, error) {
+func NewBLSKeyJSON(key *BLSKey) (*BLSKeyJSON, error) {
 	masterKeyBuf := bytes.NewBuffer(nil)
 	masterKeyEnc := gob.NewEncoder(masterKeyBuf)
 	_, commits := key.MasterPubKey.Info()
