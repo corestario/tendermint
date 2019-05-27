@@ -125,13 +125,13 @@ func NewKeyStore(db dbm.DB) *KeyStore {
 	}
 }
 
-func CalcEpochKey(epoch int64) []byte {
+func calcEpochKey(epoch int64) []byte {
 	return []byte(fmt.Sprintf("EP:%v", epoch))
 }
 
 // Load BLSkey from KeyStore
-func (ks *KeyStore) LoadBLSKey(epoch int64) *BLSKey {
-	bz := ks.db.Get(CalcEpochKey(epoch))
+func (ks *KeyStore) GetBLSKey(epoch int64) *BLSKey {
+	bz := ks.db.Get(calcEpochKey(epoch))
 	if len(bz) == 0 {
 		return nil
 	}
@@ -157,6 +157,6 @@ func (ks *KeyStore) SetBLSKey(blsKey *BLSKey, epoch int64) error {
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal bytes: %X", bz))
 	}
-	ks.db.SetSync(CalcEpochKey(epoch), bz)
+	ks.db.SetSync(calcEpochKey(epoch), bz)
 	return nil
 }

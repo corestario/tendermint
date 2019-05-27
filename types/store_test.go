@@ -82,7 +82,7 @@ func TestSaveLoadBLSKey(t *testing.T) {
 			Share:        share,
 		}
 		keyStore.SetBLSKey(key, int64(i))
-		loadedKey := keyStore.LoadBLSKey(int64(i))
+		loadedKey := keyStore.GetBLSKey(int64(i))
 
 		if !key.IsEqual(loadedKey) {
 			t.Errorf("Saved and loaded keys are not equal")
