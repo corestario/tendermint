@@ -11,28 +11,31 @@ import (
 
 func TestBLSKeySerialization(t *testing.T) {
 	pubPoly, _ := LoadPubKey(TestnetMasterPubKey, 4)
-	share, _ := TestnetShares[0].Deserialize()
 
-	key := &BLSKey{
-		N:            4,
-		MasterPubKey: pubPoly,
-		Share:        share,
-	}
+	for _, tc := range TestnetShares {
+		share, _ := tc.Deserialize()
 
-	keyJSON, err := NewBLSKeyJSON(key)
-	if err != nil {
-		t.Errorf("failed to create BLSKeyJSON object: %v", err)
-		return
-	}
+		key := &BLSKey{
+			N:            4,
+			MasterPubKey: pubPoly,
+			Share:        share,
+		}
 
-	key2, err2 := keyJSON.Deserialize()
-	if err2 != nil {
-		t.Errorf("failed to deserialize BLSKeyJSON object: %v", err2)
-		return
-	}
+		keyJSON, err := NewBLSKeyJSON(key)
+		if err != nil {
+			t.Errorf("failed to create BLSKeyJSON object: %v", err)
+			return
+		}
 
-	if !key.IsEqual(key2) {
-		t.Errorf("Object before the serialization and object after the seriailization are not equal")
+		key2, err2 := keyJSON.Deserialize()
+		if err2 != nil {
+			t.Errorf("failed to deserialize BLSKeyJSON object: %v", err2)
+			return
+		}
+
+		if !key.IsEqual(key2) {
+			t.Errorf("Object before the serialization and object after the seriailization are not equal")
+		}
 	}
 }
 
@@ -46,6 +49,7 @@ func (key1 *BLSKey) IsEqual(key2 *BLSKey) bool {
 }
 
 func (share1 *BLSShare) IsEqual(share2 *BLSShare) bool {
+	//Kyber doesn't allow comparison between two Priv/PubShare in a "simple" way, so we use hash instead
 	suite := bn256.NewSuite()
 	pubHash1 := share1.Pub.Hash(suite)
 	pubHash2 := share2.Pub.Hash(suite)
@@ -68,19 +72,20 @@ func TestSaveLoadBLSKey(t *testing.T) {
 
 	//set BLSKey for saving to the keyStore
 	pubPoly, _ := LoadPubKey(TestnetMasterPubKey, 4)
-	share, _ := TestnetShares[0].Deserialize()
 
-	key := &BLSKey{
-		N:            4,
-		MasterPubKey: pubPoly,
-		Share:        share,
-	}
-	//save key
-	keyStore.SetBLSKey(key, 0)
-	//load key
-	loadedKey := keyStore.LoadBLSKey(0)
+	for i, tc := range TestnetShares {
+		share, _ := tc.Deserialize()
 
-	if !key.IsEqual(loadedKey) {
-		t.Errorf("Saved and loaded keys are not equal")
+		key := &BLSKey{
+			N:            4,
+			MasterPubKey: pubPoly,
+			Share:        share,
+		}
+		keyStore.SetBLSKey(key, int64(i))
+		loadedKey := keyStore.LoadBLSKey(int64(i))
+
+		if !key.IsEqual(loadedKey) {
+			t.Errorf("Saved and loaded keys are not equal")
+		}
 	}
 }
