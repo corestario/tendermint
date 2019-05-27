@@ -35,7 +35,7 @@ type BLSKey struct {
 
 type BLSKeyJSON struct {
 	N              int    `json:"n"`
-	MPubKeyCommits string `json:"musterPubKey"`
+	MPubKeyCommits string `json:"musterPubKey"` // it's parts of MasterPubKey (type point)
 	PubShare       string `json:"pubShare"`
 	PrivShare      string `json:"privShare"`
 }
@@ -67,15 +67,15 @@ func (blsJSON *BLSKeyJSON) Deserialize() (*BLSKey, error) {
 		return nil, fmt.Errorf("failed to base64-decode commits of masterPubKey: %v", err)
 	}
 	mPubCommitsDec := gob.NewDecoder(bytes.NewBuffer(masterPubBytes))
-	MPubKeyCommits := make([]kyber.Point, blsJSON.N)
+	mPubKeyCommits := make([]kyber.Point, blsJSON.N)
 	g2 := bn256.NewSuite().G2()
 	for i := 0; i < blsJSON.N; i++ {
-		MPubKeyCommits[i] = g2.Point()
+		mPubKeyCommits[i] = g2.Point()
 	}
-	if err := mPubCommitsDec.Decode(&MPubKeyCommits); err != nil {
+	if err := mPubCommitsDec.Decode(&mPubKeyCommits); err != nil {
 		return nil, fmt.Errorf("failed to decode commits of masterPubKey: %v", err)
 	}
-	MPubKey := share.NewPubPoly(bn256.NewSuite().G2(), nil, MPubKeyCommits)
+	mPubKey := share.NewPubPoly(g2, nil, mPubKeyCommits)
 	shareJSON := &BLSShareJSON{blsJSON.PubShare, blsJSON.PrivShare}
 	share, err := shareJSON.Deserialize()
 	if err != nil {
@@ -83,7 +83,7 @@ func (blsJSON *BLSKeyJSON) Deserialize() (*BLSKey, error) {
 	}
 	return &BLSKey{
 		N:            blsJSON.N,
-		MasterPubKey: MPubKey,
+		MasterPubKey: mPubKey,
 		Share:        share,
 	}, nil
 }
