@@ -782,8 +782,8 @@ func (n *Node) BlockStore() *bc.BlockStore {
 }
 
 // KeyStore returns the Node's KeyStore.
-func (n *Node) KeyStore() *ks.KeyStore {
-	return n.KeyStore
+func (n *Node) KeyStore() *types.KeyStore {
+	return n.keyStore
 }
 
 // ConsensusState returns the Node's ConsensusState.
