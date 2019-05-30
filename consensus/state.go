@@ -185,6 +185,7 @@ func NewConsensusState(
 	for _, option := range options {
 		option(cs)
 	}
+
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
@@ -288,6 +289,15 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 
 func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
 	cs.dkg.SetVerifier(verifier)
+}
+
+func (cs *ConsensusState) SetDKGVerifierCallback(f func(v types.Verifier)) {
+	d := (cs.dkg).(*dkgState)
+	d.verifierCallback = f
+}
+
+func (cs *ConsensusState) GetDKGQueueLen() int {
+	return len(cs.dkg.MsgQueue())
 }
 
 func (cs *ConsensusState) StartDKG() error {
@@ -647,28 +657,44 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		rs := cs.RoundState
 		var mi msgInfo
 
-		select {
-		case msg := <-cs.dkg.MsgQueue():
-			cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
-		case <-cs.txNotifier.TxsAvailable():
-			cs.handleTxsAvailable()
-		case mi = <-cs.peerMsgQueue:
-			cs.wal.Write(mi)
-			// handles proposals, block parts, votes
-			// may generate internal events (votes, complete proposals, 2/3 majorities)
-			cs.handleMsg(mi)
-		case mi = <-cs.internalMsgQueue:
-			cs.wal.WriteSync(mi) // NOTE: fsync
-			// handles proposals, block parts, votes
-			cs.handleMsg(mi)
-		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
-			cs.wal.Write(ti)
-			// if the timeout is relevant to the rs
-			// go to the next step
-			cs.handleTimeout(ti, rs)
-		case <-cs.Quit():
-			onExit(cs)
-			return
+		if cs.dkg.Verifier() != nil {
+			select {
+			case msg := <-cs.dkg.MsgQueue():
+				cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			case <-cs.txNotifier.TxsAvailable():
+				cs.handleTxsAvailable()
+			case mi = <-cs.peerMsgQueue:
+				cs.wal.Write(mi)
+				// handles proposals, block parts, votes
+				// may generate internal events (votes, complete proposals, 2/3 majorities)
+				cs.handleMsg(mi)
+			case mi = <-cs.internalMsgQueue:
+				cs.wal.WriteSync(mi) // NOTE: fsync
+				// handles proposals, block parts, votes
+				cs.handleMsg(mi)
+			case ti := <-cs.timeoutTicker.Chan(): // tockChan:
+				cs.wal.Write(ti)
+				// if the timeout is relevant to the rs
+				// go to the next step
+				cs.handleTimeout(ti, rs)
+			case <-cs.Quit():
+				onExit(cs)
+				return
+			}
+		} else {
+			select {
+			case msg := <-cs.dkg.MsgQueue():
+				cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			case mi = <-cs.peerMsgQueue:
+				cs.wal.Write(mi)
+				// handles proposals, block parts, votes
+				// may generate internal events (votes, complete proposals, 2/3 majorities)
+				cs.handleMsg(mi)
+			case <-cs.Quit():
+				onExit(cs)
+				return
+
+			}
 		}
 	}
 }
@@ -1187,6 +1213,9 @@ func (cs *ConsensusState) enterPrecommitWait(height int64, round int) {
 
 // Enter: +2/3 precommits for block
 func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
+	if cs.dkg.Verifier() == nil {
+		return
+	}
 	logger := cs.Logger.With("height", height, "commitRound", commitRound)
 
 	if cs.Height != height || cstypes.RoundStepCommit <= cs.Step {
@@ -1276,6 +1305,10 @@ func (cs *ConsensusState) tryFinalizeCommit(height int64) {
 func (cs *ConsensusState) finalizeCommit(height int64) {
 	if cs.Height != height || cs.Step != cstypes.RoundStepCommit {
 		cs.Logger.Debug(fmt.Sprintf("finalizeCommit(%v): Invalid args. Current step: %v/%v/%v", height, cs.Height, cs.Round, cs.Step))
+		return
+	}
+
+	if cs.dkg.Verifier() == nil {
 		return
 	}
 
@@ -1586,17 +1619,19 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
-	if vote.Type == types.PrecommitType {
-		var (
-			prevBlockData = cs.getPreviousBlock().RandomData
-			validatorAddr = vote.ValidatorAddress.String()
-		)
-		if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
-			return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
-				err, validatorAddr, prevBlockData, vote.BLSSignature)
+	if cs.dkg.Verifier() != nil {
+		if vote.Type == types.PrecommitType {
+			var (
+				prevBlockData = cs.getPreviousBlock().RandomData
+				validatorAddr = vote.ValidatorAddress.String()
+			)
+
+			if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+				return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
+					err, validatorAddr, prevBlockData, vote.BLSSignature)
+			}
 		}
 	}
-
 	height := cs.Height
 	added, err = cs.Votes.AddVote(vote, peerID)
 	if !added {

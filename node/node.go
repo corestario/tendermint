@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tendermint/tendermint/libs/events"
@@ -47,6 +48,9 @@ import (
 )
 
 //------------------------------------------------------------------------------
+
+// RestartDKGDefaultDuration defines time between DKG restarts when DKG starts on chain start
+const RestartDKGDefaultDuration = time.Millisecond * 1000
 
 // DBContext specifies config information for loading a new DB.
 type DBContext struct {
@@ -321,23 +325,27 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
-	fmt.Println("load bls from", config.BLSKeyFile())
-	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
-	}
+	var verifier types.Verifier
+	if !config.Consensus.StartDKGOnChainStart {
+		fmt.Println("load bls from", config.BLSKeyFile())
+		blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
+		}
 
-	keypair, err := blsShare.Deserialize()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keypair: %v", err)
-	}
-	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
+		keypair, err := blsShare.Deserialize()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load keypair: %v", err)
+		}
+		masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+		}
 
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
-
+		verifier = types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+	} else {
+		fmt.Println("bls will be generated on chain start")
+	}
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
@@ -549,27 +557,18 @@ func NewNode(config *cfg.Config,
 		indexerService:   indexerService,
 		eventBus:         eventBus,
 	}
-	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 
-	if config.Consensus.StartDKGOnChainStart && state.LastBlockHeight == 0 {
-		err = node.consensusState.StartDKG()
-		if err != nil {
-			return nil, err
+	if config.Consensus.StartDKGOnChainStart {
+		if err := node.generateVerifier(); err != nil {
+			return nil, fmt.Errorf("failed to generate verifier: %v", err)
 		}
 	}
-
+	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 	return node, nil
 }
 
-// OnStart starts the Node. It implements cmn.Service.
-func (n *Node) OnStart() error {
-	now := tmtime.Now()
-	genTime := n.genesisDoc.GenesisTime
-	if genTime.After(now) {
-		n.Logger.Info("Genesis time is in the future. Sleeping until then...", "genTime", genTime)
-		time.Sleep(genTime.Sub(now))
-	}
-
+// onStart contains common functions for both with DKG generation on start and without it
+func (n *Node) onStart() error {
 	err := n.eventBus.Start()
 	if err != nil {
 		return err
@@ -577,16 +576,6 @@ func (n *Node) OnStart() error {
 
 	// Add private IDs to addrbook to block those peers being added
 	n.addrBook.AddPrivateIDs(splitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
-
-	// Start the RPC server before the P2P server
-	// so we can eg. receive txs for the first block
-	if n.config.RPC.ListenAddress != "" {
-		listeners, err := n.startRPC()
-		if err != nil {
-			return err
-		}
-		n.rpcListeners = listeners
-	}
 
 	if n.config.Instrumentation.Prometheus &&
 		n.config.Instrumentation.PrometheusListenAddr != "" {
@@ -612,10 +601,87 @@ func (n *Node) OnStart() error {
 
 	// Always connect to persistent peers
 	if n.config.P2P.PersistentPeers != "" {
-		err = n.sw.DialPeersAsync(n.addrBook, splitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "), true)
+		err := n.sw.DialPeersAsync(n.addrBook, splitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "), true)
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// generateVerifier starts DKG on chain start
+func (n *Node) generateVerifier() error {
+	// can not start rpc yet
+	if err := n.onStart(); err != nil {
+		return err
+	}
+
+	var verifier types.Verifier
+	var mu sync.RWMutex
+	n.consensusState.SetDKGVerifierCallback(func(v types.Verifier) {
+		mu.Lock()
+		defer mu.Unlock()
+		n.bcReactor.SetVerifier(v)
+		n.consensusState.SetVerifier(v)
+		verifier = v
+	})
+	if err := n.consensusState.StartDKG(); err != nil {
+		return err
+	}
+
+	duration := n.config.Consensus.RestartDKGSleepDuration
+	if duration == 0 {
+		duration = RestartDKGDefaultDuration
+	}
+
+	tickerDKG := time.NewTicker(duration)
+	defer tickerDKG.Stop()
+	for {
+		select {
+		case <-tickerDKG.C:
+			mu.RLock()
+			if verifier != nil {
+				mu.RUnlock()
+				return nil
+			}
+			mu.RUnlock()
+			// check not to restart dkg too often
+			if n.consensusState.GetDKGQueueLen() == 0 {
+				if err := n.consensusState.StartDKG(); err != nil {
+					return err
+				}
+			}
+		default:
+			mu.RLock()
+			if verifier != nil {
+				mu.RUnlock()
+				return nil
+			}
+			mu.RUnlock()
+		}
+	}
+}
+
+// OnStart starts the Node. It implements cmn.Service.
+func (n *Node) OnStart() error {
+	now := tmtime.Now()
+	genTime := n.genesisDoc.GenesisTime
+	if genTime.After(now) {
+		n.Logger.Info("Genesis time is in the future. Sleeping until then...", "genTime", genTime)
+		time.Sleep(genTime.Sub(now))
+	}
+
+	if !n.config.Consensus.StartDKGOnChainStart {
+		if err := n.onStart(); err != nil {
+			return err
+		}
+	}
+	if n.config.RPC.ListenAddress != "" {
+		listeners, err := n.startRPC()
+		if err != nil {
+			return err
+		}
+		n.rpcListeners = listeners
 	}
 
 	// start tx indexer
@@ -856,7 +922,7 @@ func makeNodeInfo(
 		Version:         version.TMCoreSemVer,
 		Channels: []byte{
 			bc.BlockchainChannel,
-			cs.StateChannel, cs.DataChannel, cs.VoteChannel, cs.VoteSetBitsChannel,
+			cs.StateChannel, cs.DataChannel, cs.VoteChannel, cs.VoteSetBitsChannel, cs.DKGChannel,
 			mempl.MempoolChannel,
 			evidence.EvidenceChannel,
 		},

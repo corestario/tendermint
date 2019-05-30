@@ -626,7 +626,8 @@ type ConsensusConfig struct {
 	BlockTimeIota   time.Duration `mapstructure:"blocktime_iota"`
 	DKGRoundTimeout time.Duration `mapstructure:"dkg_round_timeout"`
 
-	StartDKGOnChainStart bool `mapstructure:"start_dkg_on_chain_start"`
+	StartDKGOnChainStart    bool          `mapstructure:"start_dkg_on_chain_start"`
+	RestartDKGSleepDuration time.Duration `mapstructure:"restart_dkg_sleep_duration"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service
