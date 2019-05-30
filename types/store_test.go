@@ -2,9 +2,10 @@ package types
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
 	"testing"
 
-	cfg "github.com/tendermint/tendermint/config"
 	dbm "github.com/tendermint/tendermint/libs/db"
 	"go.dedis.ch/kyber/pairing/bn256"
 )
@@ -65,9 +66,13 @@ func (share1 *BLSShare) IsEqual(share2 *BLSShare) bool {
 
 func TestSaveLoadBLSKey(t *testing.T) {
 	//set keyStore
-	config := cfg.ResetTestRoot("node_node_test")
-	dbType := dbm.DBBackendType(config.DBBackend)
-	keyStoreDB := dbm.NewDB("keyStore", dbType, config.DBDir())
+	backend := "leveldb"
+	dirname, err := ioutil.TempDir("", fmt.Sprintf("test_keystore_%s_", backend))
+	if err != nil {
+		t.Errorf("Temporary directory wasn't created")
+	}
+	dbType := dbm.DBBackendType(backend)
+	keyStoreDB := dbm.NewDB("keyStore", dbType, dirname)
 	keyStore := NewKeyStore(keyStoreDB)
 
 	//set BLSKey for saving to the keyStore
