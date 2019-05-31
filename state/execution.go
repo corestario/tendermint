@@ -464,6 +464,7 @@ func updateState(
 	}
 
 	if state.HeightToUpdateValidators == header.Height {
+		// Change results from this height but only applies to the next next height.
 		lastHeightValsChanged = header.Height + 1 + 1
 		nValSet = state.ValidatorsAfterOffChainDKG.Copy()
 		state.ValidatorsAfterOffChainDKG = nil
