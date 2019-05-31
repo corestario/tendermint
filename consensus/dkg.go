@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	errDKGVerifierNotReady = errors.New("verifier not ready yet")
+	ErrDKGVerifierNotReady = errors.New("verifier not ready yet")
 )
 
 type dkgState struct {
@@ -162,7 +162,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	}
 
 	verifier, err := dealer.GetVerifier()
-	if err == errDKGVerifierNotReady {
+	if err == ErrDKGVerifierNotReady {
 		dkg.Logger.Debug("dkgState: verifier not ready")
 		return
 	}

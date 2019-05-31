@@ -8,6 +8,8 @@ import (
 	"sort"
 
 	"encoding/hex"
+	"math"
+
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
@@ -17,7 +19,6 @@ import (
 	"go.dedis.ch/kyber/share"
 	dkg "go.dedis.ch/kyber/share/dkg/rabin"
 	vss "go.dedis.ch/kyber/share/vss/rabin"
-	"math"
 )
 
 type Dealer interface {
@@ -741,7 +742,7 @@ func (d *DKGDealer) ProcessReconstructCommits() (error, bool) {
 
 func (d *DKGDealer) GetVerifier() (types.Verifier, error) {
 	if d.instance == nil || !d.instance.Finished() {
-		return nil, errDKGVerifierNotReady
+		return nil, ErrDKGVerifierNotReady
 	}
 
 	distKeyShare, err := d.instance.DistKeyShare()
