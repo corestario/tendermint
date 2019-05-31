@@ -167,7 +167,6 @@ type Node struct {
 	txIndexer        txindex.TxIndexer
 	indexerService   *txindex.IndexerService
 	prometheusSrv    *http.Server
-	keyStore         *types.KeyStore
 }
 
 // NewNode returns a new, ready to go, Tendermint Node.
@@ -179,12 +178,6 @@ func NewNode(config *cfg.Config,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
 	logger log.Logger) (*Node, error) {
-	//Get KeyStore
-	keyStoreDB, err := dbProvider(&DBContext{"keystore", config})
-	if err != nil {
-		return nil, err
-	}
-	keyStore := types.NewKeyStore(keyStoreDB)
 
 	// Get BlockStore
 	blockStoreDB, err := dbProvider(&DBContext{"blockstore", config})
@@ -556,7 +549,6 @@ func NewNode(config *cfg.Config,
 		txIndexer:        txIndexer,
 		indexerService:   indexerService,
 		eventBus:         eventBus,
-		keyStore:         keyStore,
 	}
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 	return node, nil
@@ -779,11 +771,6 @@ func (n *Node) Switch() *p2p.Switch {
 // BlockStore returns the Node's BlockStore.
 func (n *Node) BlockStore() *bc.BlockStore {
 	return n.blockStore
-}
-
-// KeyStore returns the Node's KeyStore.
-func (n *Node) KeyStore() *types.KeyStore {
-	return n.keyStore
 }
 
 // ConsensusState returns the Node's ConsensusState.
