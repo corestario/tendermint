@@ -15,7 +15,7 @@ LINT_FLAGS = --exclude '.*\.pb\.go' --exclude 'vendor/*' --vendor --deadline=600
 
 all: check build test install
 
-check: check_tools get_vendor_deps
+check: check_tools
 
 ########################################
 ### Build Tendermint
@@ -89,11 +89,6 @@ get_dev_tools:
 update_tools:
 	@echo "--> Updating tools"
 	./scripts/get_tools.sh
-
-#Update dependencies
-get_vendor_deps:
-	@echo "--> Running dep"
-	@dep ensure
 
 #For ABCI and libs
 get_protoc:
@@ -197,7 +192,6 @@ test_p2p:
 test_integrations:
 	make build_docker_test_image
 	make get_tools
-	make get_vendor_deps
 	make install
 	make test_cover
 	make test_apps
@@ -344,5 +338,5 @@ build-slate:
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
 # https://www.gnu.org/software/make/manual/html_node/Phony-Targets.html
-.PHONY: check build build_race build_abci dist install install_abci check_dep check_tools get_tools get_dev_tools update_tools get_vendor_deps draw_deps get_protoc protoc_abci protoc_libs gen_certs clean_certs grpc_dbserver test_cover test_apps test_persistence test_p2p test test_race test_integrations test_release test100 vagrant_test fmt rpc-docs build-linux localnet-start localnet-stop build-docker build-docker-localnode sentry-start sentry-config sentry-stop build-slate protoc_grpc protoc_all build_c install_c bench
+.PHONY: check build build_race build_abci dist install install_abci check_dep check_tools get_tools get_dev_tools update_tools draw_deps get_protoc protoc_abci protoc_libs gen_certs clean_certs grpc_dbserver test_cover test_apps test_persistence test_p2p test test_race test_integrations test_release test100 vagrant_test fmt rpc-docs build-linux localnet-start localnet-stop build-docker build-docker-localnode sentry-start sentry-config sentry-stop build-slate protoc_grpc protoc_all build_c install_c bench
 
