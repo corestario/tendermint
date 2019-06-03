@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"io"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/events"
 
 	"github.com/pkg/errors"
 

@@ -96,6 +96,11 @@ func (sc *SignerRemote) SignVote(chainID string, vote *types.Vote) error {
 	return nil
 }
 
+func (sc *SignerRemote) SignDKGData(data *types.DKGData) error {
+	// TODO: @programmer10110 implement this.
+	return nil
+}
+
 // SignProposal implements PrivValidator.
 func (sc *SignerRemote) SignProposal(chainID string, proposal *types.Proposal) error {
 	err := writeMsg(sc.conn, &SignProposalRequest{Proposal: proposal})

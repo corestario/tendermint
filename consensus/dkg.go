@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -113,7 +112,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 		dealer = dkg.newDKGDealer(validators, dkg.privValidator, dkg.sendSignedDKGMessage, dkg.evsw, dkg.Logger)
 		dkg.dkgRoundToDealer[msg.RoundID] = dealer
 		if err := dealer.Start(); err != nil {
-			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
+			panic(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
 		}
 	}
 	if dealer == nil {
@@ -241,7 +240,7 @@ func (dkg *dkgState) CheckDKGTime(height int64, validators *types.ValidatorSet) 
 
 	if height > 1 && height%dkg.dkgNumBlocks == 0 {
 		if err := dkg.startDKGRound(validators); err != nil {
-			common.PanicSanity(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
+			panic(fmt.Sprintf("failed to start a dealer (round %d): %v", dkg.dkgRoundID, err))
 		}
 	}
 }

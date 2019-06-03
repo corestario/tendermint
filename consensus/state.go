@@ -3,22 +3,15 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"github.com/tendermint/tendermint/crypto"
 	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/fail"
-	"github.com/tendermint/tendermint/libs/log"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
-	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
+	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/fail"
@@ -1253,7 +1246,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 
 	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
 	if err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Failed to recover random data from votes: %v", err))
+		panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
 	cs.Logger.Info("Generated random data", "rand_data", randomData)
 	// TODO @oopcode: check if this is a possible situation.
@@ -1326,7 +1319,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	prevBlock := cs.getPreviousBlock()
 	if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
-		cmn.PanicSanity(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
+		panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
 	}
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)

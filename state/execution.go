@@ -3,7 +3,6 @@ package state
 import (
 	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	abci "github.com/tendermint/tendermint/abci/types"

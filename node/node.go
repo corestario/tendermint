@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -16,7 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
-
 	amino "github.com/tendermint/go-amino"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/blockchain"
@@ -28,6 +26,7 @@ import (
 	"github.com/tendermint/tendermint/evidence"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	dbm "github.com/tendermint/tendermint/libs/db"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -332,35 +331,16 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
-
-	fmt.Println("load bls from", config.BLSKeyFile())
-	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
-	}
-
-	keypair, err := blsShare.Deserialize()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keypair: %v", err)
-	}
-	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
-
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
-
-	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
-	bcReactor.SetLogger(logger.With("module", "blockchain"))
+	consensusLogger log.Logger,
+	verifier types.Verifier,
+	dkgNumBlocks int64) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
 
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 	dkg := cs.NewDKG(
 		evsw,
 		cs.WithVerifier(verifier),
-		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
+		cs.WithDKGNumBlocks(dkgNumBlocks),
 		cs.WithLogger(consensusLogger.With("dkg")),
 		cs.WithPVKey(privValidator))
 
@@ -598,15 +578,35 @@ func NewNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
+	fmt.Println("load bls from", config.BLSKeyFile())
+	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
+	}
+
+	keypair, err := blsShare.Deserialize()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load keypair: %v", err)
+	}
+	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+	}
+
+	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+
 	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	// Make ConsensusReactor
 	consensusReactor, consensusState := createConsensusReactor(
 		config, state, blockExec, blockStore, mempool, evidencePool,
-		privValidator, csMetrics, fastSync, eventBus, consensusLogger,
+		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to createConsensusReactor: %v", err)
+	}
 
 	nodeInfo, err := makeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
 	if err != nil {

@@ -86,6 +86,10 @@ func (ve *SignerValidatorEndpoint) SignVote(chainID string, vote *types.Vote) er
 	return ve.signer.SignVote(chainID, vote)
 }
 
+func (ve *SignerValidatorEndpoint) SignDKGData(data *types.DKGData) error {
+	return ve.signer.SignDKGData(data)
+}
+
 // SignProposal implements PrivValidator.
 func (ve *SignerValidatorEndpoint) SignProposal(chainID string, proposal *types.Proposal) error {
 	ve.mtx.Lock()
