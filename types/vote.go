@@ -52,12 +52,22 @@ type Vote struct {
 	Type             SignedMsgType `json:"type"`
 	Height           int64         `json:"height"`
 	Round            int           `json:"round"`
-	Timestamp        time.Time     `json:"timestamp"`
 	BlockID          BlockID       `json:"block_id"` // zero if vote is nil.
+	Timestamp        time.Time     `json:"timestamp"`
 	ValidatorAddress Address       `json:"validator_address"`
 	ValidatorIndex   int           `json:"validator_index"`
 	Signature        []byte        `json:"signature"`
 	BLSSignature     []byte        `json:"bls_signature"`
+}
+
+// CommitSig converts the Vote to a CommitSig.
+// If the Vote is nil, the CommitSig will be nil.
+func (vote *Vote) CommitSig() *CommitSig {
+	if vote == nil {
+		return nil
+	}
+	cs := CommitSig(*vote)
+	return &cs
 }
 
 func (vote *Vote) SignBytes(chainID string) []byte {
@@ -84,7 +94,7 @@ func (vote *Vote) String() string {
 	case PrecommitType:
 		typeString = "Precommit"
 	default:
-		cmn.PanicSanity("Unknown vote type")
+		panic("Unknown vote type")
 	}
 
 	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s BLSSignature: %+v}",
@@ -128,6 +138,11 @@ func (vote *Vote) ValidateBasic() error {
 
 	if err := vote.BlockID.ValidateBasic(); err != nil {
 		return fmt.Errorf("Wrong BlockID: %v", err)
+	}
+	// BlockID.ValidateBasic would not err if we for instance have an empty hash but a
+	// non-empty PartsSetHeader:
+	if !vote.BlockID.IsZero() && !vote.BlockID.IsComplete() {
+		return fmt.Errorf("BlockID must be either empty or complete, got: %v", vote.BlockID)
 	}
 	if len(vote.ValidatorAddress) != crypto.AddressSize {
 		return fmt.Errorf("Expected ValidatorAddress size to be %d bytes, got %d bytes",

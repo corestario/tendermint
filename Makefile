@@ -1,17 +1,16 @@
 GOTOOLS = \
 	github.com/mitchellh/gox \
 	github.com/golang/dep/cmd/dep \
-	github.com/alecthomas/gometalinter \
+	github.com/golangci/golangci-lint/cmd/golangci-lint \
 	github.com/gogo/protobuf/protoc-gen-gogo \
 	github.com/square/certstrap
 GOBIN?=${GOPATH}/bin
 PACKAGES=$(shell go list ./...)
+OUTPUT?=build/tendermint
 
 INCLUDE = -I=. -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf
 BUILD_TAGS?='tendermint'
 BUILD_FLAGS = -ldflags "-X github.com/tendermint/tendermint/version.GitCommit=`git rev-parse --short=8 HEAD`"
-
-LINT_FLAGS = --exclude '.*\.pb\.go' --exclude 'vendor/*' --vendor --deadline=600s
 
 all: check build test install
 
@@ -21,19 +20,19 @@ check: check_tools
 ### Build Tendermint
 
 build:
-	CGO_ENABLED=0 go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/
+	CGO_ENABLED=0 go build $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o $(OUTPUT) ./cmd/tendermint/
 
 build_c:
-	CGO_ENABLED=1 go build $(BUILD_FLAGS) -tags "$(BUILD_TAGS) gcc" -o build/tendermint ./cmd/tendermint/
+	CGO_ENABLED=1 go build $(BUILD_FLAGS) -tags "$(BUILD_TAGS) cleveldb" -o $(OUTPUT) ./cmd/tendermint/
 
 build_race:
-	CGO_ENABLED=0 go build -race $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint
+	CGO_ENABLED=0 go build -race $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o $(OUTPUT) ./cmd/tendermint
 
 install:
 	go install  $(BUILD_FLAGS) -tags $(BUILD_TAGS) ./cmd/tendermint/
 
 install_c:
-	CGO_ENABLED=1 go install  $(BUILD_FLAGS) -tags "$(BUILD_TAGS) gcc" ./cmd/tendermint
+	CGO_ENABLED=1 go install  $(BUILD_FLAGS) -tags "$(BUILD_TAGS) cleveldb" ./cmd/tendermint
 
 ########################################
 ### Protobuf
@@ -82,10 +81,6 @@ get_tools:
 	@echo "--> Installing tools"
 	./scripts/get_tools.sh
 
-get_dev_tools:
-	@echo "--> Downloading linters (this may take awhile)"
-	$(GOPATH)/src/github.com/alecthomas/gometalinter/scripts/install.sh -b $(GOBIN)
-
 update_tools:
 	@echo "--> Updating tools"
 	./scripts/get_tools.sh
@@ -110,7 +105,7 @@ draw_deps:
 
 get_deps_bin_size:
 	@# Copy of build recipe with additional flags to perform binary size analysis
-	$(eval $(shell go build -work -a $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o build/tendermint ./cmd/tendermint/ 2>&1))
+	$(eval $(shell go build -work -a $(BUILD_FLAGS) -tags $(BUILD_TAGS) -o $(OUTPUT) ./cmd/tendermint/ 2>&1))
 	@find $(WORK) -type f -name "*.a" | xargs -I{} du -hxs "{}" | sort -rh | sed -e s:${WORK}/::g > deps_bin_size.log
 	@echo "Results can be found here: $(CURDIR)/deps_bin_size.log"
 
@@ -132,7 +127,7 @@ clean_certs:
 	rm -f db/remotedb/::.crt db/remotedb/::.key
 
 test_libs: gen_certs
-	go test -tags gcc $(PACKAGES)
+	go test -tags clevedb boltdb $(PACKAGES)
 	make clean_certs
 
 grpc_dbserver:
@@ -216,17 +211,26 @@ test:
 	@echo "--> Running go test"
 	@go test -p 1 $(PACKAGES)
 
-test_verbose:
-	@echo "--> Running go test (verbose)"
-	@go test -v -p 1 $(PACKAGES)
-
 test_race:
 	@echo "--> Running go test --race"
 	@go test -p 1 -v -race $(PACKAGES)
 
-### benchmarks
-bench:
-	go run ./bench/bench.go -server="http://142.93.184.168:26657" -writetxs=80
+# uses https://github.com/sasha-s/go-deadlock/ to detect potential deadlocks
+test_with_deadlock:
+	make set_with_deadlock
+	make test
+	make cleanup_after_test_with_deadlock
+
+set_with_deadlock:
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 sed -i.bak 's/sync.RWMutex/deadlock.RWMutex/'
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 sed -i.bak 's/sync.Mutex/deadlock.Mutex/'
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 goimports -w
+
+# cleanes up after you ran test_with_deadlock
+cleanup_after_test_with_deadlock:
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 sed -i.bak 's/deadlock.RWMutex/sync.RWMutex/'
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 sed -i.bak 's/deadlock.Mutex/sync.Mutex/'
+	find . -name "*.go" | grep -v "vendor/" | xargs -n 1 goimports -w
 
 ########################################
 ### Formatting, linting, and vetting
@@ -234,38 +238,9 @@ bench:
 fmt:
 	@go fmt ./...
 
-metalinter:
+lint:
 	@echo "--> Running linter"
-	@gometalinter $(LINT_FLAGS) --disable-all  \
-		--enable=deadcode \
-		--enable=gosimple \
-	 	--enable=misspell \
-		--enable=safesql \
-		./...
-		#--enable=gas \
-		#--enable=maligned \
-		#--enable=dupl \
-		#--enable=errcheck \
-		#--enable=goconst \
-		#--enable=gocyclo \
-		#--enable=goimports \
-		#--enable=golint \ <== comments on anything exported
-		#--enable=gotype \
-	 	#--enable=ineffassign \
-	   	#--enable=interfacer \
-	   	#--enable=megacheck \
-	   	#--enable=staticcheck \
-	   	#--enable=structcheck \
-	   	#--enable=unconvert \
-	   	#--enable=unparam \
-		#--enable=unused \
-	   	#--enable=varcheck \
-		#--enable=vet \
-		#--enable=vetshadow \
-
-metalinter_all:
-	@echo "--> Running linter (all)"
-	gometalinter $(LINT_FLAGS) --enable-all --disable=lll ./...
+	@golangci-lint run
 
 DESTINATION = ./index.html.md
 
@@ -281,7 +256,7 @@ check_dep:
 ### Docker image
 
 build-docker:
-	cp build/tendermint DOCKER/tendermint
+	cp $(OUTPUT) DOCKER/tendermint
 	docker build --label=tendermint --tag="tendermint/tendermint" DOCKER
 	rm -rf DOCKER/tendermint
 
@@ -289,12 +264,11 @@ build-docker:
 ### Local testnet using docker
 
 # Build linux binary on other platforms
-build-linux:
+build-linux: get_tools get_vendor_deps
 	GOOS=linux GOARCH=amd64 $(MAKE) build
 
 build-docker-localnode:
-	cd networks/local
-	make
+	@cd networks/local && make
 
 # Run a $TESTNET_NODES-node testnet locally
 localnet-start:
@@ -338,5 +312,5 @@ build-slate:
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
 # https://www.gnu.org/software/make/manual/html_node/Phony-Targets.html
-.PHONY: check build build_race build_abci dist install install_abci check_dep check_tools get_tools get_dev_tools update_tools draw_deps get_protoc protoc_abci protoc_libs gen_certs clean_certs grpc_dbserver test_cover test_apps test_persistence test_p2p test test_race test_integrations test_release test100 vagrant_test fmt rpc-docs build-linux localnet-start localnet-stop build-docker build-docker-localnode sentry-start sentry-config sentry-stop build-slate protoc_grpc protoc_all build_c install_c bench
 
+.PHONY: check build build_race build_abci dist install install_abci check_tools get_tools update_tools draw_deps get_protoc protoc_abci protoc_libs gen_certs clean_certs grpc_dbserver test_cover test_apps test_persistence test_p2p test test_race test_integrations test_release test100 vagrant_test fmt rpc-docs build-linux localnet-start localnet-stop build-docker build-docker-localnode sentry-start sentry-config sentry-stop build-slate protoc_grpc protoc_all build_c install_c test_with_deadlock cleanup_after_test_with_deadlock lint

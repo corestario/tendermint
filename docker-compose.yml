@@ -8,10 +8,9 @@ services:
       - "26656-26657:26656-26657"
     environment:
       - ID=0
-      - LOG=tendermint.log
+      - LOG=${LOG:-tendermint.log}
     volumes:
       - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
     networks:
       localnet:
         ipv4_address: 192.167.10.2
@@ -20,13 +19,12 @@ services:
     container_name: node1
     image: "tendermint/localnode"
     ports:
-      - "26658-26659:26656-26657"
+      - "26659-26660:26656-26657"
     environment:
       - ID=1
-      - LOG=tendermint.log
+      - LOG=${LOG:-tendermint.log}
     volumes:
       - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
     networks:
       localnet:
         ipv4_address: 192.167.10.3
@@ -34,14 +32,13 @@ services:
   node2:
     container_name: node2
     image: "tendermint/localnode"
-    ports:
-      - "26660-26661:26656-26657"
     environment:
       - ID=2
-      - LOG=tendermint.log
+      - LOG=${LOG:-tendermint.log}
+    ports:
+      - "26661-26662:26656-26657"
     volumes:
       - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
     networks:
       localnet:
         ipv4_address: 192.167.10.4
@@ -49,14 +46,13 @@ services:
   node3:
     container_name: node3
     image: "tendermint/localnode"
-    ports:
-      - "26662-26663:26656-26657"
     environment:
       - ID=3
-      - LOG=tendermint.log
+      - LOG=${LOG:-tendermint.log}
+    ports:
+      - "26663-26664:26656-26657"
     volumes:
       - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
     networks:
       localnet:
         ipv4_address: 192.167.10.5

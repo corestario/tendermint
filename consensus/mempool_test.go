@@ -3,6 +3,7 @@ package consensus
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -10,12 +11,15 @@ import (
 
 	"github.com/tendermint/tendermint/abci/example/code"
 	abci "github.com/tendermint/tendermint/abci/types"
+	dbm "github.com/tendermint/tendermint/libs/db"
+	mempl "github.com/tendermint/tendermint/mempool"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 )
 
-func init() {
-	config = ResetConfig("consensus_mempool_test")
+// for testing
+func assertMempool(txn txNotifier) mempl.Mempool {
+	return txn.(mempl.Mempool)
 }
 
 // for testing
@@ -26,6 +30,7 @@ func assertMempool(txn txNotifier) sm.Mempool {
 func TestMempoolNoProgressUntilTxsAvailable(t *testing.T) {
 	testName := "consensus_mempool_txs_available_test"
 	config := ResetConfig(testName)
+	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
 	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
@@ -45,6 +50,7 @@ func TestMempoolNoProgressUntilTxsAvailable(t *testing.T) {
 func TestMempoolProgressAfterCreateEmptyBlocksInterval(t *testing.T) {
 	testName := "consensus_mempool_txs_available_test"
 	config := ResetConfig(testName)
+	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocksInterval = ensureTimeout
 	state, privVals := randGenesisState(1, false, 10)
 	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
@@ -61,6 +67,7 @@ func TestMempoolProgressAfterCreateEmptyBlocksInterval(t *testing.T) {
 func TestMempoolProgressInHigherRound(t *testing.T) {
 	testName := "consensus_mempool_txs_available_test"
 	config := ResetConfig(testName)
+	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
 	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
@@ -109,7 +116,9 @@ func deliverTxsRange(cs *ConsensusState, start, end int) {
 
 func TestMempoolTxConcurrentWithCommit(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusState(state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)("TestMempoolTxConcurrentWithCommit", 0), testSkipDKGNumBlocks)
+	blockDB := dbm.NewMemDB()
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)("TestMempoolTxConcurrentWithCommit", 0), testSkipDKGNumBlocks, blockDB)
+	sm.SaveState(blockDB, state)
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
 
@@ -120,9 +129,9 @@ func TestMempoolTxConcurrentWithCommit(t *testing.T) {
 	for nTxs := 0; nTxs < NTxs; {
 		ticker := time.NewTicker(time.Second * 30)
 		select {
-		case b := <-newBlockCh:
-			evt := b.(types.EventDataNewBlock)
-			nTxs += int(evt.Block.Header.NumTxs)
+		case msg := <-newBlockCh:
+			blockEvent := msg.Data().(types.EventDataNewBlock)
+			nTxs += int(blockEvent.Block.Header.NumTxs)
 		case <-ticker.C:
 			panic("Timed out waiting to commit blocks with transactions")
 		}
@@ -132,7 +141,9 @@ func TestMempoolTxConcurrentWithCommit(t *testing.T) {
 func TestMempoolRmBadTx(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
 	app := NewCounterApplication()
-	cs := newConsensusState(state, privVals[0], app, &types.MockVerifier{}, testSkipDKGNumBlocks)
+	blockDB := dbm.NewMemDB()
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], app, &types.MockVerifier{}, testSkipDKGNumBlocks, blockDB)
+	sm.SaveState(blockDB, state)
 
 	// increment the counter by 1
 	txBytes := make([]byte, 8)

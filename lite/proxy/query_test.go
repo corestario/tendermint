@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tendermint/tendermint/abci/example/kvstore"
+	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/lite"
 	certclient "github.com/tendermint/tendermint/lite/client"
 	nm "github.com/tendermint/tendermint/node"
@@ -21,6 +22,7 @@ import (
 
 var node *nm.Node
 var chainID = "tendermint_test" // TODO use from config.
+//nolint:unused
 var waitForEventTimeout = 5 * time.Second
 
 // TODO fix tests!!
@@ -32,8 +34,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	node.Stop()
-	node.Wait()
+	rpctest.StopTendermint(node)
 	os.Exit(code)
 }
 
@@ -43,6 +44,7 @@ func kvstoreTx(k, v []byte) []byte {
 
 // TODO: enable it after general proof format has been adapted
 // in abci/examples/kvstore.go
+//nolint:unused,deadcode
 func _TestAppProofs(t *testing.T) {
 	assert, require := assert.New(t), require.New(t)
 
@@ -93,6 +95,8 @@ func _TestAppProofs(t *testing.T) {
 	// verify a query before the tx block has no data (and valid non-exist proof)
 	bs, height, proof, err := GetWithProof(prt, k, brh-1, cl, cert)
 	require.NoError(err, "%#v", err)
+	require.NotNil(proof)
+	require.Equal(height, brh-1)
 	// require.NotNil(proof)
 	// TODO: Ensure that *some* keys will be there, ensuring that proof is nil,
 	// (currently there's a race condition)
@@ -145,12 +149,13 @@ func TestTxProofs(t *testing.T) {
 	require.NotNil(err)
 	require.Contains(err.Error(), "not found")
 
-	// Now let's check with the real tx hash.
+	// Now let's check with the real tx root hash.
 	key = types.Tx(tx).Hash()
 	res, err = cl.Tx(key, true)
 	require.NoError(err, "%#v", err)
 	require.NotNil(res)
-	err = res.Proof.Validate(key)
+	keyHash := merkle.SimpleHashFromByteSlices([][]byte{key})
+	err = res.Proof.Validate(keyHash)
 	assert.NoError(err, "%#v", err)
 
 	commit, err := GetCertifiedCommit(br.Height, cl, cert)

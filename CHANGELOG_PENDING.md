@@ -1,8 +1,6 @@
-## v0.29.0
+## v0.31.7
 
-*TBD*
-
-Special thanks to external contributors on this release:
+**
 
 ### BREAKING CHANGES:
 
