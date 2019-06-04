@@ -470,7 +470,6 @@ func createAddrBookAndSetOnSwitch(config *cfg.Config, sw *p2p.Switch,
 
 func createPEXReactorAndAddToSwitch(addrBook pex.AddrBook, config *cfg.Config,
 	sw *p2p.Switch, logger log.Logger) *pex.PEXReactor {
-
 	// TODO persistent peers ? so we can have their DNS addrs saved
 	pexReactor := pex.NewPEXReactor(addrBook,
 		&pex.PEXReactorConfig{
@@ -497,7 +496,6 @@ func NewNode(config *cfg.Config,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
 	logger log.Logger) (*Node, error) {
-
 	blockStore, stateDB, err := initDBs(config, dbProvider)
 	if err != nil {
 		return nil, err
@@ -588,13 +586,13 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}
-	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, state.Validators.Size())
+
+	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
 
 	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
-
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
@@ -648,7 +646,9 @@ func NewNode(config *cfg.Config,
 	}
 
 	if config.ProfListenAddress != "" {
-		go logger.Error("Profile server", "err", http.ListenAndServe(config.ProfListenAddress, nil))
+		go func() {
+			logger.Error("Profile server", "err", http.ListenAndServe(config.ProfListenAddress, nil))
+		}()
 	}
 
 	node := &Node{
