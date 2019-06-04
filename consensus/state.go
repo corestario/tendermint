@@ -139,12 +139,13 @@ type ConsensusState struct {
 }
 
 type DKG interface {
-	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
+	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) bool
 	CheckDKGTime(height int64, validators *types.ValidatorSet)
 	SetVerifier(verifier types.Verifier)
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
 	StartRoundsGC()
+	StartDKGRound(*types.ValidatorSet) error
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -538,7 +539,6 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 	}
 
 	// Reset fields based on state.
-	validators := state.Validators
 	lastPrecommits := (*types.VoteSet)(nil)
 	if cs.CommitRound > -1 && cs.Votes != nil {
 		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
@@ -564,7 +564,14 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 		cs.StartTime = cs.config.Commit(cs.CommitTime)
 	}
 
-	cs.Validators = validators
+	if state.HasValUpdates {
+		cs.Logger.Info("There is validators update! Starting off-chain DKG round")
+		cs.NextValidators = state.NextValidators.Copy()
+		state.NextValidators = state.Validators.Copy()
+		cs.dkg.StartDKGRound(cs.NextValidators)
+	}
+
+	cs.Validators = state.Validators
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
@@ -574,7 +581,7 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 	cs.ValidRound = -1
 	cs.ValidBlock = nil
 	cs.ValidBlockParts = nil
-	cs.Votes = cstypes.NewHeightVoteSet(state.ChainID, height, validators)
+	cs.Votes = cstypes.NewHeightVoteSet(state.ChainID, height, cs.Validators)
 	cs.CommitRound = -1
 	cs.LastCommit = lastPrecommits
 	cs.LastValidators = state.LastValidators
@@ -645,7 +652,12 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			if cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey()) {
+				if cs.NextValidators != nil && cs.state.ValidatorsAfterOffChainDKG != nil && !bytes.Equal(cs.NextValidators.Hash(), cs.state.ValidatorsAfterOffChainDKG.Hash()) {
+					cs.state.HeightToUpdateValidators = (cs.Height + BlocksAhead) - ((cs.Height + BlocksAhead) % 5)
+					cs.state.ValidatorsAfterOffChainDKG = cs.NextValidators.Copy()
+				}
+			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:

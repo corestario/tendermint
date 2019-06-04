@@ -84,6 +84,7 @@ type RoundState struct {
 	CommitRound        int                 `json:"commit_round"` //
 	LastCommit         *types.VoteSet      `json:"last_commit"`  // Last precommits at Height-1
 	LastValidators     *types.ValidatorSet `json:"last_validators"`
+	NextValidators     *types.ValidatorSet `json:"next_validators"` // ValidatorSet for usage after onValidatorsUpdate DKG round
 }
 
 // Compressed version of the RoundState for use in RPC

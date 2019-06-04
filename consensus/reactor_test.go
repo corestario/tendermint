@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"os"
 	"path"
 	"runtime"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/events"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
