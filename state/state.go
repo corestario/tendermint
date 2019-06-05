@@ -69,7 +69,10 @@ type State struct {
 	NextValidators              *types.ValidatorSet
 	Validators                  *types.ValidatorSet
 	LastValidators              *types.ValidatorSet
+	ValidatorsAfterOffChainDKG  *types.ValidatorSet
+	HeightToUpdateValidators    int64
 	LastHeightValidatorsChanged int64
+	HasValUpdates               bool
 
 	// Consensus parameters used for validating blocks.
 	// Changes returned by EndBlock and updated after Commit.

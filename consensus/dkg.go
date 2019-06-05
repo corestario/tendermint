@@ -110,14 +110,14 @@ func WithDKGDealerConstructor(newDealer DKGDealerConstructor) DKGOption {
 	}
 }
 
-func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) {
+func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) bool {
 	dkg.mtx.Lock()
 	defer dkg.mtx.Unlock()
 
 	dkgMsg, ok := mi.Msg.(*DKGDataMessage)
 	if !ok {
 		dkg.Logger.Info("dkgState: rejecting message (unknown type)", reflect.TypeOf(dkgMsg).Name())
-		return
+		return false
 	}
 
 	var msg = dkgMsg.Data
@@ -132,13 +132,13 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	}
 	if dealer == nil {
 		dkg.Logger.Info("dkgState: received message for inactive round:", "round", msg.RoundID)
-		return
+		return false
 	}
 	dkg.Logger.Info("dkgState: received message with signature:", "signature", hex.EncodeToString(dkgMsg.Data.Signature))
 
 	if err := dealer.VerifyMessage(*dkgMsg); err != nil {
 		dkg.Logger.Info("DKG: can't verify message:", "error", err.Error())
-		return
+		return false
 	}
 	dkg.Logger.Info("DKG: message verified")
 
@@ -172,19 +172,19 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 		dkg.Logger.Error("dkgState: failed to handle message", "error", err, "type", msg.Type)
 		dkg.slashDKGLosers(dealer.GetLosers())
 		dkg.dkgRoundToDealer[msg.RoundID] = nil
-		return
+		return false
 	}
 
 	verifier, err := dealer.GetVerifier()
 	if err == errDKGVerifierNotReady {
 		dkg.Logger.Debug("dkgState: verifier not ready")
-		return
+		return false
 	}
 	if err != nil {
 		dkg.Logger.Error("dkgState: verifier should be ready, but it's not ready:", err)
 		dkg.slashDKGLosers(dealer.GetLosers())
 		dkg.dkgRoundToDealer[msg.RoundID] = nil
-		return
+		return false
 	}
 
 	dkg.verifierOnce.Do(func() {
@@ -199,7 +199,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	dkg.nextVerifier = verifier
 	dkg.changeHeight = (height + BlocksAhead) - ((height + BlocksAhead) % 5)
 	dkg.evsw.FireEvent(types.EventDKGSuccessful, dkg.changeHeight)
-
+	return true
 }
 
 func (dkg *dkgState) StartRoundsGC() {

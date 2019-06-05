@@ -445,6 +445,8 @@ func updateState(
 	validatorUpdates []*types.Validator,
 ) (State, error) {
 
+	hasValUpdates := false
+
 	// Copy the valset so we can apply changes from EndBlock
 	// and update s.LastValidators and s.Validators.
 	nValSet := state.NextValidators.Copy()
@@ -452,12 +454,20 @@ func updateState(
 	// Update the validator set with the latest abciResponses.
 	lastHeightValsChanged := state.LastHeightValidatorsChanged
 	if len(validatorUpdates) > 0 {
+		hasValUpdates = true
 		err := updateValidators(nValSet, validatorUpdates)
 		if err != nil {
 			return state, fmt.Errorf("Error changing validator set: %v", err)
 		}
 		// Change results from this height but only applies to the next next height.
 		lastHeightValsChanged = header.Height + 1 + 1
+	}
+
+	if state.HeightToUpdateValidators == header.Height {
+		// Change results from this height but only applies to the next next height.
+		lastHeightValsChanged = header.Height + 1 + 1
+		nValSet = state.ValidatorsAfterOffChainDKG.Copy()
+		state.ValidatorsAfterOffChainDKG = nil
 	}
 
 	// Update validator proposer priority and set state variables.
@@ -493,6 +503,8 @@ func updateState(
 		Validators:                       state.NextValidators.Copy(),
 		LastValidators:                   state.Validators.Copy(),
 		LastHeightValidatorsChanged:      lastHeightValsChanged,
+		ValidatorsAfterOffChainDKG:       state.ValidatorsAfterOffChainDKG,
+		HasValUpdates:                    hasValUpdates,
 		ConsensusParams:                  nextParams,
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
 		LastResultsHash:                  abciResponses.ResultsHash(),
