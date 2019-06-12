@@ -26,7 +26,7 @@ The most suitable random beacon to satisfy constraints is BLS Threshold sigantur
 
 We expanded a precommit step in the Tendermint consensus:  
 
-![Arcade consensus](https://github.com/dgamingfoundation/tendermint/blob/add-description/docs/imgs/arcade_consensus.png?raw=true)
+![Arcade consensus](https://github.com/dgamingfoundation/tendermint/blob/dcr-random/docs/imgs/arcade_consensus.png?raw=true)
 
 That scheme, among other things, means that block proposer for the round selects txs in the block before the random number for the block is known. 
 
