@@ -347,31 +347,18 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				// don't punish (leave room for soft upgrades)
 				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 			}
-
-		case DKGChannel:
-			switch msg := msg.(type) {
-			case *DKGDataMessage:
-				conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
-			default:
-				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
-			}
-
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown chId %X", chID))
 		}
-	} else {
-		switch chID {
-		case DKGChannel:
-			switch msg := msg.(type) {
-			case *DKGDataMessage:
-				conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
-			default:
-				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
-			}
+	}
+	if chID == DKGChannel {
+		switch msg := msg.(type) {
+		case *DKGDataMessage:
+			conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
 		default:
+			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
 	}
-
 }
 
 // SetEventBus sets event bus.
