@@ -16,6 +16,7 @@ import (
 
 const (
 	ABCIEvidenceTypeDuplicateVote = "duplicate/vote"
+	ABCIEvidenceTypeDKGMessage    = "message/dkg"
 	ABCIEvidenceTypeMockGood      = "mock/good"
 )
 
@@ -156,6 +157,8 @@ func (tm2pb) Evidence(ev Evidence, valSet *ValidatorSet, evTime time.Time) abci.
 	switch ev.(type) {
 	case *DuplicateVoteEvidence:
 		evType = ABCIEvidenceTypeDuplicateVote
+	case *DKGMessageEvidence:
+		evType = ABCIEvidenceTypeDKGMessage
 	case MockGoodEvidence:
 		// XXX: not great to have test types in production paths ...
 		evType = ABCIEvidenceTypeMockGood
