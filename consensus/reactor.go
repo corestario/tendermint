@@ -347,6 +347,8 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				// don't punish (leave room for soft upgrades)
 				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 			}
+		case DKGChannel:
+			// this check is to avoid default
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown chId %X", chID))
 		}
