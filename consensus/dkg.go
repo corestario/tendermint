@@ -51,7 +51,12 @@ type dkgState struct {
 
 	Logger log.Logger
 	evsw   events.EventSwitch
-	evidencePool
+
+  verifierOnce     sync.Once
+	verifierMtx      sync.RWMutex
+	verifierCallback func(v types.Verifier)
+	
+  evidencePool
 }
 
 func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
@@ -199,6 +204,10 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 		dkg.dkgRoundToDealer[msg.RoundID] = nil
 		return false
 	}
+
+	dkg.verifierOnce.Do(func() {
+		dkg.verifierCallback(verifier)
+	})
 	dkg.Logger.Info("dkgState: verifier is ready, killing older rounds")
 	for roundID := range dkg.dkgRoundToDealer {
 		if roundID < msg.RoundID {
@@ -221,15 +230,17 @@ func (dkg *dkgState) StartRoundsGC() {
 		// have a stopper).
 		select {
 		case <-ticker.C:
-			dkg.Logger.Info("dkgState: looking for dead rounds", "active_rounds", len(dkg.dkgRoundToDealer))
-			for roundID, dealer := range dkg.dkgRoundToDealer {
-				// TODO: add Deactivate() and IsDeactivated() call to dealer interface.
-				if dealer != nil {
-					if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
-						dkg.mtx.Lock()
-						dkg.dkgRoundToDealer[roundID] = nil
-						dkg.mtx.Unlock()
-						dkg.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+			if dkg.Verifier() != nil {
+				dkg.Logger.Info("dkgState: looking for dead rounds", "active_rounds", len(dkg.dkgRoundToDealer))
+				for roundID, dealer := range dkg.dkgRoundToDealer {
+					// TODO: add Deactivate() and IsDeactivated() call to dealer interface.
+					if dealer != nil {
+						if time.Now().Sub(dealer.TS()) > dkg.roundTTL {
+							dkg.mtx.Lock()
+							dkg.dkgRoundToDealer[roundID] = nil
+							dkg.mtx.Unlock()
+							dkg.Logger.Info("DKG: round killed by timeout", "round_id", roundID)
+						}
 					}
 				}
 			}
@@ -303,10 +314,14 @@ func (dkg *dkgState) MsgQueue() chan msgInfo {
 }
 
 func (dkg *dkgState) Verifier() types.Verifier {
+	dkg.verifierMtx.RLock()
+	defer dkg.verifierMtx.RUnlock()
 	return dkg.verifier
 }
 
 func (dkg *dkgState) SetVerifier(v types.Verifier) {
+	dkg.verifierMtx.Lock()
+	defer dkg.verifierMtx.Unlock()
 	dkg.verifier = v
 }
 
