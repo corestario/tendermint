@@ -52,9 +52,11 @@ type dkgState struct {
 	Logger log.Logger
 	evsw   events.EventSwitch
 
-	verifierOnce     sync.Once
+  verifierOnce     sync.Once
 	verifierMtx      sync.RWMutex
 	verifierCallback func(v types.Verifier)
+	
+  evidencePool
 }
 
 func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
@@ -99,6 +101,10 @@ func WithLogger(l log.Logger) DKGOption {
 
 func WithPVKey(pv types.PrivValidator) DKGOption {
 	return func(d *dkgState) { d.privValidator = pv }
+}
+
+func WithEvidencePool(evPool evidencePool) DKGOption {
+	return func(d *dkgState) { d.evidencePool = evPool }
 }
 
 func WithDKGDealerConstructor(newDealer DKGDealerConstructor) DKGOption {
@@ -170,6 +176,18 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	}
 	if err != nil {
 		dkg.Logger.Error("dkgState: failed to handle message", "error", err, "type", msg.Type)
+		if dkg.evidencePool != nil {
+			ev := &types.DKGMessageEvidence{
+				PubKey:   pubKey,
+				Height_:  height,
+				Error:    err.Error(),
+				DataType: int16(msg.Type),
+			}
+			err := dkg.evidencePool.AddEvidence(ev)
+			if err != nil {
+				dkg.Logger.Error("dkgState: failed to add evidence to evidencePool", "error", err)
+			}
+		}
 		dkg.slashDKGLosers(dealer.GetLosers())
 		dkg.dkgRoundToDealer[msg.RoundID] = nil
 		return false

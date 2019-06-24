@@ -359,7 +359,8 @@ func NewNode(config *cfg.Config,
 		cs.WithDKGNumBlocks(genDoc.DKGNumBlocks),
 		cs.WithLogger(consensusLogger),
 		cs.WithPVKey(privValidator),
-		cs.WithDKGRoundTTL(config.Consensus.DKGRoundTimeout))
+		cs.WithDKGRoundTTL(config.Consensus.DKGRoundTimeout),
+		cs.WithEvidencePool(evidencePool))
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,

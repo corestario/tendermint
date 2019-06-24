@@ -68,6 +68,7 @@ type Evidence interface {
 func RegisterEvidences(cdc *amino.Codec) {
 	cdc.RegisterInterface((*Evidence)(nil), nil)
 	cdc.RegisterConcrete(&DuplicateVoteEvidence{}, "tendermint/DuplicateVoteEvidence", nil)
+	cdc.RegisterConcrete(&DKGMessageEvidence{}, "tendermint/DKGMessageEvidence", nil)
 }
 
 func RegisterMockEvidences(cdc *amino.Codec) {
@@ -273,6 +274,90 @@ func (e MockBadEvidence) String() string {
 }
 
 //-------------------------------------------
+
+type DKGMessageEvidence struct {
+	PubKey   crypto.PubKey
+	Height_  int64
+	DataType int16
+	Error    string
+}
+
+var _ Evidence = &DKGMessageEvidence{}
+
+// String returns a string representation of the evidence.
+func (dkge *DKGMessageEvidence) String() string {
+	s := ""
+	switch DKGDataType(dkge.DataType) {
+	case DKGPubKey:
+		s = "DKGPubKey"
+	case DKGDeal:
+		s = "DKGDeal"
+	case DKGResponse:
+		s = "DKGResponse"
+	case DKGJustification:
+		s = "DKGJustification"
+	case DKGCommits:
+		s = "DKGCommits"
+	case DKGComplaint:
+		s = "DKGComplaint"
+	case DKGReconstructCommit:
+		s = "DKGReconstructCommit"
+	default:
+		s = "Unknown"
+	}
+	return fmt.Sprintf("DKG state: %v; error: %v", s, dkge.Error)
+}
+
+// Height returns the height this evidence refers to.
+func (dkge *DKGMessageEvidence) Height() int64 {
+	return dkge.Height_
+}
+
+// Address returns the address of the validator.
+func (dkge *DKGMessageEvidence) Address() []byte {
+	return dkge.PubKey.Address()
+}
+
+// Hash returns the hash of the evidence.
+func (dkge *DKGMessageEvidence) Bytes() []byte {
+	return cdcEncode(dkge)
+}
+
+// Hash returns the hash of the evidence.
+func (dkge *DKGMessageEvidence) Hash() []byte {
+	return tmhash.Sum(cdcEncode(dkge))
+}
+
+// Verify returns an error if the two votes aren't conflicting.
+func (dkge *DKGMessageEvidence) Verify(chainID string, pubKey crypto.PubKey) error {
+	return nil
+}
+
+// Equal checks if two pieces of evidence are equal.
+func (dkge *DKGMessageEvidence) Equal(ev Evidence) bool {
+	if _, ok := ev.(*DKGMessageEvidence); !ok {
+		return false
+	}
+
+	// just check their hashes
+	dkgeHash := tmhash.Sum(cdcEncode(dkge))
+	evHash := tmhash.Sum(cdcEncode(ev))
+	return bytes.Equal(dkgeHash, evHash)
+}
+
+// ValidateBasic performs basic validation.
+func (dkge *DKGMessageEvidence) ValidateBasic() error {
+	if len(dkge.PubKey.Bytes()) == 0 {
+		return errors.New("Empty PubKey")
+	}
+	if DKGDataType(dkge.DataType) > DKGReconstructCommit {
+		return fmt.Errorf("dkg data has wrong type %+v", dkge.DataType)
+	}
+
+	return nil
+}
+
+//-----------------------------------------------------------------
 
 // EvidenceList is a list of Evidence. Evidences is not a word.
 type EvidenceList []Evidence

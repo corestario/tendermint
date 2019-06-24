@@ -26,6 +26,8 @@ For Tendermint protocol details, see [the specification](/docs/spec).
 For detailed analysis of the Tendermint consensus protocol, including safety and liveness proofs,
 see our recent paper, "[The latest gossip on BFT consensus](https://arxiv.org/abs/1807.04938)".
 
+For Arcade details, see [Arcade specification](/docs/arcade/arcade.md)
+
 ## A Note on Production Readiness
 
 DGaming Arcade is not production ready, and Tendermint it's based on is already deployed in public networks but not yet battle-tested enough.
