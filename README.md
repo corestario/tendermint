@@ -42,13 +42,13 @@ Go version | Go1.11.4 or higher
 
 Complete documentation for Tendermint can be found on the [website](https://tendermint.com/docs/).
 
-## How Arcade is different from Tendermint
+## How Arcade is different from vanilla Tendermint
 
 This part of document describes an implementation of BLS-based random beacon that was added to Tendermint consensus by dgaming-labs team.
 
 ### Overview
 
-The goal of our project is to provide a framework for supplying cosmos applications with non-centralized source of entropy.  We want our in-built PRNG to be suitable for applications like games and gambling: that means fast, unbiasable, and easy to use. More specifiaccly, our design constraints were:
+The goal of our project is to provide a framework for supplying cosmos applications with non-centralized source of entropy.  We want our in-built PRNG to be suitable for applications like games and gambling: that means fast, unbiasable, and easy to use. More specifically, our design constraints were:
 
 * Unbiasable
 * 2 seconds round (preferably 1 sec)
@@ -59,7 +59,7 @@ The goal of our project is to provide a framework for supplying cosmos applicati
 
 Additionally, we wanted to keep vanilla Tendermint's safety, liveness, sybil and censorship resitance under the same security model. 
 
-There are a lot of solutions for random numbers in blockchain that do not conform to this constraints. Some random beacons (most notable is RanDAO) are slightly biasable, which is fine for many applications. Others are not fast enough, not live enough, have receipts too big or require asynchrounos requests (i.e. in block 1000 applications requests a random number and in block 1010 it receives it).   
+There are a lot of solutions for random numbers in blockchain that do not conform to this constraints. Some random beacons (most notable is RanDAO) are slightly biasable, which is fine for many applications. Others are not fast enough, not live enough, have receipts too big or require asynchrounos requests (i.e., in block 1000 applications requests a random number and in block 1010 it receives it).   
 
 The result of our work is a Tendermint-based blockchain that provides each block with a random number that can be safely used during block processing. In quorum setting it is as live and as safe as vanilla Tendermint (the difference is basically slightly increased size of consensus-related messages and block headers). Random data (an array of bytes) is added to each block's header and is accessible from application code.
 
@@ -71,6 +71,8 @@ Sharing signatures is implemented by extending Tendermint's `Vote` type with a `
 
 That scheme, among other things, means that block proposer for the round selects txs in the block before the random number for the block is known.
 
+*important source code files to check out about BLS random beacon*
+
 ### DKG
 
 BLS random beacon requires a distributed key generation process. It is initiated before the first block is minted, and every  N blocks to generate a new BLS keyring (that's to reduce a potential impact of a stolen key). We implemented a distributed key generation based on "Secure distributed key generation for discrete-log based cryptosystems", 2007 by Gennaro et al.; the [dedis/kyber](https://github.com/dedis/kyber) implementation of DKG is used. Messaging is done in two different ways: *off-chain* and *on-chain*.
@@ -78,7 +80,7 @@ BLS random beacon requires a distributed key generation process. It is initiated
 
 ##### Off-chain DKG
 
-Off-chain DKG uses Tendermint's messaging engine to deliver DKG-related data to validator peers *without* writing anything to blocks. When it's time to to generate a new BLS keyring, we first try to run an off-chain DKG round because it's cheap and fast; if everything goes O.K., the new keyring is used for producing new blocks. Off-chain DKG runs in parallel with consensus. The problem with off-chain DKG is that you can not (due to lack of evidence) slash validators that do not participate in DKG; if off-chain DKG fails, we switch to on-chain DKG.
+Off-chain DKG uses Tendermint's messaging engine to deliver DKG-related data to validator peers *without* writing anything to blocks. When it's time to generate a new BLS keyring, we first try to run an off-chain DKG round because it's cheap and fast; if everything goes O.K., the new keyring is used for producing new blocks. Off-chain DKG runs in parallel with consensus. The problem with off-chain DKG is that you can cannot (due to lack of evidence) slash validators that do not participate in DKG; if off-chain DKG fails, we switch to on-chain DKG.
 
 Notable source code files to check out about DKG:
 
@@ -89,10 +91,10 @@ Notable source code files to check out about DKG:
 Note that most DKG-related code will be moved to [dkglib](https://github.com/dgamingfoundation/dkglib)) (see *Randapp* section below) when On-Chain DKG is finally implemented.
 
 
-We implemented DKG for a quorum (permissioned network of equipoverful validators), and are working on a PoS implementation. We’re currently working on a protocol described below:
+We implemented DKG for a quorum (permissioned network of equipowerful validators), and are working on a PoS implementation. We’re currently working on a protocol described below:
 Every node with a stake of X+ coins is eligible to be a validator. 1 node = 1 voice, there is no difference for staking X or 2X coins apart from how much slashing you can take before losing voting rights. There is an upper cap for validator limit (about a hundred). 
 1. Chain starts with off-chain DKG from genesis stake distribution.   
-2. DKG is triggered either by a big enough shift in stakes (i.e. >5%) or by small shift + long enough period of time (i.e. 2 days).
+2. DKG is triggered either by a big enough shift in stakes (i.e., >5%) or by small shift + long enough period of time (i.e., 2 days).
 3. Optimistic off-chain DKG starts and doesn’t clog the blockchain space unless there are any malicious validators.
 4. If off-chain DKG fails, we fall back on fully on-chain Gennaro et al. DKG with small slashing of byzantine actors. If DKG fails, slash offending parties and retry.
 5. Delay validator set change until DKG is over.
@@ -104,7 +106,7 @@ On-chain DKG works the same way as the off-chain version but writes its messages
 
 ##### Randapp
 
-[Randapp](https://github.com/dgamingfoundation/randapp) (currently work in progress) is a Cosmos application that can handle DKG-related messages (that are supposed to be sent by the [dkglib](https://github.com/dgamingfoundation/dkglib)). This application is currently implemented as a standalone one, but in the future its functionality will be available as a pluggable module (same way as `/x/auth` or `/x/bank` povides its methods and routes).
+[Randapp](https://github.com/dgamingfoundation/randapp) (currently work in progress) is a Cosmos application that can handle DKG-related messages (that are supposed to be sent by the [dkglib](https://github.com/dgamingfoundation/dkglib)). This application is currently implemented as a standalone one, but in the future its functionality will be available as a pluggable module (same way as `/x/auth` or `/x/bank` provides its methods and routes).
 
 
 ### Install
