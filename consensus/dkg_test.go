@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"strconv"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
-	"strconv"
 )
 
 func init() {
@@ -1013,7 +1014,7 @@ func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
 	}
 }
 
-func createDKGMsg(addr []byte, roundID int, data []byte, toIndex, numEntities int) DKGDataMessage {
+func createDKGMsg(addr []byte, roundID uint64, data []byte, toIndex, numEntities int) DKGDataMessage {
 	return DKGDataMessage{
 		&types.DKGData{
 			Type:        types.DKGDeal,
@@ -1059,11 +1060,13 @@ func TestDKGVerifyMessage(t *testing.T) {
 	validator := types.NewValidator(pubkey, 10)
 	validators := types.NewValidatorSet([]*types.Validator{validator})
 
-	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"))
+	roundID := 1
+
+	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"), roundID)
 	testAddr := []byte("some_test_address")
 	testData := []byte("some_test_data")
 
-	msg := createDKGMsg(testAddr, 1, testData, 1, 1)
+	msg := createDKGMsg(testAddr, roundID, testData, 1, 1)
 	err := privVal.SignDKGData(msg.Data)
 	require.NoError(t, nil, err)
 	require.NoError(t, nil, dealer.VerifyMessage(msg))

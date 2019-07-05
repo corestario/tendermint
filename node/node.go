@@ -341,8 +341,9 @@ func createConsensusReactor(config *cfg.Config,
 		evsw,
 		cs.WithVerifier(verifier),
 		cs.WithDKGNumBlocks(dkgNumBlocks),
-		cs.WithLogger(consensusLogger.With("dkg")),
-		cs.WithPVKey(privValidator))
+		cs.WithLogger(consensusLogger),
+		cs.WithPVKey(privValidator),
+		cs.WithDKGRoundTTL(config.Consensus.DKGRoundTimeout))
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,

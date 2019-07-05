@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"errors"
+
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
@@ -12,8 +13,8 @@ type DKGMockDontSendOneJustification struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerNoJustification(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
+	return &DKGMockDontSendOneJustification{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
 func (m *DKGMockDontSendOneJustification) Start() error {
@@ -49,7 +50,7 @@ func (m *DKGMockDontSendOneJustification) ProcessResponses() (error, bool) {
 		return err, true
 	}
 
-	messages=messages[1:]
+	messages = messages[1:]
 	for _, msg := range messages {
 		if err = m.Dealer.SendMsgCb(msg); err != nil {
 			return err, true
@@ -78,8 +79,8 @@ type DKGMockDontSendAnyJustifications struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerAnyJustifications(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
+	return &DKGMockDontSendAnyJustifications{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
 func (m *DKGMockDontSendAnyJustifications) Start() error {

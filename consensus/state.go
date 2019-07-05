@@ -142,6 +142,7 @@ type DKG interface {
 	SetVerifier(verifier types.Verifier)
 	Verifier() types.Verifier
 	MsgQueue() chan msgInfo
+	StartRoundsGC()
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -355,6 +356,8 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
+	// Start DKG rounds garbage collector.
+	go cs.dkg.StartRoundsGC()
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
