@@ -91,6 +91,15 @@ type DealerState struct {
 	ts            time.Time
 }
 
+func (ds DealerState) GetValidatorsCount() int {
+	if ds.validators == nil {
+		return 0
+	}
+	return ds.validators.Size()
+}
+
+func (ds DealerState) GetRoundID() int { return ds.roundID }
+
 type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer
 
 func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer {
