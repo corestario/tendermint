@@ -98,7 +98,7 @@ func (ds DealerState) GetValidatorsCount() int {
 	return ds.validators.Size()
 }
 
-func (ds DealerState) GetRoundID() int { return ds.roundID }
+func (ds DealerState) GetRoundID() uint64 { return ds.roundID }
 
 type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound uint64) Dealer
 
