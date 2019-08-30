@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
@@ -66,6 +67,12 @@ func (v *Validator) String() string {
 		v.PubKey,
 		v.VotingPower,
 		v.ProposerPriority)
+}
+
+// Hash computes the unique ID of a validator with a given voting power.
+// It excludes the ProposerPriority value, which changes with every round.
+func (v *Validator) Hash() []byte {
+	return tmhash.Sum(v.Bytes())
 }
 
 // ValidatorListString returns a prettified validator list for logging purposes.

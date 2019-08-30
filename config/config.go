@@ -36,6 +36,7 @@ var (
 	defaultGenesisJSONName = "genesis.json"
 
 	defaultPrivValKeyName   = "priv_validator_key.json"
+	defaultBLSKeyName       = "bls_key.json"
 	defaultPrivValStateName = "priv_validator_state.json"
 
 	defaultNodeKeyName  = "node_key.json"
@@ -45,6 +46,7 @@ var (
 	defaultGenesisJSONPath  = filepath.Join(defaultConfigDir, defaultGenesisJSONName)
 	defaultPrivValKeyPath   = filepath.Join(defaultConfigDir, defaultPrivValKeyName)
 	defaultPrivValStatePath = filepath.Join(defaultDataDir, defaultPrivValStateName)
+	defaultBLSKeyPath       = filepath.Join(defaultConfigDir, defaultBLSKeyName)
 
 	defaultNodeKeyPath  = filepath.Join(defaultConfigDir, defaultNodeKeyName)
 	defaultAddrBookPath = filepath.Join(defaultConfigDir, defaultAddrBookName)
@@ -198,6 +200,9 @@ type BaseConfig struct {
 	// A JSON file containing the private key to use for p2p authenticated encryption
 	NodeKey string `mapstructure:"node_key_file"`
 
+	// A json path to bls key
+	BLSKey string `mapstructure:"bls_key_file"`
+
 	// Mechanism to connect to the ABCI application: socket | grpc
 	ABCI string `mapstructure:"abci"`
 
@@ -207,6 +212,8 @@ type BaseConfig struct {
 	// If true, query the ABCI app on connecting to a new peer
 	// so the app can decide if we should keep the connection or not
 	FilterPeers bool `mapstructure:"filter_peers"` // false
+
+	NodeID int `mapstructure:"node_id"`
 }
 
 // DefaultBaseConfig returns a default base configuration for a Tendermint node
@@ -215,6 +222,7 @@ func DefaultBaseConfig() BaseConfig {
 		Genesis:            defaultGenesisJSONPath,
 		PrivValidatorKey:   defaultPrivValKeyPath,
 		PrivValidatorState: defaultPrivValStatePath,
+		BLSKey:             defaultBLSKeyPath,
 		NodeKey:            defaultNodeKeyPath,
 		Moniker:            defaultMoniker,
 		ProxyApp:           "tcp://127.0.0.1:26658",
@@ -267,6 +275,11 @@ func (cfg BaseConfig) OldPrivValidatorFile() string {
 // NodeKeyFile returns the full path to the node_key.json file
 func (cfg BaseConfig) NodeKeyFile() string {
 	return rootify(cfg.NodeKey, cfg.RootDir)
+}
+
+// NodeKeyFile returns the full path to the node_key.json file
+func (cfg BaseConfig) BLSKeyFile() string {
+	return rootify(cfg.BLSKey, cfg.RootDir)
 }
 
 // DBDir returns the full path to the database directory
@@ -750,6 +763,13 @@ type ConsensusConfig struct {
 	// Reactor sleep duration parameters
 	PeerGossipSleepDuration     time.Duration `mapstructure:"peer_gossip_sleep_duration"`
 	PeerQueryMaj23SleepDuration time.Duration `mapstructure:"peer_query_maj23_sleep_duration"`
+
+	// Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
+	BlockTimeIota   time.Duration `mapstructure:"blocktime_iota"`
+	DKGRoundTimeout time.Duration `mapstructure:"dkg_round_timeout"`
+
+	StartDKGOnChainStart    bool          `mapstructure:"start_dkg_on_chain_start"`
+	RestartDKGSleepDuration time.Duration `mapstructure:"restart_dkg_sleep_duration"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service
@@ -768,6 +788,8 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		CreateEmptyBlocksInterval:   0 * time.Second,
 		PeerGossipSleepDuration:     100 * time.Millisecond,
 		PeerQueryMaj23SleepDuration: 2000 * time.Millisecond,
+		BlockTimeIota:               1000 * time.Millisecond,
+		DKGRoundTimeout:             120 * time.Second,
 	}
 }
 
@@ -784,7 +806,15 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
+	cfg.BlockTimeIota = 10 * time.Millisecond
+	cfg.DKGRoundTimeout = 120 * time.Second
 	return cfg
+}
+
+// MinValidVoteTime returns the minimum acceptable block time.
+// See the [BFT time spec](https://godoc.org/github.com/tendermint/tendermint/docs/spec/consensus/bft-time.md).
+func (cfg *ConsensusConfig) MinValidVoteTime(lastBlockTime time.Time) time.Time {
+	return lastBlockTime.Add(cfg.BlockTimeIota)
 }
 
 // WaitForTxs returns true if the consensus should wait for transactions before entering the propose step
@@ -863,6 +893,9 @@ func (cfg *ConsensusConfig) ValidateBasic() error {
 	}
 	if cfg.PeerQueryMaj23SleepDuration < 0 {
 		return errors.New("peer_query_maj23_sleep_duration can't be negative")
+	}
+	if cfg.BlockTimeIota < 0 {
+		return errors.New("blocktime_iota can't be negative")
 	}
 	return nil
 }

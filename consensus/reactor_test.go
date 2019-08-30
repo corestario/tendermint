@@ -155,7 +155,11 @@ func TestReactorWithEvidence(t *testing.T) {
 
 		// Make ConsensusState
 		blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool)
+
+		evsw := events.NewEventSwitch()
+		consensusLogger := log.TestingLogger().With("module", "consensus")
+		dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, nValidators)(testName, i)), WithLogger(consensusLogger.With("state", "dkg")))
+		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 		cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 		cs.SetPrivValidator(pv)
 

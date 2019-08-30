@@ -9,18 +9,17 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/fail"
-	"github.com/tendermint/tendermint/libs/log"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
+	"github.com/tendermint/tendermint/crypto"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
+	"github.com/tendermint/tendermint/libs/fail"
+	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	tmtime "github.com/tendermint/tendermint/types/time"
 )
 
 //-----------------------------------------------------------------------------
@@ -94,7 +93,8 @@ type ConsensusState struct {
 	// internal state
 	mtx sync.RWMutex
 	cstypes.RoundState
-	state sm.State // State until height-1.
+	triggeredTimeoutPrecommit bool
+	state                     sm.State // State until height-1.
 
 	// state changes may be triggered by: msgs from peers,
 	// msgs from ourself, or by timeouts
@@ -133,6 +133,18 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
+
+	dkg DKG
+}
+
+type DKG interface {
+	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey) bool
+	CheckDKGTime(height int64, validators *types.ValidatorSet)
+	SetVerifier(verifier types.Verifier)
+	Verifier() types.Verifier
+	MsgQueue() chan msgInfo
+	StartRoundsGC()
+	StartDKGRound(validators *types.ValidatorSet) error
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -164,6 +176,7 @@ func NewConsensusState(
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
 	}
+	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
@@ -194,6 +207,14 @@ func (cs *ConsensusState) SetLogger(l log.Logger) {
 func (cs *ConsensusState) SetEventBus(b *types.EventBus) {
 	cs.eventBus = b
 	cs.blockExec.SetEventBus(b)
+}
+
+func WithDKG(dkg DKG) StateOption {
+	return func(cs *ConsensusState) { cs.dkg = dkg }
+}
+
+func WithEVSW(evsw tmevents.EventSwitch) StateOption {
+	return func(cs *ConsensusState) { cs.evsw = evsw }
 }
 
 // StateMetrics sets the metrics.
@@ -265,6 +286,23 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Unlock()
 }
 
+func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
+	cs.dkg.SetVerifier(verifier)
+}
+
+func (cs *ConsensusState) SetDKGVerifierCallback(f func(v types.Verifier)) {
+	d := (cs.dkg).(*dkgState)
+	d.verifierCallback = f
+}
+
+func (cs *ConsensusState) GetDKGQueueLen() int {
+	return len(cs.dkg.MsgQueue())
+}
+
+func (cs *ConsensusState) StartDKG() error {
+	return cs.dkg.StartDKGRound(cs.Validators)
+}
+
 // LoadCommit loads the commit for a given height.
 func (cs *ConsensusState) LoadCommit(height int64) *types.Commit {
 	cs.mtx.RLock()
@@ -332,6 +370,8 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
+	// Start DKG rounds garbage collector.
+	go cs.dkg.StartRoundsGC()
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
@@ -444,6 +484,8 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
+
+	cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -485,6 +527,17 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 	}
 	seenCommit := cs.blockStore.LoadSeenCommit(state.LastBlockHeight)
 	lastPrecommits := types.CommitToVoteSet(state.ChainID, seenCommit, state.LastValidators)
+	for _, precommit := range seenCommit.Precommits {
+		precommit := precommit
+		if precommit == nil {
+			continue
+		}
+		pc := (*types.Vote)(precommit)
+		added, err := lastPrecommits.AddVote(pc)
+		if !added || err != nil {
+			panic(fmt.Sprintf("Failed to reconstruct LastCommit: %v", err))
+		}
+	}
 	if !lastPrecommits.HasTwoThirdsMajority() {
 		panic("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
@@ -541,6 +594,13 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 		cs.StartTime = cs.config.Commit(tmtime.Now())
 	} else {
 		cs.StartTime = cs.config.Commit(cs.CommitTime)
+	}
+
+	if state.HasValUpdates {
+		cs.Logger.Info("There is validators update! Starting off-chain DKG round")
+		cs.NextValidators = state.NextValidators.Copy()
+		state.NextValidators = state.Validators.Copy()
+		cs.dkg.StartDKGRound(cs.NextValidators)
 	}
 
 	cs.Validators = validators
@@ -622,36 +682,53 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 		rs := cs.RoundState
 		var mi msgInfo
+		if cs.dkg.Verifier() != nil {
+			select {
+			case msg := <-cs.dkg.MsgQueue():
+				cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			case <-cs.txNotifier.TxsAvailable():
+				cs.handleTxsAvailable()
+			case mi = <-cs.peerMsgQueue:
+				cs.wal.Write(mi)
+				// handles proposals, block parts, votes
+				// may generate internal events (votes, complete proposals, 2/3 majorities)
+				cs.handleMsg(mi)
+			case mi = <-cs.internalMsgQueue:
+				cs.wal.WriteSync(mi) // NOTE: fsync
 
-		select {
-		case <-cs.txNotifier.TxsAvailable():
-			cs.handleTxsAvailable()
-		case mi = <-cs.peerMsgQueue:
-			cs.wal.Write(mi)
-			// handles proposals, block parts, votes
-			// may generate internal events (votes, complete proposals, 2/3 majorities)
-			cs.handleMsg(mi)
-		case mi = <-cs.internalMsgQueue:
-			cs.wal.WriteSync(mi) // NOTE: fsync
+				if _, ok := mi.Msg.(*VoteMessage); ok {
+					// we actually want to simulate failing during
+					// the previous WriteSync, but this isn't easy to do.
+					// Equivalent would be to fail here and manually remove
+					// some bytes from the end of the wal.
+					fail.Fail() // XXX
+				}
 
-			if _, ok := mi.Msg.(*VoteMessage); ok {
-				// we actually want to simulate failing during
-				// the previous WriteSync, but this isn't easy to do.
-				// Equivalent would be to fail here and manually remove
-				// some bytes from the end of the wal.
-				fail.Fail() // XXX
+				// handles proposals, block parts, votes
+				cs.handleMsg(mi)
+			case ti := <-cs.timeoutTicker.Chan(): // tockChan:
+				cs.wal.Write(ti)
+				// if the timeout is relevant to the rs
+				// go to the next step
+				cs.handleTimeout(ti, rs)
+			case <-cs.Quit():
+				onExit(cs)
+				return
 			}
+		} else {
+			select {
+			case msg := <-cs.dkg.MsgQueue():
+				cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			case mi = <-cs.peerMsgQueue:
+				cs.wal.Write(mi)
+				// handles proposals, block parts, votes
+				// may generate internal events (votes, complete proposals, 2/3 majorities)
+				cs.handleMsg(mi)
+			case <-cs.Quit():
+				onExit(cs)
+				return
 
-			// handles proposals, block parts, votes
-			cs.handleMsg(mi)
-		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
-			cs.wal.Write(ti)
-			// if the timeout is relevant to the rs
-			// go to the next step
-			cs.handleTimeout(ti, rs)
-		case <-cs.Quit():
-			onExit(cs)
-			return
+			}
 		}
 	}
 }
@@ -1181,6 +1258,9 @@ func (cs *ConsensusState) enterPrecommitWait(height int64, round int) {
 
 // Enter: +2/3 precommits for block
 func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
+	if cs.dkg.Verifier() == nil {
+		return
+	}
 	logger := cs.Logger.With("height", height, "commitRound", commitRound)
 
 	if cs.Height != height || cstypes.RoundStepCommit <= cs.Step {
@@ -1201,6 +1281,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.tryFinalizeCommit(height)
 	}()
 
+	precommits := cs.Votes.Precommits(commitRound)
 	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
 	if !ok {
 		panic("RunActionCommit() expects +2/3 precommits")
@@ -1213,6 +1294,16 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		logger.Info("Commit is for locked block. Set ProposalBlock=LockedBlock", "blockHash", blockID.Hash)
 		cs.ProposalBlock = cs.LockedBlock
 		cs.ProposalBlockParts = cs.LockedBlockParts
+	}
+
+	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+	if err != nil {
+		panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
+	}
+	cs.Logger.Info("Generated random data", "rand_data", randomData)
+	// TODO @oopcode: check if this is a possible situation.
+	if cs.ProposalBlock != nil {
+		cs.ProposalBlock.Header.SetRandomData(randomData)
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -1263,6 +1354,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
+	if cs.dkg.Verifier() == nil {
+		return
+	}
+
 	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
 	block, blockParts := cs.ProposalBlock, cs.ProposalBlockParts
 
@@ -1279,6 +1374,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		panic(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
 
+	prevBlock := cs.getPreviousBlock()
+	if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
+		panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
+	}
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
 	cs.Logger.Info(fmt.Sprintf("%v", block))
@@ -1566,6 +1665,19 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
+	if cs.dkg.Verifier() != nil {
+		if vote.Type == types.PrecommitType {
+			var (
+				prevBlockData = cs.getPreviousBlock().RandomData
+				validatorAddr = vote.ValidatorAddress.String()
+			)
+
+			if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+				return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
+					err, validatorAddr, prevBlockData, vote.BLSSignature)
+			}
+		}
+	}
 	height := cs.Height
 	added, err = cs.Votes.AddVote(vote, peerID)
 	if !added {
@@ -1674,7 +1786,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 	return
 }
 
-func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) (*types.Vote, error) {
+func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.Vote, error) {
 	// Flush the WAL. Otherwise, we may not recompute the same vote to sign, and the privValidator will refuse to sign anything.
 	cs.wal.FlushAndSync()
 
@@ -1689,6 +1801,7 @@ func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, heade
 		Timestamp:        cs.voteTime(),
 		Type:             type_,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
+		BLSSignature:     data,
 	}
 	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
 	return vote, err
@@ -1719,7 +1832,23 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
 	}
-	vote, err := cs.signVote(type_, hash, header)
+	// If we don't have a verifier, do nothing.
+	if cs.dkg.Verifier() == nil {
+		return nil
+	}
+
+	var randomData []byte
+	var err error
+	if type_ == types.PrecommitType {
+		randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
+		if err != nil || len(randomData) == 0 {
+			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
+				"type", type_, "hash", hash, "header", header, "random", randomData)
+			return nil
+		}
+	}
+
+	vote, err := cs.signVote(type_, hash, header, randomData)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
@@ -1729,6 +1858,17 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
 	return nil
+}
+
+func (cs *ConsensusState) getPreviousBlock() *types.Block {
+	var prevBlock *types.Block
+	if cs.Height == 1 {
+		prevBlock = &types.Block{Header: types.Header{RandomData: []byte(types.InitialRandomData)}}
+	} else {
+		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
+	}
+
+	return prevBlock
 }
 
 //---------------------------------------------------------

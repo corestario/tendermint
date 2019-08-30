@@ -329,6 +329,9 @@ create_empty_blocks_interval = "{{ .Consensus.CreateEmptyBlocksInterval }}"
 peer_gossip_sleep_duration = "{{ .Consensus.PeerGossipSleepDuration }}"
 peer_query_maj23_sleep_duration = "{{ .Consensus.PeerQueryMaj23SleepDuration }}"
 
+# Block time parameters. Corresponds to the minimum time increment between consecutive blocks.
+blocktime_iota = "{{ .Consensus.BlockTimeIota }}"
+
 ##### transactions indexer configuration options #####
 [tx_index]
 
@@ -402,6 +405,7 @@ func ResetTestRootWithChainID(testName string, chainID string) *Config {
 	genesisFilePath := filepath.Join(rootDir, baseConfig.Genesis)
 	privKeyFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorKey)
 	privStateFilePath := filepath.Join(rootDir, baseConfig.PrivValidatorState)
+	BLSShareFilePath := filepath.Join(rootDir, baseConfig.BLSKeyFile())
 
 	// Write default config file if missing.
 	if !cmn.FileExists(configFilePath) {
@@ -417,6 +421,15 @@ func ResetTestRootWithChainID(testName string, chainID string) *Config {
 	// we always overwrite the priv val
 	cmn.MustWriteFile(privKeyFilePath, []byte(testPrivValidatorKey), 0644)
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
+
+	b, err := json.Marshal(types.BLSShareJSON{
+		Pub:  types.DefaultBLSVerifierPubKey,
+		Priv: types.DefaultBLSVerifierPrivKey,
+	})
+	if err != nil {
+		panic(err)
+	}
+	cmn.MustWriteFile(BLSShareFilePath, b, 0644)
 
 	config := TestConfig().SetRoot(rootDir)
 	return config
@@ -435,7 +448,18 @@ var testGenesisFmt = `{
       "name": ""
     }
   ],
-  "app_hash": ""
+  "app_hash": "",
+  "bls_threshold": "1",
+  "bls_num_shares": "4",
+  "bls_master_pub_key": "Df+DAgEC/4QAAf+CAAAR/4EGAQEFUG9pbnQB/4IAAAD/hv+EAAH/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/Q",
+  "bls_share": {
+    "pub": "I/+FAwEBCFB1YlNoYXJlAf+GAAECAQFJAQQAAQFWAf+CAAAAEf+BBgEBBVBvaW50Af+CAAAA/4b/hgL/gG9Pz5sOyRmxdttuuCOwK+efAvhrO9nTVk+JrBLW1EscSDz3QBnKSWTCHb26RDbQGJEfo2Utq29y/uzFHKqrHNAzlbSe9+0Nv8sCldtXiPz96STqRp1Nxtso7Cnk2Z+q1lu39AFVYFluEUbpKWcdXXAqupgfHuyEwiCLjNDHoc/QAA==",
+    "priv": "I/+HAwEBCFByaVNoYXJlAf+IAAECAQFJAQQAAQFWAf+KAAAAEv+JBgEBBlNjYWxhcgH/igAAACX/iAIghVFMQNE4GNFCGPpzYXJ8lqUnHA0IlIefA3j+lvDdoUYA",
+    "id": "0"
+  },
+  "bls_others": {
+    "CC479BCC141F91A565E9CF06840E149DB14079FA": "0"
+  }
 }`
 
 var testPrivValidatorKey = `{

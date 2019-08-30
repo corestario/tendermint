@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	amino "github.com/tendermint/go-amino"
@@ -23,6 +24,8 @@ const (
 
 	// ask for best height every 10s
 	statusUpdateIntervalSeconds = 10
+	// check if we should switch to consensus reactor
+	switchToConsensusIntervalSeconds = 1
 
 	// NOTE: keep up to date with bcBlockResponseMessage
 	bcBlockResponseMessagePrefixSize   = 4
@@ -271,6 +274,12 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 	default:
 		bcR.Logger.Error(fmt.Sprintf("unknown message type %v", reflect.TypeOf(msg)))
 	}
+}
+
+func (bcR *BlockchainReactor) SetVerifier(verifier types.Verifier) {
+	bcR.verifierMtx.Lock()
+	bcR.verifier = verifier
+	bcR.verifierMtx.Unlock()
 }
 
 // processBlocksRoutine processes blocks until signlaed to stop over the stopProcessing channel

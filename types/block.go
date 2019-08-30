@@ -30,6 +30,10 @@ const (
 	// Uvarint length of Data.Txs:          4 bytes
 	// Data.Txs field:                      1 byte
 	MaxAminoOverheadForBlock int64 = 11
+
+	// InitialRandomData is the (non-)random data that will be used as the starting point
+	// by BLS-based random data generation.
+	InitialRandomData = "dgaming-random-source"
 )
 
 // Block defines the atomic unit of a Tendermint blockchain.
@@ -152,6 +156,10 @@ func (b *Block) ValidateBasic() error {
 	if len(b.ProposerAddress) != crypto.AddressSize {
 		return fmt.Errorf("Expected len(Header.ProposerAddress) to be %d, got %d",
 			crypto.AddressSize, len(b.ProposerAddress))
+	}
+
+	if err := ValidateHash(b.RandomHash); err != nil {
+		return fmt.Errorf("Wrong Header.RandomHash: %v", err)
 	}
 
 	return nil
@@ -360,6 +368,9 @@ type Header struct {
 	// consensus info
 	EvidenceHash    cmn.HexBytes `json:"evidence_hash"`    // evidence included in the block
 	ProposerAddress Address      `json:"proposer_address"` // original proposer of the block
+
+	RandomData []byte       `json:"random_number"`
+	RandomHash cmn.HexBytes `json:"final_hash"`
 }
 
 // Populate the Header with state-derived data.
@@ -436,6 +447,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Results:        %v
 %s  Evidence:       %v
 %s  Proposer:       %v
+%s  RandomData:   %v
 %s}#%v`,
 		indent, h.Version,
 		indent, h.ChainID,
@@ -453,7 +465,13 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.LastResultsHash,
 		indent, h.EvidenceHash,
 		indent, h.ProposerAddress,
+		indent, h.RandomData,
 		indent, h.Hash())
+}
+
+func (h *Header) SetRandomData(randomData []byte) {
+	h.RandomData = randomData
+	h.RandomHash = h.getRandomHash()
 }
 
 //-------------------------------------
@@ -468,6 +486,13 @@ type CommitSig Vote
 // String returns the underlying Vote.String()
 func (cs *CommitSig) String() string {
 	return cs.toVote().String()
+}
+
+func (h *Header) getRandomHash() cmn.HexBytes {
+	return merkle.SimpleHashFromByteSlices([][]byte{
+		cdcEncode(h.RandomData),
+		h.Hash(),
+	})
 }
 
 // toVote converts the CommitSig to a vote.
@@ -491,7 +516,8 @@ type Commit struct {
 	// active ValidatorSet.
 	BlockID    BlockID      `json:"block_id"`
 	Precommits []*CommitSig `json:"precommits"`
-
+	// Volatile
+	firstPrecommit *Vote
 	// memoized in first call to corresponding method
 	// NOTE: can't memoize in constructor because constructor
 	// isn't used for unmarshaling
@@ -499,6 +525,26 @@ type Commit struct {
 	round    int
 	hash     cmn.HexBytes
 	bitArray *cmn.BitArray
+}
+
+// FirstPrecommit returns the first non-nil precommit in the commit.
+// If all precommits are nil, it returns an empty precommit with height 0.
+func (commit *Commit) FirstPrecommit() *Vote {
+	if len(commit.Precommits) == 0 {
+		return nil
+	}
+	if commit.firstPrecommit != nil {
+		return commit.firstPrecommit
+	}
+	for _, precommit := range commit.Precommits {
+		if precommit != nil {
+			commit.firstPrecommit = precommit.toVote()
+			return precommit.toVote()
+		}
+	}
+	return &Vote{
+		Type: PrecommitType,
+	}
 }
 
 // NewCommit returns a new Commit with the given blockID and precommits.

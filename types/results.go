@@ -3,6 +3,7 @@ package types
 import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/merkle"
+	"github.com/tendermint/tendermint/crypto/tmhash"
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
@@ -14,6 +15,12 @@ import (
 type ABCIResult struct {
 	Code uint32       `json:"code"`
 	Data cmn.HexBytes `json:"data"`
+}
+
+// Hash returns the canonical hash of the ABCIResult
+func (a ABCIResult) Hash() []byte {
+	bz := tmhash.Sum(cdcEncode(a))
+	return bz
 }
 
 // Bytes returns the amino encoded ABCIResult

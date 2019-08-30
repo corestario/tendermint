@@ -84,6 +84,7 @@ type RoundState struct {
 	CommitRound               int                 `json:"commit_round"` //
 	LastCommit                *types.VoteSet      `json:"last_commit"`  // Last precommits at Height-1
 	LastValidators            *types.ValidatorSet `json:"last_validators"`
+	NextValidators     	  *types.ValidatorSet `json:"next_validators"` // ValidatorSet for usage after onValidatorsUpdate DKG round	
 	TriggeredTimeoutPrecommit bool                `json:"triggered_timeout_precommit"`
 }
 
@@ -148,10 +149,14 @@ func (rs *RoundState) CompleteProposalEvent() types.EventDataCompleteProposal {
 
 // RoundStateEvent returns the H/R/S of the RoundState as an event.
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
+	// copy the RoundState.
+	// TODO: if we want to avoid this, we may need synchronous events after all
+	rsCopy := *rs
 	return types.EventDataRoundState{
-		Height: rs.Height,
-		Round:  rs.Round,
-		Step:   rs.Step.String(),
+		Height:     rs.Height,
+		Round:      rs.Round,
+		Step:       rs.Step.String(),
+		RoundState: &rsCopy,
 	}
 }
 

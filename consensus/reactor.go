@@ -24,6 +24,7 @@ const (
 	DataChannel        = byte(0x21)
 	VoteChannel        = byte(0x22)
 	VoteSetBitsChannel = byte(0x23)
+	DKGChannel         = byte(0x24)
 
 	maxMsgSize = 1048576 // 1MB; NOTE/TODO: keep in sync with types.PartSet sizes.
 
@@ -157,6 +158,12 @@ func (conR *ConsensusReactor) GetChannels() []*p2p.ChannelDescriptor {
 			RecvBufferCapacity:  1024,
 			RecvMessageCapacity: maxMsgSize,
 		},
+		{
+			ID:                  DKGChannel,
+			Priority:            5,
+			SendQueueCapacity:   100,
+			RecvMessageCapacity: maxMsgSize,
+		},
 	}
 }
 
@@ -236,105 +243,32 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		panic(fmt.Sprintf("Peer %v has no state", src))
 	}
 
-	switch chID {
-	case StateChannel:
-		switch msg := msg.(type) {
-		case *NewRoundStepMessage:
-			ps.ApplyNewRoundStepMessage(msg)
-		case *NewValidBlockMessage:
-			ps.ApplyNewValidBlockMessage(msg)
-		case *HasVoteMessage:
-			ps.ApplyHasVoteMessage(msg)
-		case *VoteSetMaj23Message:
-			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
-			if height != msg.Height {
-				return
-			}
-			// Peer claims to have a maj23 for some BlockID at H,R,S,
-			err := votes.SetPeerMaj23(msg.Round, msg.Type, ps.peer.ID(), msg.BlockID)
-			if err != nil {
-				conR.Switch.StopPeerForError(src, err)
-				return
-			}
-			// Respond with a VoteSetBitsMessage showing which votes we have.
-			// (and consequently shows which we don't have)
-			var ourVotes *cmn.BitArray
-			switch msg.Type {
-			case types.PrevoteType:
-				ourVotes = votes.Prevotes(msg.Round).BitArrayByBlockID(msg.BlockID)
-			case types.PrecommitType:
-				ourVotes = votes.Precommits(msg.Round).BitArrayByBlockID(msg.BlockID)
-			default:
-				panic("Bad VoteSetBitsMessage field Type. Forgot to add a check in ValidateBasic?")
-			}
-			src.TrySend(VoteSetBitsChannel, cdc.MustMarshalBinaryBare(&VoteSetBitsMessage{
-				Height:  msg.Height,
-				Round:   msg.Round,
-				Type:    msg.Type,
-				BlockID: msg.BlockID,
-				Votes:   ourVotes,
-			}))
-		default:
-			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
-		}
-
-	case DataChannel:
-		if conR.FastSync() {
-			conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
-		switch msg := msg.(type) {
-		case *ProposalMessage:
-			ps.SetHasProposal(msg.Proposal)
-			conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
-		case *ProposalPOLMessage:
-			ps.ApplyProposalPOLMessage(msg)
-		case *BlockPartMessage:
-			ps.SetHasProposalBlockPart(msg.Height, msg.Round, msg.Part.Index)
-			conR.metrics.BlockParts.With("peer_id", string(src.ID())).Add(1)
-			conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
-		default:
-			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
-		}
-
-	case VoteChannel:
-		if conR.FastSync() {
-			conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
-		switch msg := msg.(type) {
-		case *VoteMessage:
-			cs := conR.conS
-			cs.mtx.RLock()
-			height, valSize, lastCommitSize := cs.Height, cs.Validators.Size(), cs.LastCommit.Size()
-			cs.mtx.RUnlock()
-			ps.EnsureVoteBitArrays(height, valSize)
-			ps.EnsureVoteBitArrays(height-1, lastCommitSize)
-			ps.SetHasVote(msg.Vote)
-
-			cs.peerMsgQueue <- msgInfo{msg, src.ID()}
-
-		default:
-			// don't punish (leave room for soft upgrades)
-			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
-		}
-
-	case VoteSetBitsChannel:
-		if conR.FastSync() {
-			conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
-		switch msg := msg.(type) {
-		case *VoteSetBitsMessage:
-			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
-
-			if height == msg.Height {
+	if conR.conS.dkg.Verifier() != nil {
+		switch chID {
+		case StateChannel:
+			switch msg := msg.(type) {
+			case *NewRoundStepMessage:
+				ps.ApplyNewRoundStepMessage(msg)
+			case *NewValidBlockMessage:
+				ps.ApplyNewValidBlockMessage(msg)
+			case *HasVoteMessage:
+				ps.ApplyHasVoteMessage(msg)
+			case *VoteSetMaj23Message:
+				cs := conR.conS
+				cs.mtx.Lock()
+				height, votes := cs.Height, cs.Votes
+				cs.mtx.Unlock()
+				if height != msg.Height {
+					return
+				}
+				// Peer claims to have a maj23 for some BlockID at H,R,S,
+				err := votes.SetPeerMaj23(msg.Round, msg.Type, ps.peer.ID(), msg.BlockID)
+				if err != nil {
+					conR.Switch.StopPeerForError(src, err)
+					return
+				}
+				// Respond with a VoteSetBitsMessage showing which votes we have.
+				// (and consequently shows which we don't have)
 				var ourVotes *cmn.BitArray
 				switch msg.Type {
 				case types.PrevoteType:
@@ -344,17 +278,101 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				default:
 					panic("Bad VoteSetBitsMessage field Type. Forgot to add a check in ValidateBasic?")
 				}
-				ps.ApplyVoteSetBitsMessage(msg, ourVotes)
-			} else {
-				ps.ApplyVoteSetBitsMessage(msg, nil)
+				src.TrySend(VoteSetBitsChannel, cdc.MustMarshalBinaryBare(&VoteSetBitsMessage{
+					Height:  msg.Height,
+					Round:   msg.Round,
+					Type:    msg.Type,
+					BlockID: msg.BlockID,
+					Votes:   ourVotes,
+				}))
+			default:
+				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 			}
+
+		case DataChannel:
+			if conR.FastSync() {
+				conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
+				return
+			}
+			switch msg := msg.(type) {
+			case *ProposalMessage:
+				ps.SetHasProposal(msg.Proposal)
+				conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
+			case *ProposalPOLMessage:
+				ps.ApplyProposalPOLMessage(msg)
+			case *BlockPartMessage:
+				ps.SetHasProposalBlockPart(msg.Height, msg.Round, msg.Part.Index)
+				conR.metrics.BlockParts.With("peer_id", string(src.ID())).Add(1)
+				conR.conS.peerMsgQueue <- msgInfo{msg, src.ID()}
+			default:
+				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
+			}
+
+		case VoteChannel:
+			if conR.FastSync() {
+				conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
+				return
+			}
+			switch msg := msg.(type) {
+			case *VoteMessage:
+				cs := conR.conS
+				cs.mtx.RLock()
+				height, valSize, lastCommitSize := cs.Height, cs.Validators.Size(), cs.LastCommit.Size()
+				cs.mtx.RUnlock()
+				ps.EnsureVoteBitArrays(height, valSize)
+				ps.EnsureVoteBitArrays(height-1, lastCommitSize)
+				ps.SetHasVote(msg.Vote)
+
+				cs.peerMsgQueue <- msgInfo{msg, src.ID()}
+
+			default:
+				// don't punish (leave room for soft upgrades)
+				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
+			}
+
+		case VoteSetBitsChannel:
+			if conR.FastSync() {
+				conR.Logger.Info("Ignoring message received during fastSync", "msg", msg)
+				return
+			}
+			switch msg := msg.(type) {
+			case *VoteSetBitsMessage:
+				cs := conR.conS
+				cs.mtx.Lock()
+				height, votes := cs.Height, cs.Votes
+				cs.mtx.Unlock()
+
+				if height == msg.Height {
+					var ourVotes *cmn.BitArray
+					switch msg.Type {
+					case types.PrevoteType:
+						ourVotes = votes.Prevotes(msg.Round).BitArrayByBlockID(msg.BlockID)
+					case types.PrecommitType:
+						ourVotes = votes.Precommits(msg.Round).BitArrayByBlockID(msg.BlockID)
+					default:
+						panic("Bad VoteSetBitsMessage field Type. Forgot to add a check in ValidateBasic?")
+					}
+					ps.ApplyVoteSetBitsMessage(msg, ourVotes)
+				} else {
+					ps.ApplyVoteSetBitsMessage(msg, nil)
+				}
+			default:
+				// don't punish (leave room for soft upgrades)
+				conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
+			}
+		case DKGChannel:
+			// this check is to avoid default
 		default:
-			// don't punish (leave room for soft upgrades)
+			conR.Logger.Error(fmt.Sprintf("Unknown chId %X", chID))
+		}
+	}
+	if chID == DKGChannel {
+		switch msg := msg.(type) {
+		case *DKGDataMessage:
+			conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
+		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
-
-	default:
-		conR.Logger.Error(fmt.Sprintf("Unknown chId %X", chID))
 	}
 }
 
@@ -392,7 +410,10 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		func(data tmevents.EventData) {
 			conR.broadcastHasVoteMessage(data.(*types.Vote))
 		})
-
+	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
+		func(data tmevents.EventData) {
+			conR.broadcastDKGDataMessage(data.(*types.DKGData))
+		})
 }
 
 func (conR *ConsensusReactor) unsubscribeFromBroadcastEvents() {
@@ -443,6 +464,11 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 			}
 		}
 	*/
+}
+
+// Broadcasts HasVoteMessage to peers that care.
+func (conR *ConsensusReactor) broadcastDKGDataMessage(data *types.DKGData) {
+	conR.Switch.Broadcast(DKGChannel, cdc.MustMarshalBinaryBare(&DKGDataMessage{Data: data}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -905,7 +931,7 @@ type PeerState struct {
 	peer   p2p.Peer
 	logger log.Logger
 
-	mtx   sync.Mutex             // NOTE: Modify below using setters, never directly.
+	mtx   sync.Mutex             `json:"-"`           // NOTE: Modify below using setters, never directly.
 	PRS   cstypes.PeerRoundState `json:"round_state"` // Exposed.
 	Stats *peerStateStats        `json:"stats"`       // Exposed.
 }
@@ -1380,6 +1406,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
+	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1468,6 +1495,18 @@ func (m *NewValidBlockMessage) String() string {
 }
 
 //-------------------------------------
+
+type DKGDataMessage struct {
+	Data *types.DKGData
+}
+
+func (m *DKGDataMessage) ValidateBasic() error {
+	return nil
+}
+
+func (m *DKGDataMessage) String() string {
+	return fmt.Sprintf("[Proposal %+v]", m.Data)
+}
 
 // ProposalMessage is sent when a new block is proposed.
 type ProposalMessage struct {

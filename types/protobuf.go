@@ -16,6 +16,7 @@ import (
 
 const (
 	ABCIEvidenceTypeDuplicateVote = "duplicate/vote"
+	ABCIEvidenceTypeDKGMessage    = "message/dkg"
 	ABCIEvidenceTypeMockGood      = "mock/good"
 )
 
@@ -63,6 +64,9 @@ func (tm2pb) Header(header *Header) abci.Header {
 
 		EvidenceHash:    header.EvidenceHash,
 		ProposerAddress: header.ProposerAddress,
+
+		RandomNumber:     header.RandomData,
+		RandomNumberHash: header.RandomHash,
 	}
 }
 
@@ -153,6 +157,8 @@ func (tm2pb) Evidence(ev Evidence, valSet *ValidatorSet, evTime time.Time) abci.
 	switch ev.(type) {
 	case *DuplicateVoteEvidence:
 		evType = ABCIEvidenceTypeDuplicateVote
+	case *DKGMessageEvidence:
+		evType = ABCIEvidenceTypeDKGMessage
 	case MockGoodEvidence:
 		// XXX: not great to have test types in production paths ...
 		evType = ABCIEvidenceTypeMockGood
@@ -219,4 +225,19 @@ func (pb2tm) ValidatorUpdates(vals []abci.ValidatorUpdate) ([]*Validator, error)
 		tmVals[i] = NewValidator(pub, v.Power)
 	}
 	return tmVals, nil
+}
+
+func (pb2tm) ConsensusParams(csp *abci.ConsensusParams) ConsensusParams {
+	return ConsensusParams{
+		Block: BlockParams{
+			MaxBytes: csp.Block.MaxBytes,
+			MaxGas:   csp.Block.MaxGas,
+		},
+		Evidence: EvidenceParams{
+			MaxAge: csp.Evidence.MaxAge,
+		},
+		Validator: ValidatorParams{
+			PubKeyTypes: csp.Validator.PubKeyTypes,
+		},
+	}
 }

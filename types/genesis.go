@@ -39,6 +39,11 @@ type GenesisDoc struct {
 	Validators      []GenesisValidator `json:"validators,omitempty"`
 	AppHash         cmn.HexBytes       `json:"app_hash"`
 	AppState        json.RawMessage    `json:"app_state,omitempty"`
+	BLSThreshold    int                `json:"bls_threshold"`
+	BLSNumShares    int                `json:"bls_num_shares"`
+	BLSMasterPubKey string             `json:"bls_master_pub_key"`
+	BLSShare        *BLSShareJSON      `json:"bls_share"`
+	DKGNumBlocks    int64              `json:"dkg_hum_blocks"` // Trigger DKG after this number of blocks added
 }
 
 // SaveAs is a utility method for saving GenensisDoc as a JSON file.

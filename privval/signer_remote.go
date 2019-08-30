@@ -48,6 +48,30 @@ func (sc *SignerRemote) GetPubKey() crypto.PubKey {
 	return sc.consensusPubKey
 }
 
+// SignDKGData implements PrivValidator
+func (sc *SignerRemote) SignDKGData(data *types.DKGData) error {
+	err := writeMsg(sc.conn, &SignDKGDataRequest{DKGData: data})
+	if err != nil {
+		return err
+	}
+
+	res, err := readMsg(sc.conn)
+	if err != nil {
+		return err
+	}
+
+	resp, ok := res.(*SignedDKGDataResponse)
+	if !ok {
+		return ErrUnexpectedResponse
+	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	*data = *resp.DKGData
+
+	return nil
+}
+
 // not thread-safe (only called on startup).
 func getPubKey(conn net.Conn) (crypto.PubKey, error) {
 	err := writeMsg(conn, &PubKeyRequest{})
@@ -136,6 +160,15 @@ func (sc *SignerRemote) Ping() error {
 	}
 
 	return nil
+}
+
+type SignDKGDataRequest struct {
+	DKGData *types.DKGData
+}
+
+type SignedDKGDataResponse struct {
+	DKGData *types.DKGData
+	Error   *RemoteSignerError
 }
 
 func readMsg(r io.Reader) (msg RemoteSignerMsg, err error) {

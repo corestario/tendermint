@@ -16,6 +16,8 @@ type PrivValidator interface {
 
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
+
+	SignDKGData(*DKGData) error
 }
 
 //----------------------------------------
@@ -62,6 +64,22 @@ func NewMockPVWithParams(privKey crypto.PrivKey, breakProposalSigning, breakVote
 // Implements PrivValidator.
 func (pv *MockPV) GetPubKey() crypto.PubKey {
 	return pv.privKey.PubKey()
+}
+
+// SignDKGData Implements PrivValidator
+func (pv *MockPV) SignDKGData(data *DKGData) error {
+	var (
+		signBytes, sig []byte
+		err            error
+	)
+	if signBytes, err = data.SignBytes(); err != nil {
+		return err
+	}
+	if sig, err = pv.privKey.Sign(signBytes); err != nil {
+		return err
+	}
+	data.Signature = sig
+	return nil
 }
 
 // Implements PrivValidator.

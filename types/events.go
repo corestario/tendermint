@@ -37,6 +37,22 @@ const (
 	EventVote             = "Vote"
 )
 
+//DKG events
+const (
+	EventDKGData                        = "DKGData"
+	EventDKGStart                       = "DKGStart"
+	EventDKGPubKeyReceived              = "DKGPubKeyReceived"
+	EventDKGDealsProcessed              = "DKGDealsProcessed"
+	EventDKGResponsesProcessed          = "DKGResponsesProcessed"
+	EventDKGJustificationsProcessed     = "DKGJustificationsProcessed"
+	EventDKGInstanceCertified           = "DKGInstanceCertified"
+	EventDKGCommitsProcessed            = "DKGCommitsProcessed"
+	EventDKGComplaintProcessed          = "DKGComplaintProcessed"
+	EventDKGReconstructCommitsProcessed = "DKGReconstructCommitsProcessed"
+	EventDKGSuccessful                  = "DKGSuccessful"
+	EventDKGKeyChange                   = "DKGKeyChange"
+)
+
 ///////////////////////////////////////////////////////////////////////////////
 // ENCODING / DECODING
 ///////////////////////////////////////////////////////////////////////////////
@@ -87,6 +103,9 @@ type EventDataRoundState struct {
 	Height int64  `json:"height"`
 	Round  int    `json:"round"`
 	Step   string `json:"step"`
+
+	// private, not exposed to websockets
+	RoundState interface{} `json:"-"`
 }
 
 type ValidatorInfo struct {

@@ -2,6 +2,8 @@ package state
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -121,7 +123,7 @@ func (blockExec *BlockExecutor) ApplyBlock(state State, blockID types.BlockID, b
 	}
 
 	startTime := time.Now().UnixNano()
-	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db)
+	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, state.LastValidators, blockExec.db)
 	endTime := time.Now().UnixNano()
 	blockExec.metrics.BlockProcessingTime.Observe(float64(endTime-startTime) / 1000000)
 	if err != nil {
@@ -216,6 +218,8 @@ func (blockExec *BlockExecutor) Commit(
 		"Committed state",
 		"height", block.Height,
 		"txs", block.NumTxs,
+		"rnd", big.NewInt(0).SetBytes(block.Header.RandomData),
+		"rndHash", block.Header.RandomHash.String(),
 		"appHash", fmt.Sprintf("%X", res.Data),
 	)
 
@@ -240,6 +244,7 @@ func execBlockOnProxyApp(
 	logger log.Logger,
 	proxyAppConn proxy.AppConnConsensus,
 	block *types.Block,
+	lastValSet *types.ValidatorSet,
 	stateDB dbm.DB,
 ) (*ABCIResponses, error) {
 	var validTxs, invalidTxs = 0, 0
@@ -388,6 +393,8 @@ func updateState(
 	validatorUpdates []*types.Validator,
 ) (State, error) {
 
+	hasValUpdates := false
+
 	// Copy the valset so we can apply changes from EndBlock
 	// and update s.LastValidators and s.Validators.
 	nValSet := state.NextValidators.Copy()
@@ -395,12 +402,20 @@ func updateState(
 	// Update the validator set with the latest abciResponses.
 	lastHeightValsChanged := state.LastHeightValidatorsChanged
 	if len(validatorUpdates) > 0 {
+		hasValUpdates = true
 		err := nValSet.UpdateWithChangeSet(validatorUpdates)
 		if err != nil {
 			return state, fmt.Errorf("Error changing validator set: %v", err)
 		}
 		// Change results from this height but only applies to the next next height.
 		lastHeightValsChanged = header.Height + 1 + 1
+	}
+
+	if state.HeightToUpdateValidators == header.Height {
+		// Change results from this height but only applies to the next next height.
+		lastHeightValsChanged = header.Height + 1 + 1
+		nValSet = state.ValidatorsAfterOffChainDKG.Copy()
+		state.ValidatorsAfterOffChainDKG = nil
 	}
 
 	// Update validator proposer priority and set state variables.
@@ -436,6 +451,8 @@ func updateState(
 		Validators:                       state.NextValidators.Copy(),
 		LastValidators:                   state.Validators.Copy(),
 		LastHeightValidatorsChanged:      lastHeightValsChanged,
+		ValidatorsAfterOffChainDKG:       state.ValidatorsAfterOffChainDKG,
+		HasValUpdates:                    hasValUpdates,
 		ConsensusParams:                  nextParams,
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
 		LastResultsHash:                  abciResponses.ResultsHash(),
@@ -482,9 +499,10 @@ func ExecCommitBlock(
 	appConnConsensus proxy.AppConnConsensus,
 	block *types.Block,
 	logger log.Logger,
+	lastValSet *types.ValidatorSet,
 	stateDB dbm.DB,
 ) ([]byte, error) {
-	_, err := execBlockOnProxyApp(logger, appConnConsensus, block, stateDB)
+	_, err := execBlockOnProxyApp(logger, appConnConsensus, block, lastValSet, stateDB)
 	if err != nil {
 		logger.Error("Error executing block on proxy app", "height", block.Height, "err", err)
 		return nil, err
@@ -497,4 +515,14 @@ func ExecCommitBlock(
 	}
 	// ResponseCommit has no error or log, just data
 	return res.Data, nil
+}
+
+// Make pretty string for validatorUpdates logging
+func makeValidatorUpdatesLogString(vals []*types.Validator) string {
+	chunks := make([]string, len(vals))
+	for i, val := range vals {
+		chunks[i] = fmt.Sprintf("%s:%d", val.Address, val.VotingPower)
+	}
+
+	return strings.Join(chunks, ",")
 }

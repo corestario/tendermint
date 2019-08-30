@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -73,7 +73,10 @@ func WALGenerateNBlocks(t *testing.T, wr io.Writer, numBlocks int) (err error) {
 	mempool := mock.Mempool{}
 	evpool := sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
-	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool)
+
+	evsw := events.NewEventSwitch()
+	dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, 1)("wal_generator", 0)), WithLogger(logger.With("dkg")))
+	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg), WithEVSW(evsw))
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)
 	if privValidator != nil {

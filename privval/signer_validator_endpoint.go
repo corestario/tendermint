@@ -93,6 +93,10 @@ func (ve *SignerValidatorEndpoint) SignProposal(chainID string, proposal *types.
 	return ve.signer.SignProposal(chainID, proposal)
 }
 
+func (ve *SignerValidatorEndpoint) SignDKGData(data *types.DKGData) error {
+	return ve.signer.SignDKGData(data)
+}
+
 //--------------------------------------------------------
 // More thread safe methods proxied to the signer
 

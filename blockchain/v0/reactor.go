@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	amino "github.com/tendermint/go-amino"
@@ -67,10 +68,14 @@ type BlockchainReactor struct {
 
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
+
+	verifier types.Verifier
+
+	verifierMtx sync.RWMutex
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore , verifier types.Verifier,
 	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
@@ -97,6 +102,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		fastSync:     fastSync,
 		requestsCh:   requestsCh,
 		errorsCh:     errorsCh,
+		verifier:     verifier,
 	}
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
@@ -206,6 +212,12 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 	}
 }
 
+func (bcR *BlockchainReactor) SetVerifier(verifier types.Verifier) {
+	bcR.verifierMtx.Lock()
+	bcR.verifier = verifier
+	bcR.verifierMtx.Unlock()
+}
+
 // Handle messages from the poolReactor telling the reactor what to do.
 // NOTE: Don't sleep in the FOR_LOOP or otherwise slow it down!
 func (bcR *BlockchainReactor) poolRoutine() {
@@ -291,7 +303,12 @@ FOR_LOOP:
 			// Consequently, it is better to split these routines rather than
 			// coupling them as it's written here.  TODO uncouple from request
 			// routine.
-
+			bcR.verifierMtx.RLock()
+			if bcR.verifier == nil {
+				bcR.verifierMtx.RUnlock()
+				continue FOR_LOOP
+			}
+			bcR.verifierMtx.RUnlock()
 			// See if there are any blocks to sync.
 			first, second := bcR.pool.PeekTwoBlocks()
 			//bcR.Logger.Info("TrySync peeked", "first", first, "second", second)
@@ -302,6 +319,16 @@ FOR_LOOP:
 				// Try again quickly next loop.
 				didProcessCh <- struct{}{}
 			}
+
+			// no need to use mutex, cause there might be only one write operation to change it
+			// but actually add mutex to prevent mistakes in future
+			bcR.verifierMtx.RLock()
+			if err := bcR.verifier.VerifyRandomData(first.RandomData, second.RandomData); err != nil {
+				bcR.poolRoutineHandleErr(err, first, second)
+				bcR.verifierMtx.RUnlock()
+				continue FOR_LOOP
+			}
+			bcR.verifierMtx.RUnlock()
 
 			firstParts := first.MakePartSet(types.BlockPartSizeBytes)
 			firstPartsHeader := firstParts.Header()
