@@ -387,6 +387,24 @@ FOR_LOOP:
 	}
 }
 
+func (bcR *BlockchainReactor) poolRoutineHandleErr(err error, first, second *types.Block) {
+	bcR.Logger.Error("Error in validation", "err", err)
+	peerID := bcR.pool.RedoRequest(first.Height)
+	peer := bcR.Switch.Peers().Get(peerID)
+	if peer != nil {
+		// NOTE: we've already removed the peer's request, but we
+		// still need to clean up the rest.
+		bcR.Switch.StopPeerForError(peer, fmt.Errorf("BlockchainReactor validation error: %v", err))
+	}
+	peerID2 := bcR.pool.RedoRequest(second.Height)
+	peer2 := bcR.Switch.Peers().Get(peerID2)
+	if peer2 != nil && peer2 != peer {
+		// NOTE: we've already removed the peer's request, but we
+		// still need to clean up the rest.
+		bcR.Switch.StopPeerForError(peer2, fmt.Errorf("BlockchainReactor validation error: %v", err))
+	}
+}
+
 // BroadcastStatusRequest broadcasts `BlockStore` height.
 func (bcR *BlockchainReactor) BroadcastStatusRequest() error {
 	msgBytes := cdc.MustMarshalBinaryBare(&bcStatusRequestMessage{bcR.store.Height()})

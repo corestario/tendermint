@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"encoding/json"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/types"
 )
 
 // DefaultDirPerm is the default permissions used when creating directories.

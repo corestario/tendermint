@@ -322,7 +322,7 @@ func NewNode(config *cfg.Config,
 		fmt.Println("bls will be generated on chain start")
 	}
 
-	bcReactor, err := createBlockchainReactor(config, state, blockExec, blockStore, fastSync, logger)
+	bcReactor, err := createBlockchainReactor(config, state, blockExec, blockStore, fastSync, logger, verifier)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create blockchain reactor")
 	}
@@ -604,7 +604,7 @@ func createBlockchainReactor(config *cfg.Config,
 	case "v0":
 		bcReactor = bcv0.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	case "v1":
-		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	default:
 		return nil, fmt.Errorf("unknown fastsync version %s", config.FastSync.Version)
 	}

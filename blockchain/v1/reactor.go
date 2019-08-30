@@ -76,10 +76,14 @@ type BlockchainReactor struct {
 	eventsFromFSMCh chan bcFsmMessage
 
 	swReporter *behaviour.SwitchReporter
+
+	verifier types.Verifier
+
+	verifierMtx sync.RWMutex
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore, verifier types.Verifier,
 	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
@@ -102,6 +106,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		messagesForFSMCh: messagesForFSMCh,
 		eventsFromFSMCh:  eventsFromFSMCh,
 		errorsForFSMCh:   errorsForFSMCh,
+		verifier:     verifier,
 	}
 	fsm := NewFSM(startHeight, bcR)
 	bcR.fsm = fsm
