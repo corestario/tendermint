@@ -1,4 +1,4 @@
-module github.com/tendermint/tendermint
+module github.com/dgamingfoundation/tendermint
 
 go 1.12
 
