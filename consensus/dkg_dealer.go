@@ -97,13 +97,14 @@ func (ds DealerState) GetValidatorsCount() int {
 
 func (ds DealerState) GetRoundID() int { return ds.roundID }
 
-type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer
+type DKGDealerConstructor func(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer
 
-func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
+func NewDKGDealer(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
 	return &DKGDealer{
 		DealerState: DealerState{
 			validators: validators,
 			addrBytes:  pv.GetPubKey().Address().Bytes(),
+			roundID:    startRound,
 		},
 		sendMsgCb:  sendMsgCb,
 		eventFirer: eventFirer,
