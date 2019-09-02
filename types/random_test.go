@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"go.dedis.ch/kyber/pairing/bn256"
-	"go.dedis.ch/kyber/sign/bls"
-	"go.dedis.ch/kyber/sign/tbls"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"go.dedis.ch/kyber/v3/pairing/bn256"
+	"go.dedis.ch/kyber/v3/sign/bls"
+	"go.dedis.ch/kyber/v3/sign/tbls"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 )

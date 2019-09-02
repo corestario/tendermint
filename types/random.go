@@ -14,11 +14,11 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 
 	"github.com/pkg/errors"
-	"go.dedis.ch/kyber"
-	"go.dedis.ch/kyber/pairing/bn256"
-	"go.dedis.ch/kyber/share"
-	"go.dedis.ch/kyber/sign/bls"
-	"go.dedis.ch/kyber/sign/tbls"
+	"go.dedis.ch/kyber/v3"
+	"go.dedis.ch/kyber/v3/pairing/bn256"
+	"go.dedis.ch/kyber/v3/share"
+	"go.dedis.ch/kyber/v3/sign/bls"
+	"go.dedis.ch/kyber/v3/sign/tbls"
 )
 
 const (

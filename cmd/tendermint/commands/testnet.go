@@ -22,7 +22,7 @@ var (
 	nValidators     int
 	nDeadValidators int
 	nNonValidators  int
-	configFile     string
+	configFile      string
 	outputDir       string
 	nodeDirPrefix   string
 
@@ -167,11 +167,12 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	genDoc := &types.GenesisDoc{
 		GenesisTime:     tmtime.Now(),
 		ChainID:         "chain-" + cmn.RandStr(6),
+		ConsensusParams: types.DefaultConsensusParams(),
 		Validators:      genVals,
 		BLSMasterPubKey: types.TestnetMasterPubKey,
 		BLSThreshold:    3,
 		BLSNumShares:    4,
-		DKGNumBlocks:    1000,
+		DKGNumBlocks:    10,
 	}
 
 	// Write genesis file.

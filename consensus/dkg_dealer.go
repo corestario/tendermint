@@ -14,11 +14,11 @@ import (
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
-	"go.dedis.ch/kyber"
-	"go.dedis.ch/kyber/pairing/bn256"
-	"go.dedis.ch/kyber/share"
-	dkg "go.dedis.ch/kyber/share/dkg/rabin"
-	vss "go.dedis.ch/kyber/share/vss/rabin"
+	"go.dedis.ch/kyber/v3"
+	"go.dedis.ch/kyber/v3/pairing/bn256"
+	"go.dedis.ch/kyber/v3/share"
+	dkg "go.dedis.ch/kyber/v3/share/dkg/rabin"
+	vss "go.dedis.ch/kyber/v3/share/vss/rabin"
 )
 
 type Dealer interface {

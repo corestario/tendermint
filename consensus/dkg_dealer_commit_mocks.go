@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	dkg "go.dedis.ch/kyber/share/dkg/rabin"
+
+	dkg "go.dedis.ch/kyber/v3/share/dkg/rabin"
 
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"

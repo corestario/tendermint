@@ -220,9 +220,10 @@ func (mem *CListMempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), t
 	var (
 		memSize  = mem.Size()
 		txsBytes = mem.TxsBytes()
+		txSize   = len(tx)
 	)
 	if memSize >= mem.config.Size ||
-		int64(len(tx))+txsBytes > mem.config.MaxTxsBytes {
+		int64(txSize)+txsBytes > mem.config.MaxTxsBytes {
 		return ErrMempoolIsFull{
 			memSize, mem.config.Size,
 			txsBytes, mem.config.MaxTxsBytes}
@@ -231,8 +232,8 @@ func (mem *CListMempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), t
 	// The size of the corresponding amino-encoded TxMessage
 	// can't be larger than the maxMsgSize, otherwise we can't
 	// relay it to peers.
-	if len(tx) > maxTxSize {
-		return ErrTxTooLarge
+	if max := calcMaxTxSize(mem.config.MaxMsgBytes); txSize > max {
+		return ErrTxTooLarge{max, txSize}
 	}
 
 	if mem.preCheck != nil {
@@ -249,11 +250,11 @@ func (mem *CListMempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), t
 		// so we only record the sender for txs still in the mempool.
 		if e, ok := mem.txsMap.Load(txKey(tx)); ok {
 			memTx := e.(*clist.CElement).Value.(*mempoolTx)
-			if _, loaded := memTx.senders.LoadOrStore(txInfo.SenderID, true); loaded {
-				// TODO: consider punishing peer for dups,
-				// its non-trivial since invalid txs can become valid,
-				// but they can spam the same tx with little cost to them atm.
-			}
+			memTx.senders.LoadOrStore(txInfo.SenderID, true)
+			// TODO: consider punishing peer for dups,
+			// its non-trivial since invalid txs can become valid,
+			// but they can spam the same tx with little cost to them atm.
+
 		}
 
 		return ErrTxInCache
@@ -279,7 +280,7 @@ func (mem *CListMempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), t
 		return err
 	}
 
-	reqRes := mem.proxyAppConn.CheckTxAsync(tx)
+	reqRes := mem.proxyAppConn.CheckTxAsync(abci.RequestCheckTx{Tx: tx})
 	reqRes.SetCallback(mem.reqResCb(tx, txInfo.SenderID, cb))
 
 	return nil
@@ -538,24 +539,23 @@ func (mem *CListMempool) Update(
 		if deliverTxResponses[i].Code == abci.CodeTypeOK {
 			// Add valid committed tx to the cache (if missing).
 			_ = mem.cache.Push(tx)
-
-			// Remove valid committed tx from the mempool.
-			if e, ok := mem.txsMap.Load(txKey(tx)); ok {
-				mem.removeTx(tx, e.(*clist.CElement), false)
-			}
 		} else {
 			// Allow invalid transactions to be resubmitted.
 			mem.cache.Remove(tx)
+		}
 
-			// Don't remove invalid tx from the mempool.
-			// Otherwise evil proposer can drop valid txs.
-			// Example:
-			//   100 -> 101 -> 102
-			// Block, proposed by evil proposer:
-			//   101 -> 102
-			// Mempool (if you remove txs):
-			//   100
-			// https://github.com/tendermint/tendermint/issues/3322.
+		// Remove committed tx from the mempool.
+		//
+		// Note an evil proposer can drop valid txs!
+		// Mempool before:
+		//   100 -> 101 -> 102
+		// Block, proposed by an evil proposer:
+		//   101 -> 102
+		// Mempool after:
+		//   100
+		// https://github.com/tendermint/tendermint/issues/3322.
+		if e, ok := mem.txsMap.Load(txKey(tx)); ok {
+			mem.removeTx(tx, e.(*clist.CElement), false)
 		}
 	}
 
@@ -592,7 +592,10 @@ func (mem *CListMempool) recheckTxs() {
 	// NOTE: globalCb may be called concurrently.
 	for e := mem.txs.Front(); e != nil; e = e.Next() {
 		memTx := e.Value.(*mempoolTx)
-		mem.proxyAppConn.CheckTxAsync(memTx.tx)
+		mem.proxyAppConn.CheckTxAsync(abci.RequestCheckTx{
+			Tx:   memTx.tx,
+			Type: abci.CheckTxType_Recheck,
+		})
 	}
 
 	mem.proxyAppConn.FlushAsync()

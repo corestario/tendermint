@@ -1,9 +1,11 @@
 package client_test
 
 import (
-	"github.com/tendermint/tendermint/consensus"
+	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/tendermint/tendermint/consensus"
 
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	nm "github.com/tendermint/tendermint/node"
@@ -14,7 +16,11 @@ var node *nm.Node
 
 func TestMain(m *testing.M) {
 	// start a tendermint node (and kvstore) in the background to test against
-	app := kvstore.NewKVStoreApplication()
+	dir, err := ioutil.TempDir("/tmp", "rpc-client-test")
+	if err != nil {
+		panic(err)
+	}
+	app := kvstore.NewPersistentKVStoreApplication(dir)
 	node = rpctest.StartTendermint(app)
 
 	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("rpc_client_tests", 0))
