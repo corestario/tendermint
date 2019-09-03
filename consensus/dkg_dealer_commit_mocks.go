@@ -16,8 +16,8 @@ type DKGMockDontSendOneCommit struct {
 	Dealer
 }
 
-func NewDKGMockDealerNoCommit(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendOneCommit{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger)}
+func NewDKGMockDealerNoCommit(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+	return &DKGMockDontSendOneCommit{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound)}
 }
 
 func (m *DKGMockDontSendOneCommit) Start() error {
@@ -88,8 +88,8 @@ type DKGMockDontSendAnyCommits struct {
 	logger log.Logger
 }
 
-func NewDKGMockDealerAnyCommits(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger) Dealer {
-	return &DKGMockDontSendAnyCommits{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger), logger}
+func NewDKGMockDealerAnyCommits(validators *types.ValidatorSet, pv types.PrivValidator, sendMsgCb func(*types.DKGData) error, eventFirer events.Fireable, logger log.Logger, startRound int) Dealer {
+	return &DKGMockDontSendAnyCommits{NewDKGDealer(validators, pv, sendMsgCb, eventFirer, logger, startRound), logger}
 }
 
 func (m *DKGMockDontSendAnyCommits) Start() error {
