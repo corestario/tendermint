@@ -7,6 +7,8 @@ import (
 
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
+
+	dkg "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 // PrivValidator defines the functionality of a local Tendermint validator
@@ -17,7 +19,7 @@ type PrivValidator interface {
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
 
-	SignDKGData(*DKGData) error
+	SignDKGData(*dkg.DKGData) error
 }
 
 //----------------------------------------
@@ -67,7 +69,7 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 }
 
 // SignDKGData Implements PrivValidator
-func (pv *MockPV) SignDKGData(data *DKGData) error {
+func (pv *MockPV) SignDKGData(data *dkg.DKGData) error {
 	var (
 		signBytes, sig []byte
 		err            error

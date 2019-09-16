@@ -12,6 +12,9 @@ import (
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/types"
+
+	dkglib "github.com/dgamingfoundation/dkglib/lib"
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 // TODO: implement round timeouts.
@@ -37,10 +40,10 @@ type dkgState struct {
 
 	// message queue used for dkgState-related messages.
 	dkgMsgQueue      chan msgInfo
-	dkgRoundToDealer map[int]Dealer
+	dkgRoundToDealer map[int]dkglib.Dealer
 	dkgRoundID       int
 	dkgNumBlocks     int64
-	newDKGDealer     DKGDealerConstructor
+	newDKGDealer     dkglib.DKGDealerConstructor
 	privValidator    types.PrivValidator
 
 	Logger log.Logger
@@ -51,8 +54,8 @@ func NewDKG(evsw events.EventSwitch, options ...DKGOption) *dkgState {
 	dkg := &dkgState{
 		evsw:             evsw,
 		dkgMsgQueue:      make(chan msgInfo, msgQueueSize),
-		dkgRoundToDealer: make(map[int]Dealer),
-		newDKGDealer:     NewDKGDealer,
+		dkgRoundToDealer: make(map[int]dkglib.Dealer),
+		newDKGDealer:     dkglib.NewDKGDealer,
 		dkgNumBlocks:     DefaultDKGNumBlocks,
 	}
 
@@ -86,7 +89,7 @@ func WithPVKey(pv types.PrivValidator) DKGOption {
 	return func(d *dkgState) { d.privValidator = pv }
 }
 
-func WithDKGDealerConstructor(newDealer DKGDealerConstructor) DKGOption {
+func WithDKGDealerConstructor(newDealer dkglib.DKGDealerConstructor) DKGOption {
 	return func(d *dkgState) {
 		if newDealer == nil {
 			return
@@ -99,7 +102,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 	dkg.mtx.Lock()
 	defer dkg.mtx.Unlock()
 
-	dkgMsg, ok := mi.Msg.(*DKGDataMessage)
+	dkgMsg, ok := mi.Msg.(*dkglib.DKGDataMessage)
 	if !ok {
 		dkg.Logger.Info("dkgState: rejecting message (unknown type)", reflect.TypeOf(dkgMsg).Name())
 		return
@@ -131,25 +134,25 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *types.
 
 	var err error
 	switch msg.Type {
-	case types.DKGPubKey:
+	case dkgtypes.DKGPubKey:
 		dkg.Logger.Info("dkgState: received PubKey message", "from", fromAddr)
 		err = dealer.HandleDKGPubKey(msg)
-	case types.DKGDeal:
+	case dkgtypes.DKGDeal:
 		dkg.Logger.Info("dkgState: received Deal message", "from", fromAddr)
 		err = dealer.HandleDKGDeal(msg)
-	case types.DKGResponse:
+	case dkgtypes.DKGResponse:
 		dkg.Logger.Info("dkgState: received Response message", "from", fromAddr)
 		err = dealer.HandleDKGResponse(msg)
-	case types.DKGJustification:
+	case dkgtypes.DKGJustification:
 		dkg.Logger.Info("dkgState: received Justification message", "from", fromAddr)
 		err = dealer.HandleDKGJustification(msg)
-	case types.DKGCommits:
+	case dkgtypes.DKGCommits:
 		dkg.Logger.Info("dkgState: received Commit message", "from", fromAddr)
 		err = dealer.HandleDKGCommit(msg)
-	case types.DKGComplaint:
+	case dkgtypes.DKGComplaint:
 		dkg.Logger.Info("dkgState: received Complaint message", "from", fromAddr)
 		err = dealer.HandleDKGComplaint(msg)
-	case types.DKGReconstructCommit:
+	case dkgtypes.DKGReconstructCommit:
 		dkg.Logger.Info("dkgState: received ReconstructCommit message", "from", fromAddr)
 		err = dealer.HandleDKGReconstructCommit(msg)
 	}
@@ -197,11 +200,11 @@ func (dkg *dkgState) startDKGRound(validators *types.ValidatorSet) error {
 	return nil
 }
 
-func (dkg *dkgState) sendDKGMessage(msg *types.DKGData) {
+func (dkg *dkgState) sendDKGMessage(msg *dkgtypes.DKGData) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
 	dkg.evsw.FireEvent(types.EventDKGData, msg)
-	mi := msgInfo{&DKGDataMessage{msg}, ""}
+	mi := msgInfo{&dkglib.DKGDataMessage{msg}, ""}
 	select {
 	case dkg.dkgMsgQueue <- mi:
 	default:
@@ -210,7 +213,7 @@ func (dkg *dkgState) sendDKGMessage(msg *types.DKGData) {
 	}
 }
 
-func (dkg *dkgState) sendSignedDKGMessage(data *types.DKGData) error {
+func (dkg *dkgState) sendSignedDKGMessage(data *dkgtypes.DKGData) error {
 	if err := dkg.Sign(data); err != nil {
 		return err
 	}
@@ -220,7 +223,7 @@ func (dkg *dkgState) sendSignedDKGMessage(data *types.DKGData) error {
 }
 
 // Sign sign message by dealer's secret key
-func (dkg *dkgState) Sign(data *types.DKGData) error {
+func (dkg *dkgState) Sign(data *dkgtypes.DKGData) error {
 	return dkg.privValidator.SignDKGData(data)
 }
 
