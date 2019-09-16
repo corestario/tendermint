@@ -78,6 +78,10 @@ func (vote *Vote) SignBytes(chainID string) []byte {
 	return bz
 }
 
+func (v *Vote) SetSignature(sig []byte) {
+	v.Signature = sig
+}
+
 func (vote *Vote) Copy() *Vote {
 	voteCopy := *vote
 	return &voteCopy

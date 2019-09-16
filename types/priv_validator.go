@@ -10,6 +10,11 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
 
+type SignData interface {
+	SignBytes(string) []byte
+	SetSignature([]byte)
+}
+
 // PrivValidator defines the functionality of a local Tendermint validator
 // that signs votes and proposals, and never double signs.
 type PrivValidator interface {
@@ -17,6 +22,8 @@ type PrivValidator interface {
 
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
+
+	SignData(chainID string, data SignData)
 
 	SignDKGData(*dkg.DKGData) error
 }
@@ -83,33 +90,17 @@ func (pv *MockPV) SignDKGData(data *dkg.DKGData) error {
 	return nil
 }
 
-// Implements PrivValidator.
-func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
+func (pv *MockPV) SignData(chainID string, data SignData) error {
 	useChainID := chainID
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
 	}
-	signBytes := vote.SignBytes(useChainID)
+	signBytes := data.SignBytes(useChainID)
 	sig, err := pv.privKey.Sign(signBytes)
 	if err != nil {
 		return err
 	}
-	vote.Signature = sig
-	return nil
-}
-
-// Implements PrivValidator.
-func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
-	useChainID := chainID
-	if pv.breakProposalSigning {
-		useChainID = "incorrect-chain-id"
-	}
-	signBytes := proposal.SignBytes(useChainID)
-	sig, err := pv.privKey.Sign(signBytes)
-	if err != nil {
-		return err
-	}
-	proposal.Signature = sig
+	data.SetSignature(sig)
 	return nil
 }
 

@@ -95,3 +95,7 @@ func (p *Proposal) SignBytes(chainID string) []byte {
 	}
 	return bz
 }
+
+func (p *Proposal) SetSignature(sig []byte) {
+	p.Signature = sig
+}
