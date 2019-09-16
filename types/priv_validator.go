@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	dkg "github.com/dgamingfoundation/dkglib/lib/alias"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
-
-	dkg "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 // PrivValidator defines the functionality of a local Tendermint validator

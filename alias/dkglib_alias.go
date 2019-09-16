@@ -1,7 +1,7 @@
 package alias
 
 import (
-	"github.com/dgamingfoundation/tendermint/types"
+	"github.com/tendermint/tendermint/types"
 )
 
 var (
