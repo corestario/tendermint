@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
-	github.com/dgamingfoundation/dkglib v0.0.0-20190916102624-9ef54625dbe7 // indirect
+	github.com/dgamingfoundation/dkglib v0.0.0-20190916135233-1b887a142176
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.8.0
 	github.com/go-logfmt/logfmt v0.4.0
