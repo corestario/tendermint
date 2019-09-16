@@ -5,8 +5,9 @@ import (
 )
 
 var (
-	NewValidatorSet    = types.NewValidatorSet
-	RegisterBlockAmino = types.RegisterBlockAmino
+	NewValidatorSet     = types.NewValidatorSet
+	RegisterBlockAmino  = types.RegisterBlockAmino
+	NewMockPVWithParams = types.NewMockPVWithParams
 )
 
 type (
@@ -14,4 +15,5 @@ type (
 	ValidatorSet  = types.ValidatorSet
 	PrivValidator = types.PrivValidator
 	Vote          = types.Vote
+	MockPV        = types.MockPV
 )
