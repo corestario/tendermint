@@ -222,7 +222,8 @@ func (dkg *dkgState) sendSignedDKGMessage(data *dkgalias.DKGData) error {
 
 // Sign sign message by dealer's secret key
 func (dkg *dkgState) Sign(data *dkgalias.DKGData) error {
-	return dkg.privValidator.SignDKGData(data)
+	dkg.privValidator.SignData("rchain", data)
+	return nil
 }
 
 func (dkg *dkgState) slashDKGLosers(losers []*alias.Validator) {
