@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	dkg "github.com/dgamingfoundation/dkglib/lib/alias"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
@@ -24,8 +23,6 @@ type PrivValidator interface {
 	SignProposal(chainID string, proposal *Proposal) error
 
 	SignData(chainID string, data SignData)
-
-	SignDKGData(*dkg.DKGData) error
 }
 
 //----------------------------------------
@@ -74,20 +71,12 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 	return pv.privKey.PubKey()
 }
 
-// SignDKGData Implements PrivValidator
-func (pv *MockPV) SignDKGData(data *dkg.DKGData) error {
-	var (
-		signBytes, sig []byte
-		err            error
-	)
-	if signBytes, err = data.SignBytes(); err != nil {
-		return err
-	}
-	if sig, err = pv.privKey.Sign(signBytes); err != nil {
-		return err
-	}
-	data.Signature = sig
-	return nil
+func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
+	return pv.SignData(chainID, vote)
+}
+
+func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
+	return pv.SignData(chainID, proposal)
 }
 
 func (pv *MockPV) SignData(chainID string, data SignData) error {
@@ -95,6 +84,7 @@ func (pv *MockPV) SignData(chainID string, data SignData) error {
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
 	}
+
 	signBytes := data.SignBytes(useChainID)
 	sig, err := pv.privKey.Sign(signBytes)
 	if err != nil {
