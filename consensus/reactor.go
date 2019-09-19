@@ -18,7 +18,7 @@ import (
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
 
-	dkg "github.com/dgamingfoundation/dkglib/lib"
+	dkgalias "github.com/dgamingfoundation/dkglib/lib/alias"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
@@ -280,7 +280,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
-		case *dkg.DKGDataMessage:
+		case *dkgtypes.DKGDataMessage:
 			conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
@@ -399,7 +399,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		})
 	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
 		func(data tmevents.EventData) {
-			conR.broadcastDKGDataMessage(data.(*dkgtypes.DKGData))
+			conR.broadcastDKGDataMessage(data.(*dkgalias.DKGData))
 		})
 }
 
@@ -454,8 +454,8 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastDKGDataMessage(data *dkgtypes.DKGData) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkg.DKGDataMessage{Data: data}))
+func (conR *ConsensusReactor) broadcastDKGDataMessage(data *dkgalias.DKGData) {
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkgtypes.DKGDataMessage{Data: data}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -1393,7 +1393,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&dkg.DKGDataMessage{}, "tendermint/DKGData", nil)
+	cdc.RegisterConcrete(&dkgtypes.DKGDataMessage{}, "tendermint/DKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {

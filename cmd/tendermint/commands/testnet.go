@@ -16,6 +16,8 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 var (
@@ -169,7 +171,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		ChainID:         "chain-" + cmn.RandStr(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		Validators:      genVals,
-		BLSMasterPubKey: types.TestnetMasterPubKey,
+		BLSMasterPubKey: dkgtypes.TestnetMasterPubKey,
 		BLSThreshold:    3,
 		BLSNumShares:    4,
 		DKGNumBlocks:    10,

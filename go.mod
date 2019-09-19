@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
-	github.com/dgamingfoundation/dkglib v0.0.0-20190917091739-36b850d29a02
+	github.com/dgamingfoundation/dkglib v0.0.0-20190919110308-c226511a1dcad0ef1cee4ec349e0002507d272f9
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.8.0
 	github.com/go-logfmt/logfmt v0.4.0
@@ -30,4 +30,6 @@ require (
 	google.golang.org/grpc v1.22.0
 )
 
-replace github.com/tendermint/tendermint => github.com/dgamingfoundation/tendermint v0.27.4-0.20190917090014-1f5c26d0932f
+replace github.com/tendermint/tendermint => /Users/pr0n00gler/projects/dgamingfoundation/tendermint
+
+replace github.com/dgamingfoundation/dkglib => /Users/pr0n00gler/projects/dgamingfoundation/dkglib

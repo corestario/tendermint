@@ -22,7 +22,7 @@ type PrivValidator interface {
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
 
-	SignData(chainID string, data SignData)
+	SignData(chainID string, data SignData) error
 }
 
 //----------------------------------------

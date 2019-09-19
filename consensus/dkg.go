@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"sync"
 
-	dkglib "github.com/dgamingfoundation/dkglib/lib"
 	dkgalias "github.com/dgamingfoundation/dkglib/lib/alias"
+	dkglib "github.com/dgamingfoundation/dkglib/lib/dealer"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/tendermint/tendermint/alias"
 	"github.com/tendermint/tendermint/crypto"
@@ -101,7 +101,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *alias.
 	dkg.mtx.Lock()
 	defer dkg.mtx.Unlock()
 
-	dkgMsg, ok := mi.Msg.(*dkglib.DKGDataMessage)
+	dkgMsg, ok := mi.Msg.(*dkgtypes.DKGDataMessage)
 	if !ok {
 		dkg.Logger.Info("dkgState: rejecting message (unknown type)", reflect.TypeOf(dkgMsg).Name())
 		return
@@ -202,7 +202,7 @@ func (dkg *dkgState) sendDKGMessage(msg *dkgalias.DKGData) {
 	// Broadcast to peers. This will not lead to processing the message
 	// on the sending node, we need to send it manually (see below).
 	dkg.evsw.FireEvent(dkgtypes.EventDKGData, msg)
-	mi := msgInfo{&dkglib.DKGDataMessage{msg}, ""}
+	mi := msgInfo{&dkgtypes.DKGDataMessage{msg}, ""}
 	select {
 	case dkg.dkgMsgQueue <- mi:
 	default:
