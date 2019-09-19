@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -16,8 +18,6 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 var (
@@ -171,7 +171,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		ChainID:         "chain-" + cmn.RandStr(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		Validators:      genVals,
-		BLSMasterPubKey: dkgtypes.TestnetMasterPubKey,
+		BLSMasterPubKey: blsShare.TestnetMasterPubKey,
 		BLSThreshold:    3,
 		BLSNumShares:    4,
 		DKGNumBlocks:    10,

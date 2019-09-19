@@ -8,6 +8,7 @@ import (
 
 	amino "github.com/tendermint/go-amino"
 
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
@@ -68,11 +69,11 @@ type BlockchainReactor struct {
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
 
-	verifier types.Verifier
+	verifier dkgtypes.Verifier
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore, verifier types.Verifier,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore, verifier dkgtypes.Verifier,
 	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {

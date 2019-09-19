@@ -4,23 +4,23 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
-	dbm "github.com/tendermint/tm-db"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/mock"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
+	dbm "github.com/tendermint/tm-db"
 )
 
 const (
@@ -127,7 +127,7 @@ func (pb *playback) replayReset(count int, newStepSub types.Subscription) error 
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
+	dkg := NewDKG(evsw, WithVerifier(&dkgtypes.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
 		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw), WithDKG(dkg))
 	newCS.SetEventBus(pb.cs.eventBus)
@@ -321,7 +321,7 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(&types.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
+	dkg := NewDKG(evsw, WithVerifier(&dkgtypes.MockVerifier{}), WithLogger(consensusLogger.With("state", "dkg")))
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
 		blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
 

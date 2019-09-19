@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	dkgalias "github.com/dgamingfoundation/dkglib/lib/alias"
 	dkglib "github.com/dgamingfoundation/dkglib/lib/dealer"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
@@ -263,7 +265,7 @@ type verifierFunc func(s string, i int) dkgtypes.Verifier
 
 func GetVerifier(T, N int) verifierFunc {
 	return func(s string, i int) dkgtypes.Verifier {
-		return dkgtypes.NewTestBLSVerifierByID(s, i, T, N)
+		return blsShare.NewTestBLSVerifierByID(s, i, T, N)
 	}
 }
 
