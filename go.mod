@@ -12,6 +12,7 @@ require (
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/websocket v1.4.0
+	github.com/json-iterator/go v1.1.7
 	github.com/libp2p/go-buffer-pool v0.0.1
 	github.com/magiconair/properties v1.8.0
 	github.com/pkg/errors v0.8.1
@@ -30,6 +31,6 @@ require (
 	google.golang.org/grpc v1.22.0
 )
 
-replace github.com/tendermint/tendermint => /Users/pr0n00gler/projects/dgamingfoundation/tendermint
+replace github.com/tendermint/tendermint => /home/andrey/projs/tendermint
 
-replace github.com/dgamingfoundation/dkglib => /Users/pr0n00gler/projects/dgamingfoundation/dkglib
+replace github.com/dgamingfoundation/dkglib => /home/andrey/projs/dkglib

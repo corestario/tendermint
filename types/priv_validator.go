@@ -9,7 +9,7 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
 
-type SignData interface {
+type DataSigner interface {
 	SignBytes(string) []byte
 	SetSignature([]byte)
 }
@@ -22,7 +22,7 @@ type PrivValidator interface {
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
 
-	SignData(chainID string, data SignData) error
+	SignData(chainID string, data DataSigner) error
 }
 
 //----------------------------------------
@@ -79,7 +79,7 @@ func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
 	return pv.SignData(chainID, proposal)
 }
 
-func (pv *MockPV) SignData(chainID string, data SignData) error {
+func (pv *MockPV) SignData(chainID string, data DataSigner) error {
 	useChainID := chainID
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"

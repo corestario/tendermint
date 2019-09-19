@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/dgamingfoundation/dkglib/lib/alias"
+
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -244,14 +246,12 @@ func (pv *FilePV) SignVote(chainID string, vote *types.Vote) error {
 
 // SignDKGData signs a DKG data
 // Implements PrivValidator
-func (pv *FilePV) SignDKGData(data *types.DKGData) error {
+func (pv *FilePV) SignDKGData(data *alias.DKGData) error {
 	var (
-		signBytes, sig []byte
-		err            error
+		sig []byte
+		err error
 	)
-	if signBytes, err = data.SignBytes(); err != nil {
-		return err
-	}
+	signBytes := data.SignBytes("")
 	if sig, err = pv.Key.PrivKey.Sign(signBytes); err != nil {
 		return err
 	}

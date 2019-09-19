@@ -96,7 +96,7 @@ func (sc *SignerRemote) SignVote(chainID string, vote *types.Vote) error {
 	return nil
 }
 
-func (sc *SignerRemote) SignDKGData(data *types.DKGData) error {
+func (sc *SignerRemote) SignData(chainID string, data types.DataSigner) error {
 	// TODO: @programmer10110 implement this.
 	return nil
 }

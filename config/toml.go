@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"encoding/json"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/types"
 )
 
 // DefaultDirPerm is the default permissions used when creating directories.
@@ -422,9 +423,9 @@ func ResetTestRootWithChainID(testName string, chainID string) *Config {
 	cmn.MustWriteFile(privKeyFilePath, []byte(testPrivValidatorKey), 0644)
 	cmn.MustWriteFile(privStateFilePath, []byte(testPrivValidatorState), 0644)
 
-	b, err := json.Marshal(types.BLSShareJSON{
-		Pub:  types.DefaultBLSVerifierPubKey,
-		Priv: types.DefaultBLSVerifierPrivKey,
+	b, err := json.Marshal(blsShare.BLSShareJSON{
+		Pub:  blsShare.DefaultBLSVerifierPubKey,
+		Priv: blsShare.DefaultBLSVerifierPrivKey,
 	})
 	if err != nil {
 		panic(err)
