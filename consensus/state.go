@@ -1218,6 +1218,9 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	logger.Info(fmt.Sprintf("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
 
 	defer func() {
+		if err := recover(); err != nil {
+			logger.Info("PANIC HANDLED", "PANIC HANDLED", err)
+		}
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
 		cs.updateRoundStep(cs.Round, cstypes.RoundStepCommit)
@@ -1244,7 +1247,10 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
+	logger.Info("START RANDOM DATA!!!!!!!!!!!!!!!!!!!")
 	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+	logger.Info("DONE RANDOM DATA!!!!!!!!!!!!!!!!!!!!")
+	logger.Info("Generated random data", "rand_data", randomData)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
