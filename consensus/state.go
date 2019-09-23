@@ -1247,10 +1247,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
-	logger.Info("START RANDOM DATA!!!!!!!!!!!!!!!!!!!")
 	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
-	logger.Info("DONE RANDOM DATA!!!!!!!!!!!!!!!!!!!!")
-	logger.Info("Generated random data", "rand_data", randomData)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}

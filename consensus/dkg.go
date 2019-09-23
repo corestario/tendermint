@@ -165,7 +165,7 @@ func (dkg *dkgState) HandleDKGShare(mi msgInfo, height int64, validators *alias.
 	}
 
 	verifier, err := dealer.GetVerifier()
-	if err == ErrDKGVerifierNotReady {
+	if err == dkgtypes.ErrDKGVerifierNotReady {
 		dkg.Logger.Debug("dkgState: verifier not ready")
 		return
 	}
