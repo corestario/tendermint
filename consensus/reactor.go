@@ -281,7 +281,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				Votes:   ourVotes,
 			}))
 		case *dkgtypes.DKGDataMessage:
-			conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
+			conR.conS.dkg.MsgQueue() <- msg
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}

@@ -24,6 +24,8 @@ import (
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
 	db "github.com/tendermint/tm-db"
+
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 )
 
 // WALGenerateNBlocks generates a consensus WAL. It does this by spinning up a
@@ -77,7 +79,7 @@ func WALGenerateNBlocks(t *testing.T, wr io.Writer, numBlocks int) (err error) {
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
 	evsw := events.NewEventSwitch()
-	dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, 1)("wal_generator", 0)), WithLogger(logger.With("dkg")))
+	dkg := dkgOffChain.NewDKG(evsw, dkgOffChain.WithVerifier(dkgOffChain.GetVerifier(1, 1)("wal_generator", 0)), dkgOffChain.WithLogger(logger.With("dkg")))
 	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, WithDKG(dkg), WithEVSW(evsw))
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)

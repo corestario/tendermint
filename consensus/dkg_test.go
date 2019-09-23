@@ -12,6 +12,11 @@ import (
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
 	"strconv"
+
+	dkgAlias "github.com/dgamingfoundation/dkglib/lib/alias"
+	dkgDealer "github.com/dgamingfoundation/dkglib/lib/dealer"
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+	dkgTypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 func init() {
@@ -42,7 +47,7 @@ func TestByzantineDKG(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetVerifier(T, N), dkgBlock)
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -65,7 +70,7 @@ func TestByzantineDKG(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -146,8 +151,8 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerNoDeal})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -171,7 +176,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -253,8 +258,8 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyDeal})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerAnyDeal})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -277,7 +282,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -357,8 +362,8 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoResponse})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerNoResponse})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -381,7 +386,7 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -464,8 +469,8 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyResponses})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerAnyResponses})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -488,7 +493,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -568,8 +573,8 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoJustification})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerNoJustification})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -592,7 +597,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -672,8 +677,8 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyJustifications})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerAnyJustifications})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -696,7 +701,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -776,8 +781,8 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerNoCommit})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerNoCommit})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -800,7 +805,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -880,8 +885,8 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 	N := 4
 	T := 3
 	logger := consensusLogger().With("test", "byzantine")
-	dkgConstructor := NewDealerConstructor(map[int]DKGDealerConstructor{0: NewDKGMockDealerAnyCommits})
-	css := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, GetVerifier(T, N), dkgBlock)
+	dkgConstructor := dkgDealer.NewDealerConstructor(map[int]dkgDealer.DKGDealerConstructor{0: dkgDealer.NewDKGMockDealerAnyCommits})
+	css, _ := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, dkgConstructor, dkgOffChain.GetVerifier(T, N), dkgBlock)
 
 	switches := make([]*p2p.Switch, N)
 	p2pLogger := logger.With("module", "p2p")
@@ -904,7 +909,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 		eventBus.SetLogger(logger.With("module", "events", "validator", i))
 
 		eventChans[i] = make(chan interface{}, 1)
-		err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock, eventChans[i])
+		_, err := eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryNewBlock)
 		require.NoError(t, err)
 
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
@@ -1013,10 +1018,10 @@ func (eh *dkgEventHandler) Subscribe(evsw events.EventSwitch) {
 	}
 }
 
-func createDKGMsg(addr []byte, roundID int, data []byte, toIndex, numEntities int) DKGDataMessage {
-	return DKGDataMessage{
-		&types.DKGData{
-			Type:        types.DKGDeal,
+func createDKGMsg(addr []byte, roundID int, data []byte, toIndex, numEntities int) dkgTypes.DKGDataMessage {
+	return dkgTypes.DKGDataMessage{
+		&dkgAlias.DKGData{
+			Type:        dkgAlias.DKGDeal,
 			Addr:        addr,
 			RoundID:     roundID,
 			Data:        data,
@@ -1037,10 +1042,7 @@ func TestDKGDataSignable(t *testing.T) {
 
 	msg := createDKGMsg(testAddr, 1, testData, 1, 1)
 
-	if signBytes, err = msg.Data.SignBytes(); err != nil {
-		t.Error(err.Error())
-		return
-	}
+	signBytes = msg.Data.SignBytes("")
 
 	msg.Data.Signature = nil
 	if expected, err = cdc.MarshalBinaryLengthPrefixed(msg.Data); err != nil {
@@ -1059,12 +1061,12 @@ func TestDKGVerifyMessage(t *testing.T) {
 	validator := types.NewValidator(pubkey, 10)
 	validators := types.NewValidatorSet([]*types.Validator{validator})
 
-	dealer := NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"))
+	dealer := dkgDealer.NewDKGDealer(validators, privVal, nil, nil, consensusLogger().With("test", "byzantine"), 0)
 	testAddr := []byte("some_test_address")
 	testData := []byte("some_test_data")
 
 	msg := createDKGMsg(testAddr, 1, testData, 1, 1)
-	err := privVal.SignDKGData(msg.Data)
+	err := privVal.SignData("", msg.Data)
 	require.NoError(t, nil, err)
 	require.NoError(t, nil, dealer.VerifyMessage(msg))
 }

@@ -139,11 +139,11 @@ type ConsensusState struct {
 }
 
 type DKG interface {
-	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
+	HandleDKGShare(dkgMsg *dkgtypes.DKGDataMessage, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
 	CheckDKGTime(height int64, validators *types.ValidatorSet)
 	SetVerifier(verifier dkgtypes.Verifier)
 	Verifier() dkgtypes.Verifier
-	MsgQueue() chan msgInfo
+	MsgQueue() chan *dkgtypes.DKGDataMessage
 }
 
 // StateOption sets an optional parameter on the ConsensusState.

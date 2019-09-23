@@ -17,3 +17,7 @@ type (
 	Vote          = types.Vote
 	MockPV        = types.MockPV
 )
+
+var (
+	MsgQueueSize = 1000
+)

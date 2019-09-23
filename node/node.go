@@ -12,6 +12,7 @@ import (
 	"time"
 
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -388,12 +389,12 @@ func createConsensusReactor(config *cfg.Config,
 
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	dkg := cs.NewDKG(
+	dkg := dkgOffChain.NewDKG(
 		evsw,
-		cs.WithVerifier(verifier),
-		cs.WithDKGNumBlocks(dkgNumBlocks),
-		cs.WithLogger(consensusLogger.With("dkg")),
-		cs.WithPVKey(privValidator))
+		dkgOffChain.WithVerifier(verifier),
+		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
+		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
+		dkgOffChain.WithPVKey(privValidator))
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
