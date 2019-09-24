@@ -31,6 +31,6 @@ require (
 	google.golang.org/grpc v1.22.0
 )
 
-replace github.com/tendermint/tendermint => /home/andrey/projs/tendermint
+replace github.com/tendermint/tendermint => github.com/dgamingfoundation/tendermint v1.0
 
-replace github.com/dgamingfoundation/dkglib => /home/andrey/projs/dkglib
+replace github.com/dgamingfoundation/dkglib => github.com/dgamingfoundation/dkglib v1.0
