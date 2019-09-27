@@ -20,6 +20,8 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 //-----------------------------------------------------------------------------
@@ -137,11 +139,11 @@ type ConsensusState struct {
 }
 
 type DKG interface {
-	HandleDKGShare(mi msgInfo, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
+	HandleDKGShare(dkgMsg *dkgtypes.DKGDataMessage, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
 	CheckDKGTime(height int64, validators *types.ValidatorSet)
-	SetVerifier(verifier types.Verifier)
-	Verifier() types.Verifier
-	MsgQueue() chan msgInfo
+	SetVerifier(verifier dkgtypes.Verifier)
+	Verifier() dkgtypes.Verifier
+	MsgQueue() chan *dkgtypes.DKGDataMessage
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -284,7 +286,7 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Unlock()
 }
 
-func (cs *ConsensusState) SetVerifier(verifier types.Verifier) {
+func (cs *ConsensusState) SetVerifier(verifier dkgtypes.Verifier) {
 	cs.dkg.SetVerifier(verifier)
 }
 
@@ -1216,6 +1218,9 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	logger.Info(fmt.Sprintf("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
 
 	defer func() {
+		if err := recover(); err != nil {
+			logger.Info("PANIC HANDLED", "PANIC HANDLED", err)
+		}
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
 		cs.updateRoundStep(cs.Round, cstypes.RoundStepCommit)

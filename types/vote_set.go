@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"github.com/pkg/errors"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -202,11 +204,16 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 }
 
 // GetVotes returns all votes in a voteSet, including nil ones (beware!).
-func (voteSet *VoteSet) GetVotes() []*Vote {
+func (voteSet *VoteSet) GetVotes() []blsShare.BLSSigner {
+	res := make([]blsShare.BLSSigner, 0)
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
+	for _, v := range voteSet.votes {
+		v := v
+		res = append(res, v)
+	}
 
-	return voteSet.votes
+	return res
 }
 
 // Returns (vote, true) if vote exists for valIndex and blockKey.

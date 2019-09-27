@@ -244,18 +244,15 @@ func (pv *FilePV) SignVote(chainID string, vote *types.Vote) error {
 
 // SignDKGData signs a DKG data
 // Implements PrivValidator
-func (pv *FilePV) SignDKGData(data *types.DKGData) error {
-	var (
-		signBytes, sig []byte
-		err            error
-	)
-	if signBytes, err = data.SignBytes(); err != nil {
+func (pv *FilePV) SignData(chainID string, data types.DataSigner) error {
+	useChainID := chainID
+
+	signBytes := data.SignBytes(useChainID)
+	sig, err := pv.Key.PrivKey.Sign(signBytes)
+	if err != nil {
 		return err
 	}
-	if sig, err = pv.Key.PrivKey.Sign(signBytes); err != nil {
-		return err
-	}
-	data.Signature = sig
+	data.SetSignature(sig)
 	return nil
 }
 

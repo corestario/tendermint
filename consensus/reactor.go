@@ -17,6 +17,9 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
+
+	dkgalias "github.com/dgamingfoundation/dkglib/lib/alias"
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 const (
@@ -277,8 +280,8 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
-		case *DKGDataMessage:
-			conR.conS.dkg.MsgQueue() <- msgInfo{Msg: msg, PeerID: ""}
+		case *dkgtypes.DKGDataMessage:
+			conR.conS.dkg.MsgQueue() <- msg
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -396,7 +399,7 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		})
 	conR.conS.evsw.AddListenerForEvent(subscriber, types.EventDKGData,
 		func(data tmevents.EventData) {
-			conR.broadcastDKGDataMessage(data.(*types.DKGData))
+			conR.broadcastDKGDataMessage(data.(*dkgalias.DKGData))
 		})
 }
 
@@ -451,8 +454,8 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Broadcasts HasVoteMessage to peers that care.
-func (conR *ConsensusReactor) broadcastDKGDataMessage(data *types.DKGData) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&DKGDataMessage{Data: data}))
+func (conR *ConsensusReactor) broadcastDKGDataMessage(data *dkgalias.DKGData) {
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkgtypes.DKGDataMessage{Data: data}))
 }
 
 func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) {
@@ -1390,7 +1393,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
-	cdc.RegisterConcrete(&DKGDataMessage{}, "tendermint/DKGData", nil)
+	cdc.RegisterConcrete(&dkgtypes.DKGDataMessage{}, "tendermint/DKGData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
@@ -1476,20 +1479,6 @@ func (m *NewValidBlockMessage) ValidateBasic() error {
 func (m *NewValidBlockMessage) String() string {
 	return fmt.Sprintf("[ValidBlockMessage H:%v R:%v BP:%v BA:%v IsCommit:%v]",
 		m.Height, m.Round, m.BlockPartsHeader, m.BlockParts, m.IsCommit)
-}
-
-//-------------------------------------
-
-type DKGDataMessage struct {
-	Data *types.DKGData
-}
-
-func (m *DKGDataMessage) ValidateBasic() error {
-	return nil
-}
-
-func (m *DKGDataMessage) String() string {
-	return fmt.Sprintf("[Proposal %+v]", m.Data)
 }
 
 // ProposalMessage is sent when a new block is proposed.

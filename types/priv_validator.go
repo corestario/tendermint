@@ -9,6 +9,11 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
 
+type DataSigner interface {
+	SignBytes(string) []byte
+	SetSignature([]byte)
+}
+
 // PrivValidator defines the functionality of a local Tendermint validator
 // that signs votes and proposals, and never double signs.
 type PrivValidator interface {
@@ -17,7 +22,7 @@ type PrivValidator interface {
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
 
-	SignDKGData(*DKGData) error
+	SignData(chainID string, data DataSigner) error
 }
 
 //----------------------------------------
@@ -66,49 +71,26 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 	return pv.privKey.PubKey()
 }
 
-// SignDKGData Implements PrivValidator
-func (pv *MockPV) SignDKGData(data *DKGData) error {
-	var (
-		signBytes, sig []byte
-		err            error
-	)
-	if signBytes, err = data.SignBytes(); err != nil {
-		return err
-	}
-	if sig, err = pv.privKey.Sign(signBytes); err != nil {
-		return err
-	}
-	data.Signature = sig
-	return nil
+func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
+	return pv.SignData(chainID, vote)
 }
 
-// Implements PrivValidator.
-func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
+func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
+	return pv.SignData(chainID, proposal)
+}
+
+func (pv *MockPV) SignData(chainID string, data DataSigner) error {
 	useChainID := chainID
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
 	}
-	signBytes := vote.SignBytes(useChainID)
-	sig, err := pv.privKey.Sign(signBytes)
-	if err != nil {
-		return err
-	}
-	vote.Signature = sig
-	return nil
-}
 
-// Implements PrivValidator.
-func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
-	useChainID := chainID
-	if pv.breakProposalSigning {
-		useChainID = "incorrect-chain-id"
-	}
-	signBytes := proposal.SignBytes(useChainID)
+	signBytes := data.SignBytes(useChainID)
 	sig, err := pv.privKey.Sign(signBytes)
 	if err != nil {
 		return err
 	}
-	proposal.Signature = sig
+	data.SetSignature(sig)
 	return nil
 }
 

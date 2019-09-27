@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	bls "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -42,7 +43,7 @@ type GenesisDoc struct {
 	BLSThreshold    int                `json:"bls_threshold"`
 	BLSNumShares    int                `json:"bls_num_shares"`
 	BLSMasterPubKey string             `json:"bls_master_pub_key"`
-	BLSShare        *BLSShareJSON      `json:"bls_share"`
+	BLSShare        *bls.BLSShareJSON  `json:"bls_share"`
 	DKGNumBlocks    int64              `json:"dkg_hum_blocks"` // Trigger DKG after this number of blocks added
 }
 

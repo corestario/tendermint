@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"os"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"encoding/json"
 
 	"github.com/spf13/cobra"
@@ -63,7 +65,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 			return err
 		}
 		defer f.Close()
-		share, ok := types.TestnetShares[config.NodeID]
+		share, ok := blsShare.TestnetShares[config.NodeID]
 		if !ok {
 			return fmt.Errorf("node id #%d is unexpected", config.NodeID)
 		}
@@ -93,7 +95,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		}}
 
 		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
-		genDoc.BLSMasterPubKey = types.DefaultBLSVerifierMasterPubKey
+		genDoc.BLSMasterPubKey = blsShare.DefaultBLSVerifierMasterPubKey
 		genDoc.BLSThreshold = 2
 		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 1000

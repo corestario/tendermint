@@ -60,6 +60,14 @@ type Vote struct {
 	BLSSignature     []byte        `json:"bls_signature"`
 }
 
+func (vote *Vote) GetBLSSignature() []byte {
+	return vote.BLSSignature
+}
+
+func (vote *Vote) GetHash() []byte {
+	return vote.BlockID.Hash
+}
+
 // CommitSig converts the Vote to a CommitSig.
 // If the Vote is nil, the CommitSig will be nil.
 func (vote *Vote) CommitSig() *CommitSig {
@@ -76,6 +84,10 @@ func (vote *Vote) SignBytes(chainID string) []byte {
 		panic(err)
 	}
 	return bz
+}
+
+func (v *Vote) SetSignature(sig []byte) {
+	v.Signature = sig
 }
 
 func (vote *Vote) Copy() *Vote {

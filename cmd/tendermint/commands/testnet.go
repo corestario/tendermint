@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -169,7 +171,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		ChainID:         "chain-" + cmn.RandStr(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		Validators:      genVals,
-		BLSMasterPubKey: types.TestnetMasterPubKey,
+		BLSMasterPubKey: blsShare.TestnetMasterPubKey,
 		BLSThreshold:    3,
 		BLSNumShares:    4,
 		DKGNumBlocks:    10,

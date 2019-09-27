@@ -11,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -353,7 +356,7 @@ func createBlockchainReactor(config *cfg.Config,
 	state sm.State,
 	blockExec *sm.BlockExecutor,
 	blockStore *store.BlockStore,
-	verifier types.Verifier,
+	verifier dkgtypes.Verifier,
 	fastSync bool,
 	logger log.Logger) (bcReactor p2p.Reactor, err error) {
 
@@ -381,17 +384,17 @@ func createConsensusReactor(config *cfg.Config,
 	fastSync bool,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
-	verifier types.Verifier,
+	verifier dkgtypes.Verifier,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
 
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	dkg := cs.NewDKG(
+	dkg := dkgOffChain.NewDKG(
 		evsw,
-		cs.WithVerifier(verifier),
-		cs.WithDKGNumBlocks(dkgNumBlocks),
-		cs.WithLogger(consensusLogger.With("dkg")),
-		cs.WithPVKey(privValidator))
+		dkgOffChain.WithVerifier(verifier),
+		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
+		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
+		dkgOffChain.WithPVKey(privValidator))
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
@@ -630,7 +633,7 @@ func NewNode(config *cfg.Config,
 	)
 
 	fmt.Println("load bls from", config.BLSKeyFile())
-	blsShare, err := types.LoadBLSShareJSON(config.BLSKeyFile())
+	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
 	}
@@ -640,12 +643,12 @@ func NewNode(config *cfg.Config,
 		return nil, fmt.Errorf("failed to load keypair: %v", err)
 	}
 
-	masterPubKey, err := types.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
+	masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
 
-	verifier := types.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	// Make BlockchainReactor
 	bcReactor, err := createBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)
 	if err != nil {
