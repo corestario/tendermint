@@ -1,6 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/node"
+	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/privval"
+	"github.com/tendermint/tendermint/proxy"
 	"os"
 	"path/filepath"
 
@@ -8,7 +14,6 @@ import (
 
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
 	cfg "github.com/tendermint/tendermint/config"
-	nm "github.com/tendermint/tendermint/node"
 )
 
 func main() {
@@ -36,7 +41,7 @@ func main() {
 	//	* Provide their own DB implementation
 	// can copy this file and use something other than the
 	// DefaultNewNode function
-	nodeFunc := nm.DefaultNewNode
+	nodeFunc := node.DefaultNewNode
 
 	// Create & start node
 	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
@@ -45,4 +50,46 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		panic(err)
 	}
+}
+
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
+	// Generate node PrivKey
+	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert old PrivValidator if it exists.
+	oldPrivVal := config.OldPrivValidatorFile()
+	newPrivValKey := config.PrivValidatorKeyFile()
+	newPrivValState := config.PrivValidatorStateFile()
+	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
+		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
+		if err != nil {
+			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
+		}
+		logger.Info("Upgrading PrivValidator file",
+			"old", oldPrivVal,
+			"newKey", newPrivValKey,
+			"newState", newPrivValState,
+		)
+		oldPV.Upgrade(newPrivValKey, newPrivValState)
+	}
+
+	var blsReactor p2p.Reactor = getBLSReactor()
+
+	return node.NewNode(config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		nodeKey,
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		node.DefaultGenesisDocProviderFunc(config),
+		node.DefaultDBProvider,
+		node.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+		node.CustomReactors(map[string]p2p.Reactor{"CUSTOM": blsReactor}),
+	)
+}
+
+func getBLSReactor() p2p.Reactor {
+
 }
