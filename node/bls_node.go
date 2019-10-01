@@ -28,6 +28,87 @@ import (
 	"github.com/tendermint/tendermint/version"
 )
 
+func GetBLSReactors(config *cfg.Config, privValidator types.PrivValidator, metricsProvider MetricsProvider, fastSync bool, logger log.Logger) (p2p.Reactor, *consensus.ConsensusReactor, *consensus.ConsensusState, error) {
+	consensusLogger := logger.With("module", "consensus")
+
+	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, DefaultGenesisDocProviderFunc(config))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
+	proxyApp, err := createAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	csMetrics, _, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
+
+	// EventBus and IndexerService must be started before the handshake because
+	// we might need to index the txs of the replayed block as this might not have happened
+	// when the node stopped last time (i.e. the node stopped after it saved the block
+	// but before it indexed the txs, or, endblocker panicked)
+	eventBus, err := createAndStartEventBus(logger)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Make MempoolReactor
+	_, mempool := createMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
+
+	// Make Evidence Reactor
+	_, evidencePool, err := createEvidenceReactor(config, DefaultDBProvider, stateDB, logger)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// make block executor for consensus and blockchain reactors to execute blocks
+	blockExec := sm.NewBlockExecutor(
+		stateDB,
+		logger.With("module", "state"),
+		proxyApp.Consensus(),
+		mempool,
+		evidencePool,
+		sm.BlockExecutorWithMetrics(smMetrics),
+	)
+
+	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load bls share: %v", err)
+	}
+
+	keypair, err := blsShare.Deserialize()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to deserialize keypair: %v", err)
+	}
+
+	masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+	}
+
+	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
+
+	// Make BlockchainReactor
+	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, consensusLogger)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "could not create blockchain reactor")
+	}
+
+	// Make ConsensusReactor
+	consensusReactor, consensusState := createBLSConsensusReactor(
+		config, state, blockExec, blockStore, mempool, evidencePool,
+		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
+	)
+
+	return bcReactor, consensusReactor, consensusState, nil
+}
+
 func createBLSBlockchainReactor(config *cfg.Config,
 	state sm.State,
 	blockExec *sm.BlockExecutor,

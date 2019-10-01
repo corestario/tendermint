@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
-	"os"
-	"path/filepath"
 
 	"github.com/tendermint/tendermint/libs/cli"
 
@@ -91,5 +92,5 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 }
 
 func getBLSReactor() p2p.Reactor {
-
+	return nil
 }
