@@ -3,7 +3,6 @@ module github.com/dgamingfoundation/tendermint
 go 1.12
 
 require (
-	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/Workiva/go-datastructures v1.0.50
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
@@ -13,8 +12,8 @@ require (
 	github.com/go-logfmt/logfmt v0.4.0
 	github.com/gogo/protobuf v1.3.0
 	github.com/golang/protobuf v1.3.2
-	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/gorilla/websocket v1.4.1
+	github.com/json-iterator/go v1.1.7
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/magiconair/properties v1.8.1
 	github.com/pkg/errors v0.8.1
@@ -26,6 +25,7 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.4.0
 	github.com/tendermint/go-amino v0.15.0
+	github.com/tendermint/tendermint v0.32.3
 	github.com/tendermint/tm-db v0.2.0
 	go.dedis.ch/kyber/v3 v3.0.4
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
