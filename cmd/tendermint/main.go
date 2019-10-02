@@ -77,7 +77,13 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	var blsReactor p2p.Reactor = getBLSReactor()
+	//bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
+	bcReactor, consensusReactor, _, err := node.GetBLSReactors(
+		config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		node.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+	)
 
 	return node.NewNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
@@ -87,10 +93,9 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 		node.DefaultDBProvider,
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		node.CustomReactors(map[string]p2p.Reactor{"CUSTOM": blsReactor}),
+		node.CustomReactors(map[string]p2p.Reactor{
+			"BLOCKCHAIN": bcReactor,
+			"CONSENSUS":  consensusReactor,
+		}),
 	)
-}
-
-func getBLSReactor() p2p.Reactor {
-	return nil
 }

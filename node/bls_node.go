@@ -28,7 +28,12 @@ import (
 	"github.com/tendermint/tendermint/version"
 )
 
-func GetBLSReactors(config *cfg.Config, privValidator types.PrivValidator, metricsProvider MetricsProvider, fastSync bool, logger log.Logger) (p2p.Reactor, *consensus.ConsensusReactor, *consensus.ConsensusState, error) {
+func GetBLSReactors(
+	config *cfg.Config,
+	privValidator types.PrivValidator,
+	metricsProvider MetricsProvider,
+	logger log.Logger,
+) (p2p.Reactor, *consensus.ConsensusReactor, *consensus.ConsensusState, error) {
 	consensusLogger := logger.With("module", "consensus")
 
 	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
@@ -40,6 +45,8 @@ func GetBLSReactors(config *cfg.Config, privValidator types.PrivValidator, metri
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	fastSync := config.FastSyncMode && !onlyValidatorIsUs(state, privValidator)
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := createAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
@@ -119,7 +126,7 @@ func createBLSBlockchainReactor(config *cfg.Config,
 
 	switch config.FastSync.Version {
 	case "v0":
-		bcReactor = bcv0.NewBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
+		bcReactor = bcv0.NewBLSBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	case "v1":
 		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	default:
