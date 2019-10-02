@@ -13,6 +13,8 @@ import (
 
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	"github.com/pkg/errors"
+	dbm "github.com/tendermint/tm-db"
+
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/events"
@@ -22,7 +24,6 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
 )
 
 const (

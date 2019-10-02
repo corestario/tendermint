@@ -137,25 +137,29 @@ func TestNodeSetPrivValTCP(t *testing.T) {
 	config.BaseConfig.PrivValidatorListenAddr = addr
 
 	dialer := privval.DialTCPFn(addr, 100*time.Millisecond, ed25519.GenPrivKey())
-	pvsc := privval.NewSignerServiceEndpoint(
+	dialerEndpoint := privval.NewSignerDialerEndpoint(
 		log.TestingLogger(),
-		config.ChainID(),
-		types.NewMockPV(),
 		dialer,
 	)
-	privval.SignerServiceEndpointTimeoutReadWrite(100 * time.Millisecond)(pvsc)
+	privval.SignerDialerEndpointTimeoutReadWrite(100 * time.Millisecond)(dialerEndpoint)
+
+	signerServer := privval.NewSignerServer(
+		dialerEndpoint,
+		config.ChainID(),
+		types.NewMockPV(),
+	)
 
 	go func() {
-		err := pvsc.Start()
+		err := signerServer.Start()
 		if err != nil {
 			panic(err)
 		}
 	}()
-	defer pvsc.Stop()
+	defer signerServer.Stop()
 
 	n, err := DefaultNewNode(config, log.TestingLogger())
 	require.NoError(t, err)
-	assert.IsType(t, &privval.SignerValidatorEndpoint{}, n.PrivValidator())
+	assert.IsType(t, &privval.SignerClient{}, n.PrivValidator())
 }
 
 // address without a protocol must result in error
@@ -179,13 +183,18 @@ func TestNodeSetPrivValIPC(t *testing.T) {
 	config.BaseConfig.PrivValidatorListenAddr = "unix://" + tmpfile
 
 	dialer := privval.DialUnixFn(tmpfile)
-	pvsc := privval.NewSignerServiceEndpoint(
+	dialerEndpoint := privval.NewSignerDialerEndpoint(
 		log.TestingLogger(),
+		dialer,
+	)
+	privval.SignerDialerEndpointTimeoutReadWrite(100 * time.Millisecond)(dialerEndpoint)
+
+	pvsc := privval.NewSignerServer(
+		dialerEndpoint,
 		config.ChainID(),
 		tmpfile,
 		types.NewMockPV(),
 	)
-	privval.SignerServiceEndpointTimeoutReadWrite(100 * time.Millisecond)(pvsc)
 
 	go func() {
 		err := pvsc.Start()
@@ -195,8 +204,7 @@ func TestNodeSetPrivValIPC(t *testing.T) {
 
 	n, err := DefaultNewNode(config, log.TestingLogger())
 	require.NoError(t, err)
-	assert.IsType(t, &privval.SignerValidatorEndpoint{}, n.PrivValidator())
-
+	assert.IsType(t, &privval.SignerClient{}, n.PrivValidator())
 }
 
 // testFreeAddr claims a free port so we don't block on listener being ready.

@@ -17,6 +17,7 @@ type DataSigner interface {
 // PrivValidator defines the functionality of a local Tendermint validator
 // that signs votes and proposals, and never double signs.
 type PrivValidator interface {
+	// TODO: Extend the interface to return errors too. Issue: https://github.com/tendermint/tendermint/issues/3602
 	GetPubKey() crypto.PubKey
 
 	SignVote(chainID string, vote *Vote) error

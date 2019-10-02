@@ -449,7 +449,7 @@ func (voteSet *VoteSet) StringIndented(indent string) string {
 	voteStrings := make([]string, len(voteSet.votes))
 	for i, vote := range voteSet.votes {
 		if vote == nil {
-			voteStrings[i] = "nil-Vote"
+			voteStrings[i] = nilVoteStr
 		} else {
 			voteStrings[i] = vote.String()
 		}
@@ -514,7 +514,7 @@ func (voteSet *VoteSet) voteStrings() []string {
 	voteStrings := make([]string, len(voteSet.votes))
 	for i, vote := range voteSet.votes {
 		if vote == nil {
-			voteStrings[i] = "nil-Vote"
+			voteStrings[i] = nilVoteStr
 		} else {
 			voteStrings[i] = vote.String()
 		}

@@ -129,6 +129,7 @@ func makeJSONRPCHandler(funcMap map[string]*RPCFunc, cdc *amino.Codec, logger lo
 		}
 
 		for _, request := range requests {
+			request := request
 			// A Notification is a Request object without an "id" member.
 			// The Server MUST NOT reply to a Notification, including those that are within a batch request.
 			if request.ID == types.JSONRPCStringID("") {
@@ -339,13 +340,14 @@ func jsonStringToArg(cdc *amino.Codec, rt reflect.Type, arg string) (reflect.Val
 func nonJSONStringToArg(cdc *amino.Codec, rt reflect.Type, arg string) (reflect.Value, error, bool) {
 	if rt.Kind() == reflect.Ptr {
 		rv_, err, ok := nonJSONStringToArg(cdc, rt.Elem(), arg)
-		if err != nil {
+		switch {
+		case err != nil:
 			return reflect.Value{}, err, false
-		} else if ok {
+		case ok:
 			rv := reflect.New(rt.Elem())
 			rv.Elem().Set(rv_)
 			return rv, nil, true
-		} else {
+		default:
 			return reflect.Value{}, nil, false
 		}
 	} else {
@@ -375,9 +377,9 @@ func _nonJSONStringToArg(cdc *amino.Codec, rt reflect.Type, arg string) (reflect
 		rv, err := jsonStringToArg(cdc, rt, qarg)
 		if err != nil {
 			return rv, err, false
-		} else {
-			return rv, nil, true
 		}
+
+		return rv, nil, true
 	}
 
 	if isHexString {
@@ -395,7 +397,7 @@ func _nonJSONStringToArg(cdc *amino.Codec, rt reflect.Type, arg string) (reflect
 		if rt.Kind() == reflect.String {
 			return reflect.ValueOf(string(value)), nil, true
 		}
-		return reflect.ValueOf([]byte(value)), nil, true
+		return reflect.ValueOf(value), nil, true
 	}
 
 	if isQuotedString && expectingByteSlice {
