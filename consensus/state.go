@@ -470,7 +470,13 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
+	// TODO (oopcode): as we make ConsensusState an interface, we will feed different
+	// states (and the standard one will be without this dkg field). Currently update height
+	// is called _before_ the actual start of consensus, which leads to panic (because
+	// node.Options have not been applied yet).
+	if cs.dkg != nil {
+		cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {

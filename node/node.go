@@ -167,9 +167,6 @@ func CustomReactors(reactors map[string]p2p.Reactor) Option {
 // TODO: make consensus an interface (currently useless).
 func CustomConsensusState(state *consensus.ConsensusState) Option {
 	return func(n *Node) {
-		if err := n.consensusState.Stop(); err != nil {
-			panic(fmt.Sprintf("failed to stop default consensus: %v", err))
-		}
 		n.consensusState = state
 	}
 }
