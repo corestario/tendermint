@@ -113,6 +113,8 @@ func GetBLSReactors(
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
 
+	config.DBPath = config.DBPath + ".unused"
+
 	return bcReactor, consensusReactor, consensusState, nil
 }
 

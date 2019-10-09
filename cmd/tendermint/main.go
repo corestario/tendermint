@@ -77,9 +77,7 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	//bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
-	//bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
-	bcReactor, consensusReactor, _, err := node.GetBLSReactors(
+	bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		node.DefaultMetricsProvider(config.Instrumentation),
@@ -98,6 +96,6 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 			"BLOCKCHAIN": bcReactor,
 			"CONSENSUS":  consensusReactor,
 		}),
-		// node.CustomConsensusState(consensusState),
+		node.CustomConsensusState(consensusState),
 	)
 }
