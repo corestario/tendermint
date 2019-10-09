@@ -132,7 +132,9 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		}
 
 		config.NodeID = i
-		initFilesWithConfig(config)
+		if err := initFilesWithConfig(config); err != nil {
+			return fmt.Errorf("failed to initFilesWithConfig: %v", err)
+		}
 
 		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
 		pvStateFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorState)
@@ -162,7 +164,9 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		initFilesWithConfig(config)
+		if err := initFilesWithConfig(config); err != nil {
+			return fmt.Errorf("failed to initFilesWithConfig: %v", err)
+		}
 	}
 
 	// Generate genesis doc from generated validators

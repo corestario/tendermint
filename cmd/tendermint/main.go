@@ -42,7 +42,7 @@ func main() {
 	//	* Provide their own DB implementation
 	// can copy this file and use something other than the
 	// DefaultNewNode function
-	nodeFunc := node.DefaultNewNode
+	nodeFunc := NewBLSNode
 
 	// Create & start node
 	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
@@ -78,6 +78,7 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 	}
 
 	//bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
+	//bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
 	bcReactor, consensusReactor, _, err := node.GetBLSReactors(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
@@ -97,5 +98,6 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 			"BLOCKCHAIN": bcReactor,
 			"CONSENSUS":  consensusReactor,
 		}),
+		// node.CustomConsensusState(consensusState),
 	)
 }

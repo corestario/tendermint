@@ -108,7 +108,7 @@ func GetBLSReactors(
 	}
 
 	// Make ConsensusReactor
-	consensusReactor, consensusState := createBLSConsensusReactor(
+	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
@@ -137,7 +137,7 @@ func createBLSBlockchainReactor(config *cfg.Config,
 	return bcReactor, nil
 }
 
-func createBLSConsensusReactor(config *cfg.Config,
+func createBLSConsensus(config *cfg.Config,
 	state sm.State,
 	blockExec *sm.BlockExecutor,
 	blockStore sm.BlockStore,
@@ -150,7 +150,6 @@ func createBLSConsensusReactor(config *cfg.Config,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
-
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 	dkg := dkgOffChain.NewDKG(
@@ -299,7 +298,7 @@ func NewBLSNode(config *cfg.Config,
 	}
 
 	// Make ConsensusReactor
-	consensusReactor, consensusState := createBLSConsensusReactor(
+	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
