@@ -109,6 +109,11 @@ func (sc *SignerClient) SignVote(chainID string, vote *types.Vote) error {
 	return nil
 }
 
+func (sc *SignerClient) SignData(chainID string, data types.DataSigner) error {
+	// TODO: @programmer10110 implement this.
+	return nil
+}
+
 // SignProposal requests a remote signer to sign a proposal
 func (sc *SignerClient) SignProposal(chainID string, proposal *types.Proposal) error {
 	response, err := sc.endpoint.SendRequest(&SignProposalRequest{Proposal: proposal})
