@@ -44,4 +44,4 @@ terraform.tfstate.d
 
 .vscode
 
-go.sum
+profile\.out

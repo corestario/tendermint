@@ -8,7 +8,6 @@ import (
 
 	amino "github.com/tendermint/go-amino"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
@@ -68,12 +67,10 @@ type BlockchainReactor struct {
 
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
-
-	verifier dkgtypes.Verifier
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore, verifier dkgtypes.Verifier,
+func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
 	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
@@ -100,7 +97,6 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		fastSync:     fastSync,
 		requestsCh:   requestsCh,
 		errorsCh:     errorsCh,
-		verifier:     verifier,
 	}
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
@@ -307,11 +303,6 @@ FOR_LOOP:
 				didProcessCh <- struct{}{}
 			}
 
-			if err := bcR.verifier.VerifyRandomData(first.RandomData, second.RandomData); err != nil {
-				bcR.poolRoutineHandleErr(err, first, second)
-				continue FOR_LOOP
-			}
-
 			firstParts := first.MakePartSet(types.BlockPartSizeBytes)
 			firstPartsHeader := firstParts.Header()
 			firstID := types.BlockID{Hash: first.Hash(), PartsHeader: firstPartsHeader}
@@ -366,24 +357,6 @@ FOR_LOOP:
 		case <-bcR.Quit():
 			break FOR_LOOP
 		}
-	}
-}
-
-func (bcR *BlockchainReactor) poolRoutineHandleErr(err error, first, second *types.Block) {
-	bcR.Logger.Error("Error in validation", "err", err)
-	peerID := bcR.pool.RedoRequest(first.Height)
-	peer := bcR.Switch.Peers().Get(peerID)
-	if peer != nil {
-		// NOTE: we've already removed the peer's request, but we
-		// still need to clean up the rest.
-		bcR.Switch.StopPeerForError(peer, fmt.Errorf("BlockchainReactor validation error: %v", err))
-	}
-	peerID2 := bcR.pool.RedoRequest(second.Height)
-	peer2 := bcR.Switch.Peers().Get(peerID2)
-	if peer2 != nil && peer2 != peer {
-		// NOTE: we've already removed the peer's request, but we
-		// still need to clean up the rest.
-		bcR.Switch.StopPeerForError(peer2, fmt.Errorf("BlockchainReactor validation error: %v", err))
 	}
 }
 

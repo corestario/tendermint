@@ -79,11 +79,6 @@ var _ AddrBook = (*addrBook)(nil)
 type addrBook struct {
 	cmn.BaseService
 
-	// immutable after creation
-	filePath          string
-	routabilityStrict bool
-	key               string // random prefix for bucket placement
-
 	// accessed concurrently
 	mtx        sync.Mutex
 	rand       *cmn.Rand
@@ -94,6 +89,11 @@ type addrBook struct {
 	bucketsNew []map[string]*knownAddress
 	nOld       int
 	nNew       int
+
+	// immutable after creation
+	filePath          string
+	key               string // random prefix for bucket placement
+	routabilityStrict bool
 
 	wg sync.WaitGroup
 }
@@ -784,12 +784,12 @@ func (a *addrBook) groupKey(na *p2p.NetAddress) string {
 	}
 	if na.RFC6145() || na.RFC6052() {
 		// last four bytes are the ip address
-		ip := net.IP(na.IP[12:16])
+		ip := na.IP[12:16]
 		return (&net.IPNet{IP: ip, Mask: net.CIDRMask(16, 32)}).String()
 	}
 
 	if na.RFC3964() {
-		ip := net.IP(na.IP[2:7])
+		ip := na.IP[2:7]
 		return (&net.IPNet{IP: ip, Mask: net.CIDRMask(16, 32)}).String()
 
 	}

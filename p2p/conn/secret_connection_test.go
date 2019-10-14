@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -87,7 +86,7 @@ func makeSecretConnPair(tb testing.TB) (fooSecConn, barSecConn *SecretConnection
 	require.Nil(tb, trs.FirstError())
 	require.True(tb, ok, "Unexpected task abortion")
 
-	return
+	return fooSecConn, barSecConn
 }
 
 func TestSecretConnectionHandshake(t *testing.T) {
@@ -110,6 +109,7 @@ func TestShareLowOrderPubkey(t *testing.T) {
 
 	// all blacklisted low order points:
 	for _, remLowOrderPubKey := range blacklist {
+		remLowOrderPubKey := remLowOrderPubKey
 		_, _ = cmn.Parallel(
 			func(_ int) (val interface{}, err error, abort bool) {
 				_, err = shareEphPubKey(fooConn, locEphPub)
@@ -135,6 +135,7 @@ func TestShareLowOrderPubkey(t *testing.T) {
 func TestComputeDHFailsOnLowOrder(t *testing.T) {
 	_, locPrivKey := genEphKeys()
 	for _, remLowOrderPubKey := range blacklist {
+		remLowOrderPubKey := remLowOrderPubKey
 		shared, err := computeDHSecret(&remLowOrderPubKey, locPrivKey)
 		assert.Error(t, err)
 
@@ -187,7 +188,7 @@ func TestConcurrentRead(t *testing.T) {
 	}
 }
 
-func writeLots(t *testing.T, wg *sync.WaitGroup, conn net.Conn, txt string, n int) {
+func writeLots(t *testing.T, wg *sync.WaitGroup, conn io.Writer, txt string, n int) {
 	defer wg.Done()
 	for i := 0; i < n; i++ {
 		_, err := conn.Write([]byte(txt))
@@ -198,7 +199,7 @@ func writeLots(t *testing.T, wg *sync.WaitGroup, conn net.Conn, txt string, n in
 	}
 }
 
-func readLots(t *testing.T, wg *sync.WaitGroup, conn net.Conn, n int) {
+func readLots(t *testing.T, wg *sync.WaitGroup, conn io.Reader, n int) {
 	readBuffer := make([]byte, dataMaxSize)
 	for i := 0; i < n; i++ {
 		_, err := conn.Read(readBuffer)

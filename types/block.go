@@ -443,7 +443,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Validators:     %v
 %s  NextValidators: %v
 %s  App:            %v
-%s  Consensus:       %v
+%s  Consensus:      %v
 %s  Results:        %v
 %s  Evidence:       %v
 %s  Proposer:       %v
@@ -773,7 +773,7 @@ func (sh SignedHeader) ValidateBasic(chainID string) error {
 	// ValidateBasic on the Commit.
 	err := sh.Commit.ValidateBasic()
 	if err != nil {
-		return cmn.ErrorWrap(err, "commit.ValidateBasic failed during SignedHeader.ValidateBasic")
+		return errors.Wrap(err, "commit.ValidateBasic failed during SignedHeader.ValidateBasic")
 	}
 	return nil
 }

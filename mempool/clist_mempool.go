@@ -29,6 +29,15 @@ import (
 // mempool uses a concurrent list structure for storing transactions that can
 // be efficiently accessed by multiple concurrent readers.
 type CListMempool struct {
+	// Atomic integers
+	height     int64 // the last block Update()'d to
+	txsBytes   int64 // total size of mempool, in bytes
+	rechecking int32 // for re-checking filtered txs on Update()
+
+	// notify listeners (ie. consensus) when txs are available
+	notifiedTxsAvailable bool
+	txsAvailable         chan struct{} // fires once for each height, when the mempool is not empty
+
 	config *cfg.MempoolConfig
 
 	proxyMtx     sync.Mutex
@@ -43,18 +52,9 @@ type CListMempool struct {
 	recheckCursor *clist.CElement // next expected response
 	recheckEnd    *clist.CElement // re-checking stops here
 
-	// notify listeners (ie. consensus) when txs are available
-	notifiedTxsAvailable bool
-	txsAvailable         chan struct{} // fires once for each height, when the mempool is not empty
-
 	// Map for quick access to txs to record sender in CheckTx.
 	// txsMap: txKey -> CElement
 	txsMap sync.Map
-
-	// Atomic integers
-	height     int64 // the last block Update()'d to
-	rechecking int32 // for re-checking filtered txs on Update()
-	txsBytes   int64 // total size of mempool, in bytes
 
 	// Keep a cache of already-seen txs.
 	// This reduces the pressure on the proxyApp.
@@ -232,8 +232,8 @@ func (mem *CListMempool) CheckTxWithInfo(tx types.Tx, cb func(*abci.Response), t
 	// The size of the corresponding amino-encoded TxMessage
 	// can't be larger than the maxMsgSize, otherwise we can't
 	// relay it to peers.
-	if max := calcMaxTxSize(mem.config.MaxMsgBytes); txSize > max {
-		return ErrTxTooLarge{max, txSize}
+	if txSize > mem.config.MaxTxBytes {
+		return ErrTxTooLarge{mem.config.MaxTxBytes, txSize}
 	}
 
 	if mem.preCheck != nil {

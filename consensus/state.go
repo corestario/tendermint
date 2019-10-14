@@ -470,7 +470,13 @@ func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
 
-	cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
+	// TODO (oopcode): as we make ConsensusState an interface, we will feed different
+	// states (and the standard one will be without this dkg field). Currently update height
+	// is called _before_ the actual start of consensus, which leads to panic (because
+	// node.Options have not been applied yet).
+	if cs.dkg != nil {
+		cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -564,7 +570,7 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 		// We add timeoutCommit to allow transactions
 		// to be gathered for the first block.
 		// And alternative solution that relies on clocks:
-		//  cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
+		// cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
 		cs.StartTime = cs.config.Commit(tmtime.Now())
 	} else {
 		cs.StartTime = cs.config.Commit(cs.CommitTime)
@@ -785,9 +791,25 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 func (cs *ConsensusState) handleTxsAvailable() {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-	// we only need to do this for round 0
-	cs.enterNewRound(cs.Height, 0)
-	cs.enterPropose(cs.Height, 0)
+
+	// We only need to do this for round 0.
+	if cs.Round != 0 {
+		return
+	}
+
+	switch cs.Step {
+	case cstypes.RoundStepNewHeight: // timeoutCommit phase
+		if cs.needProofBlock(cs.Height) {
+			// enterPropose will be called by enterNewRound
+			return
+		}
+
+		// +1ms to ensure RoundStepNewRound timeout always happens after RoundStepNewHeight
+		timeoutCommit := cs.StartTime.Sub(tmtime.Now()) + 1*time.Millisecond
+		cs.scheduleTimeout(timeoutCommit, cs.Height, 0, cstypes.RoundStepNewRound)
+	case cstypes.RoundStepNewRound: // after timeoutCommit
+		cs.enterPropose(cs.Height, 0)
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -795,7 +817,7 @@ func (cs *ConsensusState) handleTxsAvailable() {
 // Used internally by handleTimeout and handleMsg to make state transitions
 
 // Enter: `timeoutNewHeight` by startTime (commitTime+timeoutCommit),
-// 	or, if SkipTimeout==true, after receiving all precommits from (height,round-1)
+// 	or, if SkipTimeoutCommit==true, after receiving all precommits from (height,round-1)
 // Enter: `timeoutPrecommits` after any +2/3 precommits from (height,round-1)
 // Enter: +2/3 precommits for nil at (height,round-1)
 // Enter: +2/3 prevotes any or +2/3 precommits for block or any from (height, round)
@@ -981,14 +1003,15 @@ func (cs *ConsensusState) isProposalComplete() bool {
 // NOTE: keep it side-effect free for clarity.
 func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts *types.PartSet) {
 	var commit *types.Commit
-	if cs.Height == 1 {
+	switch {
+	case cs.Height == 1:
 		// We're creating a proposal for the first block.
 		// The commit is empty, but not nil.
 		commit = types.NewCommit(types.BlockID{}, nil)
-	} else if cs.LastCommit.HasTwoThirdsMajority() {
+	case cs.LastCommit.HasTwoThirdsMajority():
 		// Make the commit from LastCommit
 		commit = cs.LastCommit.MakeCommit()
-	} else {
+	default:
 		// This shouldn't happen.
 		cs.Logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
 		return
@@ -1503,7 +1526,7 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		_, err = cdc.UnmarshalBinaryLengthPrefixedReader(
 			cs.ProposalBlockParts.GetReader(),
 			&cs.ProposalBlock,
-			int64(cs.state.ConsensusParams.Block.MaxBytes),
+			cs.state.ConsensusParams.Block.MaxBytes,
 		)
 		if err != nil {
 			return added, err
@@ -1563,9 +1586,11 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, err
 			cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence)
 			return added, err
 		} else {
-			// Probably an invalid signature / Bad peer.
-			// Seems this can also err sometimes with "Unexpected step" - perhaps not from a bad peer ?
-			cs.Logger.Error("Error attempting to add vote", "err", err)
+			// Either
+			// 1) bad peer OR
+			// 2) not a bad peer? this can also err sometimes with "Unexpected step" OR
+			// 3) tmkms use with multiple validators connecting to a single tmkms instance (https://github.com/tendermint/tendermint/issues/3839).
+			cs.Logger.Info("Error attempting to add vote", "err", err)
 			return added, ErrAddingVote
 		}
 	}
@@ -1685,17 +1710,18 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		}
 
 		// If +2/3 prevotes for *anything* for future round:
-		if cs.Round < vote.Round && prevotes.HasTwoThirdsAny() {
+		switch {
+		case cs.Round < vote.Round && prevotes.HasTwoThirdsAny():
 			// Round-skip if there is any 2/3+ of votes ahead of us
 			cs.enterNewRound(height, vote.Round)
-		} else if cs.Round == vote.Round && cstypes.RoundStepPrevote <= cs.Step { // current round
+		case cs.Round == vote.Round && cstypes.RoundStepPrevote <= cs.Step: // current round
 			blockID, ok := prevotes.TwoThirdsMajority()
 			if ok && (cs.isProposalComplete() || len(blockID.Hash) == 0) {
 				cs.enterPrecommit(height, vote.Round)
 			} else if prevotes.HasTwoThirdsAny() {
 				cs.enterPrevoteWait(height, vote.Round)
 			}
-		} else if cs.Proposal != nil && 0 <= cs.Proposal.POLRound && cs.Proposal.POLRound == vote.Round {
+		case cs.Proposal != nil && 0 <= cs.Proposal.POLRound && cs.Proposal.POLRound == vote.Round:
 			// If the proposal is now complete, enter prevote of cs.Round.
 			if cs.isProposalComplete() {
 				cs.enterPrevote(height, cs.Round)
@@ -1724,10 +1750,10 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 			cs.enterPrecommitWait(height, vote.Round)
 		}
 	default:
-		panic(fmt.Sprintf("Unexpected vote type %X", vote.Type)) // go-wire should prevent this.
+		panic(fmt.Sprintf("Unexpected vote type %X", vote.Type)) // go-amino should prevent this.
 	}
 
-	return
+	return added, err
 }
 
 func (cs *ConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.Vote, error) {

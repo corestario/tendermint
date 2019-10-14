@@ -9,13 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tendermint/tendermint/libs/events"
-
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/mock"
 	"github.com/tendermint/tendermint/privval"
@@ -24,8 +23,6 @@ import (
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
 	db "github.com/tendermint/tm-db"
-
-	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 )
 
 // WALGenerateNBlocks generates a consensus WAL. It does this by spinning up a

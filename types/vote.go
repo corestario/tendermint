@@ -12,7 +12,8 @@ import (
 
 const (
 	// MaxVoteBytes is a maximum vote size (including amino overhead).
-	MaxVoteBytes int64 = 223
+	MaxVoteBytes int64  = 223
+	nilVoteStr   string = "nil-Vote"
 )
 
 var (
@@ -97,7 +98,7 @@ func (vote *Vote) Copy() *Vote {
 
 func (vote *Vote) String() string {
 	if vote == nil {
-		return "nil-Vote"
+		return nilVoteStr
 	}
 	var typeString string
 	switch vote.Type {

@@ -6,20 +6,19 @@ linters:
   disable:
     - gocyclo
     - golint
-    - maligned
     - errcheck
-    - interfacer
-    - unconvert
-    - goconst
     - unparam
-    - nakedret
     - lll
     - gochecknoglobals
-    - gocritic
     - gochecknoinits
-    - scopelint
     - stylecheck
-# linters-settings:
+    - funlen
+    - godox
+    - whitespace
+
+linters-settings:
+  dogsled:
+    max-blank-identifiers: 3
 #   govet:
 #     check-shadowing: true
 #   golint:
@@ -30,9 +29,6 @@ linters:
 #     suggest-new: true
 #   dupl:
 #     threshold: 100
-#   goconst:
-#     min-len: 2
-#     min-occurrences: 2
 #   depguard:
 #     list-type: blacklist
 #     packages:
