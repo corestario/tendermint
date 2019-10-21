@@ -58,11 +58,6 @@ type Vote struct {
 	ValidatorAddress Address       `json:"validator_address"`
 	ValidatorIndex   int           `json:"validator_index"`
 	Signature        []byte        `json:"signature"`
-	BLSSignature     []byte        `json:"bls_signature"`
-}
-
-func (vote *Vote) GetBLSSignature() []byte {
-	return vote.BLSSignature
 }
 
 func (vote *Vote) GetHash() []byte {
@@ -110,7 +105,7 @@ func (vote *Vote) String() string {
 		panic("Unknown vote type")
 	}
 
-	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s BLSSignature: %+v}",
+	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s }",
 		vote.ValidatorIndex,
 		cmn.Fingerprint(vote.ValidatorAddress),
 		vote.Height,
@@ -120,7 +115,6 @@ func (vote *Vote) String() string {
 		cmn.Fingerprint(vote.BlockID.Hash),
 		cmn.Fingerprint(vote.Signature),
 		CanonicalTime(vote.Timestamp),
-		vote.BLSSignature,
 	)
 }
 
