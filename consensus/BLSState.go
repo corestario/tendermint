@@ -345,7 +345,7 @@ func (cs *BLSConsensusState) getPreviousBlock() *types.Block {
 	return prevBlock
 }
 
-func (cs *BLSConsensusState) addVote(vote *types.BLSVote, peerID p2p.ID) (added bool, err error) {
+func (cs *BLSConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, err error) {
 	cs.Logger.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "valIndex", vote.ValidatorIndex, "csHeight", cs.Height)
 
 	// A precommit for the previous height?
@@ -503,7 +503,7 @@ func (cs *BLSConsensusState) addVote(vote *types.BLSVote, peerID p2p.ID) (added 
 }
 
 // sign the vote and publish on internalMsgQueue
-func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.BLSVote {
+func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.Vote {
 	// if we don't have a key or we're not in the validator set, do nothing
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
@@ -536,29 +536,36 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	return nil
 }
 
-func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.BLSVote, error) {
+func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.Vote, error) {
 	// Flush the WAL. Otherwise, we may not recompute the same vote to sign, and the privValidator will refuse to sign anything.
 	cs.wal.FlushAndSync()
 
 	addr := cs.privValidator.GetPubKey().Address()
 	valIndex, _ := cs.Validators.GetByAddress(addr)
 
-	blsVote := &types.BLSVote{
-		Vote: types.Vote{
-			ValidatorAddress: addr,
-			ValidatorIndex:   valIndex,
-			Height:           cs.Height,
-			Round:            cs.Round,
-			Timestamp:        cs.voteTime(),
-			Type:             type_,
-			BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
-		},
-		BLSSignature: data,
+	vote := &types.Vote{
+		ValidatorAddress: addr,
+		ValidatorIndex:   valIndex,
+		Height:           cs.Height,
+		Round:            cs.Round,
+		Timestamp:        cs.voteTime(),
+		Type:             type_,
+		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
+		BLSSignature:     data,
 	}
-	err := cs.privValidator.SignVote(cs.state.ChainID, blsVote)
-	return blsVote, err
+	err := cs.privValidator.SignData(cs.state.ChainID, vote)
+	return vote, err
 }
 
 func WithDKG(dkg DKG) BLSStateOption {
 	return func(cs *BLSConsensusState) { cs.dkg = dkg }
+}
+
+func WithEVSW(evsw tmevents.EventSwitch) BLSStateOption {
+	return func(cs *BLSConsensusState) { cs.evsw = evsw }
+}
+
+// StateMetrics sets the metrics.
+func BLSStateMetrics(metrics *Metrics) BLSStateOption {
+	return func(cs *BLSConsensusState) { cs.metrics = metrics }
 }

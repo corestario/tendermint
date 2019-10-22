@@ -30,7 +30,7 @@ func MakeCommit(blockID BlockID, height int64, round int,
 }
 
 func signAddVote(privVal PrivValidator, vote *Vote, voteSet *VoteSet) (signed bool, err error) {
-	err = privVal.SignVote(voteSet.ChainID(), vote)
+	err = privVal.SignData(voteSet.ChainID(), vote)
 	if err != nil {
 		return false, err
 	}
@@ -49,7 +49,7 @@ func MakeVote(height int64, blockID BlockID, valSet *ValidatorSet, privVal PrivV
 		Type:             PrecommitType,
 		BlockID:          blockID,
 	}
-	if err := privVal.SignVote(chainID, vote); err != nil {
+	if err := privVal.SignData(chainID, vote); err != nil {
 		return nil, err
 	}
 	return vote, nil

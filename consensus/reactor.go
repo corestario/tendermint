@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"fmt"
+	"github.com/dgamingfoundation/tendermint/rpc/core"
 	"reflect"
 	"sync"
 	"time"
@@ -40,7 +41,7 @@ const (
 type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
-	conS *ConsensusState
+	conS core.Consensus
 
 	mtx      sync.RWMutex
 	fastSync bool
@@ -53,7 +54,7 @@ type ReactorOption func(*ConsensusReactor)
 
 // NewConsensusReactor returns a new ConsensusReactor with the given
 // consensusState.
-func NewConsensusReactor(consensusState *ConsensusState, fastSync bool, options ...ReactorOption) *ConsensusReactor {
+func NewConsensusReactor(consensusState core.Consensus, fastSync bool, options ...ReactorOption) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:     consensusState,
 		fastSync: fastSync,
@@ -103,7 +104,7 @@ func (conR *ConsensusReactor) OnStop() {
 // It resets the state, turns off fast_sync, and starts the consensus state-machine
 func (conR *ConsensusReactor) SwitchToConsensus(state sm.State, blocksSynced int) {
 	conR.Logger.Info("SwitchToConsensus")
-	conR.conS.reconstructLastCommit(state)
+	conR.conS.ReconstructLastCommit(state)
 	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
 	// broadcast a NewRoundStepMessage.
 	conR.conS.updateToState(state)
@@ -250,9 +251,9 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 			ps.ApplyHasVoteMessage(msg)
 		case *VoteSetMaj23Message:
 			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
+			cs.GetMtx().Lock()
+			height, votes := cs.GetHeight(), cs.GetVotes()
+			cs.GetMtx().Unlock()
 			if height != msg.Height {
 				return
 			}
@@ -313,9 +314,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteMessage:
 			cs := conR.conS
-			cs.mtx.RLock()
-			height, valSize, lastCommitSize := cs.Height, cs.Validators.Size(), cs.LastCommit.Size()
-			cs.mtx.RUnlock()
+			cs.GetMtx().RLock()
+			_, validators := cs.GetValidators()
+			height, valSize, lastCommitSize := cs.GetHeight(), len(validators), cs.GetLastCommit().Size()
+			cs.GetMtx().RUnlock()
 			ps.EnsureVoteBitArrays(height, valSize)
 			ps.EnsureVoteBitArrays(height-1, lastCommitSize)
 			ps.SetHasVote(msg.Vote)
@@ -335,9 +337,9 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteSetBitsMessage:
 			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
+			cs.GetMtx().Lock()
+			height, votes := cs.GetHeight(), cs.GetVotes()
+			cs.GetMtx().Unlock()
 
 			if height == msg.Height {
 				var ourVotes *cmn.BitArray

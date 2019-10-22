@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 
+	"github.com/dgamingfoundation/tendermint/rpc/core"
 	amino "github.com/tendermint/go-amino"
 	abci "github.com/tendermint/tendermint/abci/types"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
@@ -198,7 +199,7 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   *cs.ConsensusState     // latest consensus state
+	consensusState   core.Consensus         // latest consensus state
 	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
 	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
 	evidencePool     *evidence.EvidencePool // tracking evidence
@@ -980,7 +981,7 @@ func (n *Node) BlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() *cs.ConsensusState {
+func (n *Node) ConsensusState() core.Consensus {
 	return n.consensusState
 }
 

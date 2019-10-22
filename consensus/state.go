@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	types2 "github.com/dgamingfoundation/tendermint/consensus/types"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -968,7 +969,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	// Make proposal
 	propBlockId := types.BlockID{Hash: block.Hash(), PartsHeader: blockParts.Header()}
 	proposal := types.NewProposal(height, round, cs.ValidRound, propBlockId)
-	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal); err == nil {
+	if err := cs.privValidator.SignData(cs.state.ChainID, proposal); err == nil {
 
 		// send proposal and block parts on internal msg queue
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
@@ -1814,7 +1815,7 @@ func (cs *ConsensusState) signVote(
 		Type:             type_,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 	}
-	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
+	err := cs.privValidator.SignData(cs.state.ChainID, vote)
 	return vote, err
 }
 
@@ -1853,6 +1854,22 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
 	return nil
+}
+
+func (cs *ConsensusState) GetMtx() sync.RWMutex {
+	return cs.mtx
+}
+
+func (cs *ConsensusState) GetHeight() int64 {
+	return cs.Height
+}
+
+func (cs *ConsensusState) GetVotes() *types2.HeightVoteSet {
+	return cs.Votes
+}
+
+func (cs *ConsensusState) GetLastCommit() *types.VoteSet {
+	return cs.LastCommit
 }
 
 //---------------------------------------------------------

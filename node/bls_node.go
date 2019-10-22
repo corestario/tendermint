@@ -161,14 +161,14 @@ func createBLSConsensus(config *cfg.Config,
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator))
 
-	consensusState := cs.NewConsensusState(
+	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
 		state.Copy(),
 		blockExec,
 		blockStore,
 		mempool,
 		evidencePool,
-		cs.StateMetrics(csMetrics),
+		cs.BLSStateMetrics(csMetrics),
 		cs.WithEVSW(evsw),
 		cs.WithDKG(dkg),
 	)

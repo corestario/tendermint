@@ -20,9 +20,6 @@ type PrivValidator interface {
 	// TODO: Extend the interface to return errors too. Issue: https://github.com/tendermint/tendermint/issues/3602
 	GetPubKey() crypto.PubKey
 
-	SignVote(chainID string, vote *Vote) error
-	SignProposal(chainID string, proposal *Proposal) error
-
 	SignData(chainID string, data DataSigner) error
 }
 
