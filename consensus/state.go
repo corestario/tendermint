@@ -3,25 +3,23 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	types2 "github.com/dgamingfoundation/tendermint/consensus/types"
 	"reflect"
 	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/fail"
-	"github.com/tendermint/tendermint/libs/log"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
+	types2 "github.com/tendermint/tendermint/consensus/types"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
+	"github.com/tendermint/tendermint/libs/fail"
+	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	tmtime "github.com/tendermint/tendermint/types/time"
 )
 
 //-----------------------------------------------------------------------------
@@ -134,6 +132,8 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
+
+	dkg interface{}
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -174,7 +174,7 @@ func NewConsensusState(
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
-	cs.reconstructLastCommit(state)
+	cs.ReconstructLastCommit(state)
 	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 	for _, option := range options {
 		option(cs)
@@ -484,7 +484,7 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
-func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
+func (cs *ConsensusState) ReconstructLastCommit(state sm.State) {
 	if state.LastBlockHeight == 0 {
 		return
 	}
@@ -1856,8 +1856,8 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	return nil
 }
 
-func (cs *ConsensusState) GetMtx() sync.RWMutex {
-	return cs.mtx
+func (cs *ConsensusState) GetMtx() *sync.RWMutex {
+	return &cs.mtx
 }
 
 func (cs *ConsensusState) GetHeight() int64 {
@@ -1891,4 +1891,12 @@ func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2
 		return 1
 	}
 	return 0
+}
+
+func WithDKG(dkg DKG) StateOption {
+	return func(cs *ConsensusState) {}
+}
+
+func WithEVSW(evsw tmevents.EventSwitch) StateOption {
+	return func(cs *ConsensusState) { cs.evsw = evsw }
 }

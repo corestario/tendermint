@@ -166,7 +166,7 @@ func CustomReactors(reactors map[string]p2p.Reactor) Option {
 }
 
 // TODO: make consensus an interface (currently useless).
-func CustomConsensusState(state *consensus.ConsensusState) Option {
+func CustomConsensusState(state consensus.StateInterface) Option {
 	return func(n *Node) {
 		n.consensusState = state
 	}
@@ -385,7 +385,7 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	consensusLogger log.Logger) (*consensus.ConsensusReactor, consensus.StateInterface) {
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,

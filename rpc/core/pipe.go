@@ -2,10 +2,8 @@ package core
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
-	types2 "github.com/dgamingfoundation/tendermint/consensus/types"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/crypto"
@@ -38,19 +36,6 @@ type Consensus interface {
 	GetLastHeight() int64
 	GetRoundStateJSON() ([]byte, error)
 	GetRoundStateSimpleJSON() ([]byte, error)
-	Start() error
-	Stop() error
-	Wait()
-	ReconstructLastCommit(sm.State)
-	GetMtx() sync.RWMutex
-	GetVotes() *types2.HeightVoteSet
-	GetHeight() int64
-	GetLastCommit() types.VoteSet
-	SetEventBus(*types.EventBus)
-	GetRoundState() *types2.RoundState
-	LoadCommit(int64) *types.Commit
-	Quit() <-chan struct{}
-	StringIndented(string) string
 }
 
 type transport interface {

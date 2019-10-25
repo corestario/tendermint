@@ -2,18 +2,19 @@ package consensus
 
 import (
 	"fmt"
+	"runtime/debug"
+
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
-	"github.com/dgamingfoundation/tendermint/libs/fail"
-	"github.com/dgamingfoundation/tendermint/p2p"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
+	"github.com/tendermint/tendermint/libs/fail"
+	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-	"runtime/debug"
 )
 
 type BLSConsensusState struct {
@@ -71,7 +72,7 @@ func NewBLSConsensusState(
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
-	blsCS.reconstructLastCommit(state)
+	blsCS.ReconstructLastCommit(state)
 
 	return blsCS
 }
@@ -557,11 +558,11 @@ func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, he
 	return vote, err
 }
 
-func WithDKG(dkg DKG) BLSStateOption {
+func BLSWithDKG(dkg DKG) BLSStateOption {
 	return func(cs *BLSConsensusState) { cs.dkg = dkg }
 }
 
-func WithEVSW(evsw tmevents.EventSwitch) BLSStateOption {
+func BLSWithEVSW(evsw tmevents.EventSwitch) BLSStateOption {
 	return func(cs *BLSConsensusState) { cs.evsw = evsw }
 }
 

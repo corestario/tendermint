@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"fmt"
-	"github.com/dgamingfoundation/tendermint/rpc/core"
 	"reflect"
 	"sync"
 	"time"
@@ -41,7 +40,7 @@ const (
 type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
-	conS core.Consensus
+	conS *ConsensusState
 
 	mtx      sync.RWMutex
 	fastSync bool
@@ -54,7 +53,7 @@ type ReactorOption func(*ConsensusReactor)
 
 // NewConsensusReactor returns a new ConsensusReactor with the given
 // consensusState.
-func NewConsensusReactor(consensusState core.Consensus, fastSync bool, options ...ReactorOption) *ConsensusReactor {
+func NewConsensusReactor(consensusState *ConsensusState, fastSync bool, options ...ReactorOption) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:     consensusState,
 		fastSync: fastSync,
@@ -281,8 +280,8 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
-		case *dkgtypes.DKGDataMessage:
-			conR.conS.dkg.MsgQueue() <- msg
+		//case *dkgtypes.DKGDataMessage:
+		//	conR.conS.dkg.MsgQueue() <- msg
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}

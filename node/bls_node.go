@@ -33,7 +33,7 @@ func GetBLSReactors(
 	privValidator types.PrivValidator,
 	metricsProvider MetricsProvider,
 	logger log.Logger,
-) (p2p.Reactor, *consensus.ConsensusReactor, *consensus.ConsensusState, error) {
+) (p2p.Reactor, *consensus.ConsensusReactor, consensus.StateInterface, error) {
 	consensusLogger := logger.With("module", "consensus")
 
 	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
@@ -151,7 +151,7 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	dkgNumBlocks int64) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 	dkg := dkgOffChain.NewDKG(
@@ -169,15 +169,15 @@ func createBLSConsensus(config *cfg.Config,
 		mempool,
 		evidencePool,
 		cs.BLSStateMetrics(csMetrics),
-		cs.WithEVSW(evsw),
-		cs.WithDKG(dkg),
+		cs.BLSWithEVSW(evsw),
+		cs.BLSWithDKG(dkg),
 	)
 
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
+	consensusReactor := cs.NewConsensusReactor(&consensusState.ConsensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor

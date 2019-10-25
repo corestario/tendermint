@@ -133,6 +133,7 @@ func (pb *playback) replayReset(count int, newStepSub types.Subscription) error 
 	dkg := dkgOffChain.NewDKG(evsw, dkgOffChain.WithVerifier(&dkgtypes.MockVerifier{}), dkgOffChain.WithLogger(consensusLogger.With("state", "dkg")))
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
 		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw), WithDKG(dkg))
+
 	newCS.SetEventBus(pb.cs.eventBus)
 	newCS.SetLogger(consensusLogger)
 	newCS.startForReplay()
