@@ -8,15 +8,18 @@ import (
 	"sync"
 	"time"
 
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	types2 "github.com/tendermint/tendermint/consensus/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	tmevents "github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/fail"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/state"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -37,6 +40,8 @@ var (
 var (
 	msgQueueSize = 1000
 )
+
+var _ StateInterface = &ConsensusState{}
 
 // msgs from the reactor which may update the state
 type msgInfo struct {
@@ -132,8 +137,6 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
-
-	dkg interface{}
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -174,7 +177,7 @@ func NewConsensusState(
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
-	cs.ReconstructLastCommit(state)
+	cs.reconstructLastCommit(state)
 	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
 	for _, option := range options {
 		option(cs)
@@ -482,9 +485,13 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 	}
 }
 
+func (cs *ConsensusState) ReconstructLastCommit(state sm.State) {
+	cs.reconstructLastCommit(state)
+}
+
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
-func (cs *ConsensusState) ReconstructLastCommit(state sm.State) {
+func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 	if state.LastBlockHeight == 0 {
 		return
 	}
@@ -494,6 +501,10 @@ func (cs *ConsensusState) ReconstructLastCommit(state sm.State) {
 		panic("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
 	cs.LastCommit = lastPrecommits
+}
+
+func (cs *ConsensusState) UpdateToState(state sm.State) {
+	cs.updateToState(state)
 }
 
 // Updates ConsensusState and increments height to match that of state.
@@ -1870,6 +1881,34 @@ func (cs *ConsensusState) GetVotes() *types2.HeightVoteSet {
 
 func (cs *ConsensusState) GetLastCommit() *types.VoteSet {
 	return cs.LastCommit
+}
+
+func (cs *ConsensusState) SetDoWALCatchup(value bool) {
+	cs.doWALCatchup = value
+}
+
+func (cs *ConsensusState) GetEventSwitch() events.EventSwitch {
+	return cs.evsw
+}
+
+func (cs *ConsensusState) GetPeerMsgQueue() chan msgInfo {
+	return cs.peerMsgQueue
+}
+
+func (cs *ConsensusState) GetStatsMsgQueue() chan msgInfo {
+	return cs.statsMsgQueue
+}
+
+func (cs *ConsensusState) GetDKGMsgQueue() chan *dkgtypes.DKGDataMessage {
+	return nil
+}
+
+func (cs *ConsensusState) GetBlockStore() state.BlockStore {
+	return cs.blockStore
+}
+
+func (cs *ConsensusState) GetConfig() *cfg.ConsensusConfig {
+	return cs.config
 }
 
 //---------------------------------------------------------

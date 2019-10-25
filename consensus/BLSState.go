@@ -32,6 +32,8 @@ type DKG interface {
 	MsgQueue() chan *dkgtypes.DKGDataMessage
 }
 
+var _ StateInterface = &BLSConsensusState{}
+
 func NewBLSConsensusState(
 	config *cfg.ConsensusConfig,
 	state sm.State,
@@ -72,7 +74,7 @@ func NewBLSConsensusState(
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
-	blsCS.ReconstructLastCommit(state)
+	blsCS.reconstructLastCommit(state)
 
 	return blsCS
 }
@@ -569,4 +571,8 @@ func BLSWithEVSW(evsw tmevents.EventSwitch) BLSStateOption {
 // StateMetrics sets the metrics.
 func BLSStateMetrics(metrics *Metrics) BLSStateOption {
 	return func(cs *BLSConsensusState) { cs.metrics = metrics }
+}
+
+func (cs *BLSConsensusState) GetDKGMsgQueue() chan *dkgtypes.DKGDataMessage {
+	return cs.dkg.MsgQueue()
 }
