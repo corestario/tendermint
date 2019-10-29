@@ -231,8 +231,6 @@ func DumpConsensusState(ctx *rpctypes.Context) (*ctypes.ResultDumpConsensusState
 	return &ctypes.ResultDumpConsensusState{
 		RoundState: roundState,
 		Peers:      peerStates}, nil
-
-	return &ctypes.ResultDumpConsensusState{}, nil
 }
 
 // ConsensusState returns a concise summary of the consensus state.
