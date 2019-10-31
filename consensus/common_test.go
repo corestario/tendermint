@@ -4,17 +4,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/libs/events"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"path/filepath"
-	"reflect"
 	"runtime"
 	"sort"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/tendermint/tendermint/libs/events"
 
 	"github.com/go-kit/kit/log/term"
 
@@ -314,7 +313,7 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGDealerConstructor(newDealer), WithDKGNumBlocks(dkgNumBlocks),
 		WithLogger(consensusLogger.With("state", "dkg")), WithPVKey(pv))
 
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, BLSWithEVSW(evsw), BLSWithDKG(dkg))
 	cs.SetLogger(consensusLogger)
 	cs.SetPrivValidator(pv)
 

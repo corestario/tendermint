@@ -168,7 +168,7 @@ func TestReactorWithEvidence(t *testing.T) {
 		evsw := events.NewEventSwitch()
 		consensusLogger := log.TestingLogger().With("module", "consensus")
 		dkg := NewDKG(evsw, WithVerifier(GetVerifier(1, nValidators)(testName, i)), WithLogger(consensusLogger.With("state", "dkg")))
-		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+		cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, BLSWithEVSW(evsw), BLSWithDKG(dkg))
 		cs.SetLogger(consensusLogger)
 		cs.SetPrivValidator(pv)
 
