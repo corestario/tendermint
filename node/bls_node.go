@@ -5,6 +5,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/dgamingfoundation/dkglib/lib/basic"
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
@@ -154,12 +155,41 @@ func createBLSConsensus(config *cfg.Config,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	dkg := dkgOffChain.NewDKG(
+	/*
+		ctx, err := context.NewContext(config.ChainID(), "tcp://0.0.0.0:26657", "")
+		if err != nil {
+			return nil, nil
+		}
+		_ = ctx
+		/*
+		   	ctx = ctx.WithCodec(cdc)
+
+		   	txBldr := authtxb.NewTxBuilder(
+		   		utils.GetTxEncoder(cdc),
+		   		0,
+		   		0,
+		   		400000,
+		   		0.0,
+		   		false,
+		   		config.ChainID(),
+		   		"",
+		   		nil,
+		   		nil,
+		   	)
+		   	if err := ctx.EnsureAccountExists(); err != nil {
+		   		return nil, nil
+		   	}
+		   /*
+	*/
+
+	dkg := basic.NewDKGBasic(
 		evsw,
+		config.ChainID(),
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
-		dkgOffChain.WithPVKey(privValidator))
+		dkgOffChain.WithPVKey(privValidator),
+	)
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,

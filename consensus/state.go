@@ -1932,10 +1932,6 @@ func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2
 	return 0
 }
 
-func WithDKG(dkg DKG) StateOption {
-	return func(cs *ConsensusState) {}
-}
-
 func WithEVSW(evsw tmevents.EventSwitch) StateOption {
 	return func(cs *ConsensusState) { cs.evsw = evsw }
 }

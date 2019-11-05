@@ -18,10 +18,6 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-
-	// "sync"
-	"testing"
-	"time"
 )
 
 const (

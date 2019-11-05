@@ -7,7 +7,6 @@ import (
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
-	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmevents "github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/fail"
@@ -19,18 +18,10 @@ import (
 
 type BLSConsensusState struct {
 	ConsensusState
-	dkg DKG
+	dkg dkgtypes.DKG
 }
 
 type BLSStateOption func(*BLSConsensusState)
-
-type DKG interface {
-	HandleDKGShare(dkgMsg *dkgtypes.DKGDataMessage, height int64, validators *types.ValidatorSet, pubKey crypto.PubKey)
-	CheckDKGTime(height int64, validators *types.ValidatorSet)
-	SetVerifier(verifier dkgtypes.Verifier)
-	Verifier() dkgtypes.Verifier
-	MsgQueue() chan *dkgtypes.DKGDataMessage
-}
 
 var _ StateInterface = &BLSConsensusState{}
 
@@ -137,7 +128,7 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			cs.dkg.HandleDKGShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -560,7 +551,7 @@ func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, he
 	return vote, err
 }
 
-func BLSWithDKG(dkg DKG) BLSStateOption {
+func BLSWithDKG(dkg dkgtypes.DKG) BLSStateOption {
 	return func(cs *BLSConsensusState) { cs.dkg = dkg }
 }
 
