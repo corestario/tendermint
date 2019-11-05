@@ -155,41 +155,21 @@ func createBLSConsensus(config *cfg.Config,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	/*
-		ctx, err := context.NewContext(config.ChainID(), "tcp://0.0.0.0:26657", "")
-		if err != nil {
-			return nil, nil
-		}
-		_ = ctx
-		/*
-		   	ctx = ctx.WithCodec(cdc)
 
-		   	txBldr := authtxb.NewTxBuilder(
-		   		utils.GetTxEncoder(cdc),
-		   		0,
-		   		0,
-		   		400000,
-		   		0.0,
-		   		false,
-		   		config.ChainID(),
-		   		"",
-		   		nil,
-		   		nil,
-		   	)
-		   	if err := ctx.EnsureAccountExists(); err != nil {
-		   		return nil, nil
-		   	}
-		   /*
-	*/
-
-	dkg := basic.NewDKGBasic(
+	dkg, err := basic.NewDKGBasic(
 		evsw,
-		config.ChainID(),
+		cdc,
+		"tendermintChain",
+		"tcp://localhost:26657",
+		config.RootDir,
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
