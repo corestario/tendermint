@@ -9,9 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
-
-	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	"github.com/pkg/errors"
 	dbm "github.com/tendermint/tm-db"
 
@@ -130,9 +127,8 @@ func (pb *playback) replayReset(count int, newStepSub types.Subscription) error 
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := dkgOffChain.NewDKG(evsw, dkgOffChain.WithVerifier(&dkgtypes.MockVerifier{}), dkgOffChain.WithLogger(consensusLogger.With("state", "dkg")))
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
-		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw), WithDKG(dkg))
+		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw))
 
 	newCS.SetEventBus(pb.cs.eventBus)
 	newCS.SetLogger(consensusLogger)
@@ -325,9 +321,8 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 
 	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := dkgOffChain.NewDKG(evsw, dkgOffChain.WithVerifier(&dkgtypes.MockVerifier{}), dkgOffChain.WithLogger(consensusLogger.With("state", "dkg")))
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
-		blockStore, mempool, evpool, WithEVSW(evsw), WithDKG(dkg))
+		blockStore, mempool, evpool, WithEVSW(evsw))
 
 	consensusState.SetLogger(consensusLogger)
 	consensusState.SetEventBus(eventBus)

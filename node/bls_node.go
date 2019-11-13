@@ -5,6 +5,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	"github.com/dgamingfoundation/dkglib/lib/basic"
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
@@ -154,12 +155,21 @@ func createBLSConsensus(config *cfg.Config,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	dkg := dkgOffChain.NewDKG(
+
+	dkg, err := basic.NewDKGBasic(
 		evsw,
+		cdc,
+		"tendermintChain",
+		"tcp://localhost:26657",
+		config.RootDir,
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
-		dkgOffChain.WithPVKey(privValidator))
+		dkgOffChain.WithPVKey(privValidator),
+	)
+	if err != nil {
+		panic(err)
+	}
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
