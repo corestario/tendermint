@@ -295,6 +295,18 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 	// Create a copy of the state for staging and an event cache for txs.
 	stateCopy := cs.state.Copy()
 
+	dkgLosers := cs.dkg.GetLosers()
+	for _, dkgLoser := range dkgLosers {
+		// TODO: Currently we lack a lot of relevant information about the failed node,
+		// TODO: including the height at which we had a misbehavior. We should address
+		// TODO: this as soon as possible.
+		if err := cs.evpool.AddEvidence(&DKGEvidenceMissingData{
+			pubkey: dkgLoser.PubKey,
+		}); err != nil {
+			panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Address.String(), err))
+		}
+	}
+
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// NOTE The block.AppHash wont reflect these txs until the next block.
 	var err error
