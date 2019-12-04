@@ -1395,6 +1395,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
 	cdc.RegisterConcrete(&dkgtypes.DKGDataMessage{}, "tendermint/DKGData", nil)
+	cdc.RegisterConcrete(&DKGEvidenceMissingData{}, "tendermint/DKGEvidenceMissingData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
