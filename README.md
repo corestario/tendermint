@@ -66,7 +66,7 @@ The way this data is obtained is as follows. We generate a t-of-n BLS keyring (u
 
 Sharing signatures is implemented by extending Tendermint's `Vote` type with a `.Data []byte` field. Signatures are shared during the Precommit phase, and BLS threshold equals `2/3+1` (so that we can recover the signature as soon as we have a polka):
 
-![Tendermint+BLS](https://github.com/corestar/tendermint/raw/develop/docs/imgs/arcade_consensus.png?raw=true)
+![Tendermint+BLS](https://raw.githubusercontent.com/corestario/tendermint/develop/docs/imgs/arcade_consensus.png)
 
 That scheme, among other things, means that block proposer for the round selects txs in the block before the random number for the block is known.
 
