@@ -58,7 +58,7 @@ func makeVote(header *types.Header, blockID types.BlockID, valset *types.Validat
 		BlockID:          blockID,
 	}
 
-	_ = privVal.SignVote(header.ChainID, vote)
+	_ = privVal.SignData(header.ChainID, vote)
 
 	return vote
 }

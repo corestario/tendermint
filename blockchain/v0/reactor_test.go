@@ -1,6 +1,7 @@
 package v0
 
 import (
+	cmn "github.com/tendermint/tendermint/libs/common"
 	"os"
 	"sort"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	bls "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	abci "github.com/tendermint/tendermint/abci/types"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/log"
@@ -73,7 +75,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 	}
 
 	// A BLSVerifier with a 1-of-4 key set that doesn't require any other signatures but his own.
-	testVerifier := types.NewTestBLSVerifier(state.Validators.Validators[0].Address.String())
+	testVerifier := bls.NewTestBLSVerifier(state.Validators.Validators[0].Address.String())
 
 	// Make the BlockchainReactor itself.
 	// NOTE we have to create and commit the blocks first because
@@ -111,8 +113,8 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 			if err != nil {
 				panic(cmn.ErrorWrap(err, "error sign random data"))
 			}
-			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []*types.Vote{
-				{
+			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []bls.BLSSigner{
+				&types.Vote{
 					BlockID: types.BlockID{
 						Hash: cmn.HexBytes("text"),
 					},
@@ -138,7 +140,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		blockStore.SaveBlock(thisBlock, thisParts, lastCommit)
 	}
 
-	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, testVerifier, fastSync)
+	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	return BlockchainReactorPair{bcReactor, proxyApp}

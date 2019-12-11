@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/consensus"
 	"net"
 	"os"
 	"syscall"
@@ -35,7 +36,7 @@ func TestNodeStartStop(t *testing.T) {
 	defer os.RemoveAll(config.RootDir)
 
 	// create & start node
-	n, err := DefaultNewNode(config, log.TestingLogger())
+	n, err := DefaultNewBLSNode(config, log.TestingLogger())
 	n.ConsensusState().SetVerifier(&types.MockVerifier{})
 	require.NoError(t, err)
 	err = n.Start()
@@ -192,7 +193,6 @@ func TestNodeSetPrivValIPC(t *testing.T) {
 	pvsc := privval.NewSignerServer(
 		dialerEndpoint,
 		config.ChainID(),
-		tmpfile,
 		types.NewMockPV(),
 	)
 

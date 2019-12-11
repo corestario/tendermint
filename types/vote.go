@@ -61,7 +61,7 @@ type Vote struct {
 	BLSSignature     []byte        `json:"bls_signature"`
 }
 
-func (vote *Vote) GetHash() []byte {
+func (vote Vote) GetHash() []byte {
 	return vote.BlockID.Hash
 }
 
@@ -92,7 +92,7 @@ func (vote *Vote) Copy() *Vote {
 	return &voteCopy
 }
 
-func (vote *Vote) GetBLSSignature() []byte {
+func (vote Vote) GetBLSSignature() []byte {
 	return vote.BLSSignature
 }
 

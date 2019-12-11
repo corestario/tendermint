@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+	dkgTypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/tendermint/tendermint/abci/example/code"
 	abci "github.com/tendermint/tendermint/abci/types"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -22,18 +24,13 @@ func assertMempool(txn txNotifier) mempl.Mempool {
 	return txn.(mempl.Mempool)
 }
 
-// for testing
-func assertMempool(txn txNotifier) sm.Mempool {
-	return txn.(sm.Mempool)
-}
-
 func TestMempoolNoProgressUntilTxsAvailable(t *testing.T) {
 	testName := "consensus_mempool_txs_available_test"
 	config := ResetConfig(testName)
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), dkgOffChain.GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -53,7 +50,7 @@ func TestMempoolProgressAfterCreateEmptyBlocksInterval(t *testing.T) {
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocksInterval = ensureTimeout
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), dkgOffChain.GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -70,7 +67,7 @@ func TestMempoolProgressInHigherRound(t *testing.T) {
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), dkgOffChain.GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -102,7 +99,7 @@ func TestMempoolProgressInHigherRound(t *testing.T) {
 	ensureNewEventOnChannel(newBlockCh)       // now we can commit the block
 }
 
-func deliverTxsRange(cs *ConsensusState, start, end int) {
+func deliverTxsRange(cs *BLSConsensusState, start, end int) {
 	// Deliver some txs.
 	for i := start; i < end; i++ {
 		txBytes := make([]byte, 8)
@@ -117,7 +114,7 @@ func deliverTxsRange(cs *ConsensusState, start, end int) {
 func TestMempoolTxConcurrentWithCommit(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
 	blockDB := dbm.NewMemDB()
-	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)("TestMempoolTxConcurrentWithCommit", 0), testSkipDKGNumBlocks, blockDB)
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], NewCounterApplication(), blockDB, dkgOffChain.GetVerifier(1, 1)("TestMempoolTxConcurrentWithCommit", 0), nil, testSkipDKGNumBlocks)
 	sm.SaveState(blockDB, state)
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -142,7 +139,7 @@ func TestMempoolRmBadTx(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
 	app := NewCounterApplication()
 	blockDB := dbm.NewMemDB()
-	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], app, &types.MockVerifier{}, testSkipDKGNumBlocks, blockDB)
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], app, blockDB, &dkgTypes.MockVerifier{}, nil, testSkipDKGNumBlocks)
 	sm.SaveState(blockDB, state)
 
 	// increment the counter by 1

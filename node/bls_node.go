@@ -2,8 +2,10 @@ package node
 
 import (
 	"fmt"
+	"github.com/tendermint/tendermint/privval"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 
 	"github.com/dgamingfoundation/dkglib/lib/basic"
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
@@ -193,6 +195,41 @@ func createBLSConsensus(config *cfg.Config,
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
 	return consensusReactor, consensusState
+}
+
+func DefaultNewBLSNode(config *cfg.Config, logger log.Logger) (*Node, error) {
+	// Generate node PrivKey
+	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert old PrivValidator if it exists.
+	oldPrivVal := config.OldPrivValidatorFile()
+	newPrivValKey := config.PrivValidatorKeyFile()
+	newPrivValState := config.PrivValidatorStateFile()
+	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
+		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
+		if err != nil {
+			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
+		}
+		logger.Info("Upgrading PrivValidator file",
+			"old", oldPrivVal,
+			"newKey", newPrivValKey,
+			"newState", newPrivValState,
+		)
+		oldPV.Upgrade(newPrivValKey, newPrivValState)
+	}
+
+	return NewBLSNode(config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		nodeKey,
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		DefaultGenesisDocProviderFunc(config),
+		DefaultDBProvider,
+		DefaultMetricsProvider(config.Instrumentation),
+		logger,
+	)
 }
 
 // NewNode returns a new, ready to go, Tendermint Node.
