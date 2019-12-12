@@ -262,6 +262,10 @@ func (cs *ConsensusState) SetPrivValidator(priv types.PrivValidator) {
 	cs.mtx.Unlock()
 }
 
+func (cs *ConsensusState) SetVerifier(verifier dkgtypes.Verifier) {
+	return
+}
+
 // SetTimeoutTicker sets the local timer. It may be useful to overwrite for testing.
 func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()

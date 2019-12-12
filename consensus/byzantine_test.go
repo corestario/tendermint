@@ -12,6 +12,8 @@ import (
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+
+	dkgOffchain "github.com/dgamingfoundation/dkglib/lib/offChain"
 )
 
 //----------------------------------------------
@@ -26,7 +28,7 @@ import (
 func TestByzantine(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css, cleanup := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
+	css, cleanup := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, dkgOffchain.GetMockVerifier(), testSkipDKGNumBlocks)
 	defer cleanup()
 
 	// give the byzantine validator a normal ticker
@@ -57,7 +59,7 @@ func TestByzantine(t *testing.T) {
 			css[i].privValidator.(*types.MockPV).DisableChecks()
 			css[i].decideProposal = func(j int) func(int64, int) {
 				return func(height int64, round int) {
-					byzantineDecideProposalFunc(t, height, round, css[j], switches[j])
+					byzantineDecideProposalFunc(t, height, round, &css[j].ConsensusState, switches[j])
 				}
 			}(i)
 			css[i].doPrevote = func(height int64, round int) {}
@@ -183,7 +185,7 @@ func byzantineDecideProposalFunc(t *testing.T, height int64, round int, cs *Cons
 	block1, blockParts1 := cs.createProposalBlock()
 	polRound, propBlockID := cs.ValidRound, types.BlockID{Hash: block1.Hash(), PartsHeader: blockParts1.Header()}
 	proposal1 := types.NewProposal(height, round, polRound, propBlockID)
-	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal1); err != nil {
+	if err := cs.privValidator.SignData(cs.state.ChainID, proposal1); err != nil {
 		t.Error(err)
 	}
 
@@ -191,7 +193,7 @@ func byzantineDecideProposalFunc(t *testing.T, height int64, round int, cs *Cons
 	block2, blockParts2 := cs.createProposalBlock()
 	polRound, propBlockID = cs.ValidRound, types.BlockID{Hash: block2.Hash(), PartsHeader: blockParts2.Header()}
 	proposal2 := types.NewProposal(height, round, polRound, propBlockID)
-	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal2); err != nil {
+	if err := cs.privValidator.SignData(cs.state.ChainID, proposal2); err != nil {
 		t.Error(err)
 	}
 
@@ -228,8 +230,8 @@ func sendProposalAndParts(height int64, round int, cs *ConsensusState, peer p2p.
 
 	// votes
 	cs.mtx.Lock()
-	prevote, _ := cs.signVote(types.PrevoteType, blockHash, parts.Header(), nil)
-	precommit, _ := cs.signVote(types.PrecommitType, blockHash, parts.Header(), nil)
+	prevote, _ := cs.signVote(types.PrevoteType, blockHash, parts.Header())
+	precommit, _ := cs.signVote(types.PrecommitType, blockHash, parts.Header())
 	cs.mtx.Unlock()
 
 	peer.Send(VoteChannel, cdc.MustMarshalBinaryBare(&VoteMessage{prevote}))

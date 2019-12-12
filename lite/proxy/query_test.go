@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 	"time"
@@ -18,6 +17,8 @@ import (
 	"github.com/tendermint/tendermint/rpc/client"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
+
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 )
 
 var node *nm.Node
@@ -30,7 +31,7 @@ var waitForEventTimeout = 5 * time.Second
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node = rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("lite_proxy_tests", 0))
+	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("lite_proxy_tests", 0))
 
 	code := m.Run()
 

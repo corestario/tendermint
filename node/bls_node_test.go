@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/consensus"
 	"net"
 	"os"
 	"syscall"
@@ -13,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dkgTypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/crypto/ed25519"
@@ -37,7 +37,7 @@ func TestNodeStartStop(t *testing.T) {
 
 	// create & start node
 	n, err := DefaultNewBLSNode(config, log.TestingLogger())
-	n.ConsensusState().SetVerifier(&types.MockVerifier{})
+	n.ConsensusState().SetVerifier(&dkgTypes.MockVerifier{})
 	require.NoError(t, err)
 	err = n.Start()
 	require.NoError(t, err)

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 
@@ -12,12 +11,14 @@ import (
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
+
+	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 )
 
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("TestMain", 0))
+	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("TestMain", 0))
 	code := m.Run()
 
 	rpctest.StopTendermint(node)

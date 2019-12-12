@@ -76,7 +76,7 @@ func TestByzantineDKG(t *testing.T) {
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
 		conR.SetLogger(logger.With("validator", i))
 		conR.SetEventBus(eventBus)
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
 
@@ -185,7 +185,7 @@ func TestByzantineDKGDontSendOneDeal(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 
 		reactors[i] = conRI
 	}
@@ -291,7 +291,7 @@ func TestByzantineDKGDontAnyDeals(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -392,12 +392,12 @@ func TestByzantineDKGDontSendOneResponse(t *testing.T) {
 		conR := NewConsensusReactor(css[i], true) // so we dont start the consensus states
 		conR.SetLogger(logger.With("validator", i))
 		conR.SetEventBus(eventBus)
-		conR.conS.evsw.AddListenerForEvent("test", types.EventDKGStart, func(data events.EventData) {
+		conR.conS.GetEventSwitch().AddListenerForEvent("test", types.EventDKGStart, func(data events.EventData) {
 			t.Log("Event received", data)
 		})
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -502,7 +502,7 @@ func TestByzantineDKGDontAnyResponses(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -606,7 +606,7 @@ func TestByzantineDKGDontSendOneJustification(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -710,7 +710,7 @@ func TestByzantineDKGDontAnyJustifications(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -814,7 +814,7 @@ func TestByzantineDKGDontSendOneCommit(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
@@ -918,7 +918,7 @@ func TestByzantineDKGDontAnyCommits(t *testing.T) {
 
 		var conRI p2p.Reactor // nolint: gotype, gosimple
 		conRI = conR
-		handlers[i].Subscribe(conR.conS.evsw)
+		handlers[i].Subscribe(conR.conS.GetEventSwitch())
 		reactors[i] = conRI
 	}
 
