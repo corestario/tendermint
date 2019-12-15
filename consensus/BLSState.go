@@ -300,10 +300,11 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		// TODO: Currently we lack a lot of relevant information about the failed node,
 		// TODO: including the height at which we had a misbehavior. We should address
 		// TODO: this as soon as possible.
-		if err := cs.evpool.AddEvidence(&DKGEvidenceMissingData{
-			pubkey: dkgLoser.PubKey,
+		if err := cs.evpool.AddEvidence(&DKGEvidenceCorruptData{
+			data:            dkgLoser.Reason.Data,
+			validatorPubKey: dkgLoser.Validator.PubKey,
 		}); err != nil {
-			panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Address.String(), err))
+			panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Validator.String(), err))
 		}
 	}
 

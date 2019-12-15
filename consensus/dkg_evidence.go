@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
+	dkgAlias "github.com/dgamingfoundation/dkglib/lib/alias"
+
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -85,13 +87,14 @@ func (m *DKGEvidenceMissingData) ValidateBasic() error {
 // DKGEvidenceCorruptData should contain evidence about corrupt data that was actually
 // sent by a node.
 type DKGEvidenceCorruptData struct {
-	pubkey crypto.PubKey
-	height int64
+	data            *dkgAlias.DKGData
+	validatorPubKey crypto.PubKey
+	height          int64
 }
 
 // String returns a string representation of the evidence.
 func (m *DKGEvidenceCorruptData) String() string {
-	return fmt.Sprintf("Anndress: %s", m.pubkey.Address().String())
+	return fmt.Sprintf("Anndress: %s", m.validatorPubKey.Address().String())
 
 }
 
@@ -102,10 +105,10 @@ func (m *DKGEvidenceCorruptData) Height() int64 {
 
 // Address returns the address of the validator.
 func (m *DKGEvidenceCorruptData) Address() []byte {
-	return m.pubkey.Address()
+	return m.validatorPubKey.Address()
 }
 
-// Hash returns the hash of the evidence.
+// Hash returns the bytes which compromise the evidence
 func (m *DKGEvidenceCorruptData) Bytes() []byte {
 	return cdc.MustMarshalBinaryBare(m)
 }
@@ -115,9 +118,25 @@ func (m *DKGEvidenceCorruptData) Hash() []byte {
 	return tmhash.Sum(cdc.MustMarshalBinaryBare(m))
 }
 
-// Verify returns an error if the two votes aren't conflicting.
-// To be conflicting, they must be from the same validator, for the same H/R/S, but for different blocks.
+// Verify the evidence.
 func (m *DKGEvidenceCorruptData) Verify(chainID string, pubKey crypto.PubKey) error {
+	switch m.data.Type {
+	case dkgAlias.DKGPubKey:
+		// pass
+	case dkgAlias.DKGDeal:
+		// pass
+	case dkgAlias.DKGResponse:
+		// pass
+	case dkgAlias.DKGJustification:
+		// pass
+	case dkgAlias.DKGCommits:
+		// pass
+	case dkgAlias.DKGComplaint:
+		// pass
+	case dkgAlias.DKGReconstructCommit:
+		// pass
+	}
+
 	return nil
 }
 
@@ -135,7 +154,7 @@ func (m *DKGEvidenceCorruptData) Equal(ev types.Evidence) bool {
 
 // ValidateBasic performs basic validation.
 func (m *DKGEvidenceCorruptData) ValidateBasic() error {
-	if len(m.pubkey.Bytes()) == 0 {
+	if len(m.validatorPubKey.Bytes()) == 0 {
 		return errors.New("Empty PubKey")
 	}
 

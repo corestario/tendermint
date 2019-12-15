@@ -34,3 +34,5 @@ require (
 )
 
 replace github.com/tendermint/tendermint => ./
+
+replace github.com/dgamingfoundation/dkglib => ../dkglib
