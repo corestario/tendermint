@@ -1,4 +1,4 @@
-package client
+package client_test
 
 import (
 	"os"
@@ -13,6 +13,8 @@ import (
 	"github.com/tendermint/tendermint/types"
 
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+
+	liteClient "github.com/tendermint/tendermint/lite/client"
 )
 
 func TestMain(m *testing.M) {
@@ -37,11 +39,11 @@ func TestProvider(t *testing.T) {
 	}
 	chainID := genDoc.ChainID
 	t.Log("chainID:", chainID)
-	p := NewHTTPProvider(chainID, rpcAddr)
+	p := liteClient.NewHTTPProvider(chainID, rpcAddr)
 	require.NotNil(t, p)
 
 	// let it produce some blocks
-	err = rpcclient.WaitForHeight(p.(*provider).client, 6, nil)
+	err = rpcclient.WaitForHeight(p.(*liteClient.Provider).Client, 6, nil)
 	require.Nil(err)
 
 	// let's get the highest block

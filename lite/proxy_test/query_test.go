@@ -1,4 +1,4 @@
-package proxy
+package proxy_test
 
 import (
 	"fmt"
@@ -19,6 +19,8 @@ import (
 	"github.com/tendermint/tendermint/types"
 
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+
+	proxy "github.com/tendermint/tendermint/lite/proxy"
 )
 
 var node *nm.Node
@@ -49,7 +51,7 @@ func kvstoreTx(k, v []byte) []byte {
 func _TestAppProofs(t *testing.T) {
 	assert, require := assert.New(t), require.New(t)
 
-	prt := defaultProofRuntime()
+	prt := proxy.DefaultProofRuntime()
 	cl := client.NewLocal(node)
 	client.WaitForHeight(cl, 1, nil)
 
@@ -94,7 +96,7 @@ func _TestAppProofs(t *testing.T) {
 	require.NotNil(rootHash)
 
 	// verify a query before the tx block has no data (and valid non-exist proof)
-	bs, height, proof, err := GetWithProof(prt, k, brh-1, cl, cert)
+	bs, height, proof, err := proxy.GetWithProof(prt, k, brh-1, cl, cert)
 	require.NoError(err, "%#v", err)
 	require.NotNil(proof)
 	require.Equal(height, brh-1)
@@ -105,7 +107,7 @@ func _TestAppProofs(t *testing.T) {
 	require.Nil(bs)
 
 	// but given that block it is good
-	bs, height, proof, err = GetWithProof(prt, k, brh, cl, cert)
+	bs, height, proof, err = proxy.GetWithProof(prt, k, brh, cl, cert)
 	require.NoError(err, "%#v", err)
 	require.NotNil(proof)
 	require.Equal(height, brh)
@@ -116,7 +118,7 @@ func _TestAppProofs(t *testing.T) {
 
 	// Test non-existing key.
 	missing := []byte("my-missing-key")
-	bs, _, proof, err = GetWithProof(prt, missing, 0, cl, cert)
+	bs, _, proof, err = proxy.GetWithProof(prt, missing, 0, cl, cert)
 	require.NoError(err)
 	require.Nil(bs)
 	require.NotNil(proof)
@@ -159,7 +161,7 @@ func TestTxProofs(t *testing.T) {
 	err = res.Proof.Validate(keyHash)
 	assert.NoError(err, "%#v", err)
 
-	commit, err := GetCertifiedCommit(br.Height, cl, cert)
+	commit, err := proxy.GetCertifiedCommit(br.Height, cl, cert)
 	require.Nil(err, "%#v", err)
 	require.Equal(res.Proof.RootHash, commit.Header.DataHash)
 }
