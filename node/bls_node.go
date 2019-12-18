@@ -111,7 +111,7 @@ func GetBLSReactors(
 	// Make ConsensusReactor
 	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
-		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
+		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc,
 	)
 
 	config.DBPath = config.DBPath + ".unused"
@@ -152,18 +152,18 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
+	genDoc *types.GenesisDoc) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
 	dkg, err := basic.NewDKGBasic(
 		evsw,
 		cdc,
-		"tendermintChain",
-		"tcp://localhost:26657",
+		genDoc.ChainID,
+		genDoc.NodeEndpoint,
 		config.RootDir,
 		dkgOffChain.WithVerifier(verifier),
-		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
+		dkgOffChain.WithDKGNumBlocks(genDoc.DKGNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
@@ -312,7 +312,7 @@ func NewBLSNode(config *cfg.Config,
 	// Make ConsensusReactor
 	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
-		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
+		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc,
 	)
 
 	nodeInfo, err := makeNodeInfo(config, nodeKey, txIndexer, genDoc, state)

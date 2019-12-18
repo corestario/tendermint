@@ -46,6 +46,7 @@ type GenesisDoc struct {
 	BLSNumShares    int                `json:"bls_num_shares"`
 	BLSMasterPubKey string             `json:"bls_master_pub_key"`
 	BLSShare        *bls.BLSShareJSON  `json:"bls_share"`
+	NodeEndpoint    string             `json:"node_endpoint"`  // An endpoint to a Randapp app
 	DKGNumBlocks    int64              `json:"dkg_hum_blocks"` // Trigger DKG after this number of blocks added
 }
 
