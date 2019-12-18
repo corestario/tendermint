@@ -179,6 +179,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		BLSThreshold:    3,
 		BLSNumShares:    4,
 		DKGNumBlocks:    10,
+		NodeEndpoint:    "tcp://localhost:26657",
 	}
 
 	// Write genesis file.
