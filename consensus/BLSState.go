@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/dgamingfoundation/tendermint/state"
+
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
@@ -300,9 +302,11 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		// TODO: Currently we lack a lot of relevant information about the failed node,
 		// TODO: including the height at which we had a misbehavior. We should address
 		// TODO: this as soon as possible.
-		if err := cs.evpool.AddEvidence(&DKGEvidenceCorruptData{
-			data:            dkgLoser.Reason.Data,
-			validatorPubKey: dkgLoser.Validator.PubKey,
+		if err := cs.evpool.AddEvidence(&state.DKGEvidenceCorruptData{
+			DKGEvidence: state.DKGEvidence{
+				Loser:           dkgLoser,
+				ValidatorPubKey: dkgLoser.Validator.PubKey,
+			},
 		}); err != nil {
 			panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Validator.String(), err))
 		}

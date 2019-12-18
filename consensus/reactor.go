@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgamingfoundation/tendermint/state"
+
 	"github.com/pkg/errors"
 
 	amino "github.com/tendermint/go-amino"
@@ -1395,7 +1397,7 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
 	cdc.RegisterConcrete(&dkgtypes.DKGDataMessage{}, "tendermint/DKGData", nil)
-	cdc.RegisterConcrete(&DKGEvidenceMissingData{}, "tendermint/DKGEvidenceMissingData", nil)
+	cdc.RegisterConcrete(&state.DKGEvidenceMissingData{}, "tendermint/DKGEvidenceMissingData", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {
