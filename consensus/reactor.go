@@ -281,6 +281,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				Votes:   ourVotes,
 			}))
 		case *dkgtypes.DKGDataMessage:
+			fmt.Println("SENDING DKG MESSAGE!!!!!!!!!!!!!!!!!!")
 			conR.conS.GetDKGMsgQueue() <- msg
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))

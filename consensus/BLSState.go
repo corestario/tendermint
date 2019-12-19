@@ -99,6 +99,7 @@ func (cs *BLSConsensusState) handleMsg(mi msgInfo) {
 		err   error
 	)
 	msg, peerID := mi.Msg, mi.PeerID
+	fmt.Println("MSG RECEIVED!!!!!!!!!!!!!!!!!!!!!")
 	switch msg := msg.(type) {
 	case *ProposalMessage:
 		// will not cause transition.
@@ -169,6 +170,8 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		close(cs.done)
 	}
+
+	fmt.Println("START ROUTINE!!!!!!!!!!!!!")
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -435,17 +438,17 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 	// Create a copy of the state for staging and an event cache for txs.
 	stateCopy := cs.state.Copy()
 
-	dkgLosers := cs.dkg.GetLosers()
-	for _, dkgLoser := range dkgLosers {
-		// TODO: Currently we lack a lot of relevant information about the failed node,
-		// TODO: including the height at which we had a misbehavior. We should address
-		// TODO: this as soon as possible.
-		if err := cs.evpool.AddEvidence(&DKGEvidenceMissingData{
-			pubkey: dkgLoser.PubKey,
-		}); err != nil {
-			panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Address.String(), err))
-		}
-	}
+	//dkgLosers := cs.dkg.GetLosers()
+	//for _, dkgLoser := range dkgLosers {
+	//	// TODO: Currently we lack a lot of relevant information about the failed node,
+	//	// TODO: including the height at which we had a misbehavior. We should address
+	//	// TODO: this as soon as possible.
+	//	if err := cs.evpool.AddEvidence(&DKGEvidenceMissingData{
+	//		pubkey: dkgLoser.PubKey,
+	//	}); err != nil {
+	//		panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Address.String(), err))
+	//	}
+	//}
 
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// NOTE The block.AppHash wont reflect these txs until the next block.
@@ -461,7 +464,7 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 	}
 
 	fmt.Println("Sending block notify!!!!!")
-	cs.dkg.GetBlockNotifier() <- true
+	//cs.dkg.GetBlockNotifier() <- true
 	fmt.Println("Block notify sent!!!!!!!!!")
 
 	fail.Fail() // XXX
@@ -1331,4 +1334,174 @@ func (cs *BLSConsensusState) enterPrecommitWait(height int64, round int) {
 	// Wait for some more precommits; enterNewRound
 	cs.scheduleTimeout(cs.config.Precommit(round), height, round, cstypes.RoundStepPrecommitWait)
 
+}
+
+// OnStart implements cmn.Service.
+// It loads the latest state via the WAL, and starts the timeout and receive routines.
+func (cs *BLSConsensusState) OnStart() error {
+	fmt.Println("BLS STARTING!!!!!!!!!!!!!!!!!!!")
+	if err := cs.evsw.Start(); err != nil {
+		return err
+	}
+
+	// we may set the WAL in testing before calling Start,
+	// so only OpenWAL if its still the nilWAL
+	if _, ok := cs.wal.(nilWAL); ok {
+		walFile := cs.config.WalFile()
+		wal, err := cs.OpenWAL(walFile)
+		if err != nil {
+			cs.Logger.Error("Error loading ConsensusState wal", "err", err.Error())
+			return err
+		}
+		cs.wal = wal
+	}
+
+	// we need the timeoutRoutine for replay so
+	// we don't block on the tick chan.
+	// NOTE: we will get a build up of garbage go routines
+	// firing on the tockChan until the receiveRoutine is started
+	// to deal with them (by that point, at most one will be valid)
+	if err := cs.timeoutTicker.Start(); err != nil {
+		return err
+	}
+
+	// we may have lost some votes if the process crashed
+	// reload from consensus log to catchup
+	if cs.doWALCatchup {
+		if err := cs.catchupReplay(cs.Height); err != nil {
+			// don't try to recover from data corruption error
+			if IsDataCorruptionError(err) {
+				cs.Logger.Error("Encountered corrupt WAL file", "err", err.Error())
+				cs.Logger.Error("Please repair the WAL file before restarting")
+				fmt.Println(`You can attempt to repair the WAL as follows:
+
+----
+WALFILE=~/.tendermint/data/cs.wal/wal
+cp $WALFILE ${WALFILE}.bak # backup the file
+go run scripts/wal2json/main.go $WALFILE > wal.json # this will panic, but can be ignored
+rm $WALFILE # remove the corrupt file
+go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without corruption
+----`)
+
+				return err
+			}
+
+			cs.Logger.Error("Error on catchup replay. Proceeding to start ConsensusState anyway", "err", err.Error())
+			// NOTE: if we ever do return an error here,
+			// make sure to stop the timeoutTicker
+		}
+	}
+
+	// now start the receiveRoutine
+	go cs.receiveRoutine(0)
+
+	// schedule the first round!
+	// use GetRoundState so we don't race the receiveRoutine for access
+	cs.scheduleRound0(cs.GetRoundState())
+
+	return nil
+}
+
+// timeoutRoutine: receive requests for timeouts on tickChan and fire timeouts on tockChan
+// receiveRoutine: serializes processing of proposoals, block parts, votes; coordinates state transitions
+func (cs *BLSConsensusState) startRoutines(maxSteps int) {
+	err := cs.timeoutTicker.Start()
+	if err != nil {
+		cs.Logger.Error("Error starting timeout ticker", "err", err)
+		return
+	}
+	go cs.receiveRoutine(maxSteps)
+}
+
+// OnStop implements cmn.Service.
+func (cs *BLSConsensusState) OnStop() {
+	cs.evsw.Stop()
+	cs.timeoutTicker.Stop()
+	// WAL is stopped in receiveRoutine.
+}
+
+// Wait waits for the the main routine to return.
+// NOTE: be sure to Stop() the event switch and drain
+// any event channels or this may deadlock
+func (cs *BLSConsensusState) Wait() {
+	<-cs.done
+}
+
+// Updates ConsensusState and increments height to match that of state.
+// The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
+func (cs *BLSConsensusState) updateToState(state sm.State) {
+	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
+		panic(fmt.Sprintf("updateToState() expected state height of %v but found %v",
+			cs.Height, state.LastBlockHeight))
+	}
+	if !cs.state.IsEmpty() && cs.state.LastBlockHeight+1 != cs.Height {
+		// This might happen when someone else is mutating cs.state.
+		// Someone forgot to pass in state.Copy() somewhere?!
+		panic(fmt.Sprintf("Inconsistent cs.state.LastBlockHeight+1 %v vs cs.Height %v",
+			cs.state.LastBlockHeight+1, cs.Height))
+	}
+
+	// If state isn't further out than cs.state, just ignore.
+	// This happens when SwitchToConsensus() is called in the reactor.
+	// We don't want to reset e.g. the Votes, but we still want to
+	// signal the new round step, because other services (eg. txNotifier)
+	// depend on having an up-to-date peer state!
+	if !cs.state.IsEmpty() && (state.LastBlockHeight <= cs.state.LastBlockHeight) {
+		cs.Logger.Info(
+			"Ignoring updateToState()",
+			"newHeight",
+			state.LastBlockHeight+1,
+			"oldHeight",
+			cs.state.LastBlockHeight+1)
+		cs.newStep()
+		return
+	}
+
+	// Reset fields based on state.
+	validators := state.Validators
+	lastPrecommits := (*types.VoteSet)(nil)
+	if cs.CommitRound > -1 && cs.Votes != nil {
+		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
+			panic("updateToState(state) called but last Precommit round didn't have +2/3")
+		}
+		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
+	}
+
+	// Next desired block height
+	height := state.LastBlockHeight + 1
+
+	// RoundState fields
+	cs.updateHeight(height)
+	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
+	if cs.CommitTime.IsZero() {
+		// "Now" makes it easier to sync up dev nodes.
+		// We add timeoutCommit to allow transactions
+		// to be gathered for the first block.
+		// And alternative solution that relies on clocks:
+		// cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
+		cs.StartTime = cs.config.Commit(tmtime.Now())
+	} else {
+		cs.StartTime = cs.config.Commit(cs.CommitTime)
+	}
+
+	cs.Validators = validators
+	cs.Proposal = nil
+	cs.ProposalBlock = nil
+	cs.ProposalBlockParts = nil
+	cs.LockedRound = -1
+	cs.LockedBlock = nil
+	cs.LockedBlockParts = nil
+	cs.ValidRound = -1
+	cs.ValidBlock = nil
+	cs.ValidBlockParts = nil
+	cs.Votes = cstypes.NewHeightVoteSet(state.ChainID, height, validators)
+	cs.CommitRound = -1
+	cs.LastCommit = lastPrecommits
+	cs.LastValidators = state.LastValidators
+	cs.TriggeredTimeoutPrecommit = false
+
+	cs.state = state
+
+	// Finally, broadcast RoundState
+	cs.newStep()
 }
