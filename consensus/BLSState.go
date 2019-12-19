@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	cmn "github.com/tendermint/tendermint/libs/common"

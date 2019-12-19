@@ -6,10 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dgamingfoundation/dkglib/lib/blsShare"
-
+	"github.com/corestario/dkglib/lib/blsShare"
 	"github.com/pkg/errors"
-
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 

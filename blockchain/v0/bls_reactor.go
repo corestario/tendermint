@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"time"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
 	sm "github.com/tendermint/tendermint/state"

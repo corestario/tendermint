@@ -2,15 +2,13 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"text/template"
 
-	"github.com/dgamingfoundation/dkglib/lib/blsShare"
-
-	"encoding/json"
-
+	"github.com/corestario/dkglib/lib/blsShare"
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 

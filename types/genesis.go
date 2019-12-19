@@ -7,9 +7,8 @@ import (
 	"io/ioutil"
 	"time"
 
-	bls "github.com/dgamingfoundation/dkglib/lib/blsShare"
+	bls "github.com/corestario/dkglib/lib/blsShare"
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmtime "github.com/tendermint/tendermint/types/time"

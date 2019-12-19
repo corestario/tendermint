@@ -3,20 +3,19 @@ package consensus
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	dkgAlias "github.com/corestario/dkglib/lib/alias"
+	dkgDealer "github.com/corestario/dkglib/lib/dealer"
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
+	dkgTypes "github.com/corestario/dkglib/lib/types"
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
-	"strconv"
-
-	dkgAlias "github.com/dgamingfoundation/dkglib/lib/alias"
-	dkgDealer "github.com/dgamingfoundation/dkglib/lib/dealer"
-	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
-	dkgTypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 func init() {
