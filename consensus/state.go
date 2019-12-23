@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"

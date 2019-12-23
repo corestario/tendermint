@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
+	dkgalias "github.com/corestario/dkglib/lib/alias"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"github.com/pkg/errors"
-
 	amino "github.com/tendermint/go-amino"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -17,9 +18,6 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-
-	dkgalias "github.com/dgamingfoundation/dkglib/lib/alias"
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 )
 
 const (

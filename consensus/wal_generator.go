@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	"github.com/pkg/errors"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	cfg "github.com/tendermint/tendermint/config"
