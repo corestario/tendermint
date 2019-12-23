@@ -106,7 +106,6 @@ func (cs *BLSConsensusState) handleMsg(mi msgInfo) {
 		err   error
 	)
 	msg, peerID := mi.Msg, mi.PeerID
-	fmt.Println("MSG RECEIVED!!!!!!!!!!!!!!!!!!!!!")
 	switch msg := msg.(type) {
 	case *ProposalMessage:
 		// will not cause transition.
@@ -208,6 +207,7 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
+			fmt.Println("RECEIVED DKG MESSAGE")
 			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()

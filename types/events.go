@@ -37,6 +37,22 @@ const (
 	EventVote             = "Vote"
 )
 
+//DKG events
+const (
+	EventDKGData                        = "DKGData"
+	EventDKGStart                       = "DKGStart"
+	EventDKGPubKeyReceived              = "DKGPubKeyReceived"
+	EventDKGDealsProcessed              = "DKGDealsProcessed"
+	EventDKGResponsesProcessed          = "DKGResponsesProcessed"
+	EventDKGJustificationsProcessed     = "DKGJustificationsProcessed"
+	EventDKGInstanceCertified           = "DKGInstanceCertified"
+	EventDKGCommitsProcessed            = "DKGCommitsProcessed"
+	EventDKGComplaintProcessed          = "DKGComplaintProcessed"
+	EventDKGReconstructCommitsProcessed = "DKGReconstructCommitsProcessed"
+	EventDKGSuccessful                  = "DKGSuccessful"
+	EventDKGKeyChange                   = "DKGKeyChange"
+)
+
 ///////////////////////////////////////////////////////////////////////////////
 // ENCODING / DECODING
 ///////////////////////////////////////////////////////////////////////////////

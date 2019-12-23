@@ -2,12 +2,14 @@ package consensus
 
 import (
 	"fmt"
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 
+	dkgAlias "github.com/dgamingfoundation/dkglib/lib/alias"
 	amino "github.com/tendermint/go-amino"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -278,6 +280,8 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}))
+		case *dkgtypes.DKGDataMessage:
+			conR.conS.GetDKGMsgQueue() <- msg
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -393,6 +397,10 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		func(data tmevents.EventData) {
 			conR.broadcastHasVoteMessage(data.(*types.Vote))
 		})
+	conR.conS.GetEventSwitch().AddListenerForEvent(subscriber, types.EventDKGData,
+		func(data tmevents.EventData) {
+			conR.broadcastDKGDataMessage(data.(*dkgAlias.DKGData))
+		})
 
 }
 
@@ -404,6 +412,11 @@ func (conR *ConsensusReactor) unsubscribeFromBroadcastEvents() {
 func (conR *ConsensusReactor) broadcastNewRoundStepMessage(rs *cstypes.RoundState) {
 	nrsMsg := makeRoundStepMessage(rs)
 	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(nrsMsg))
+}
+
+// Broadcasts HasVoteMessage to peers that care.
+func (conR *ConsensusReactor) broadcastDKGDataMessage(data *dkgAlias.DKGData) {
+	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkgtypes.DKGDataMessage{Data: data}))
 }
 
 func (conR *ConsensusReactor) broadcastNewValidBlockMessage(rs *cstypes.RoundState) {
@@ -1395,6 +1408,8 @@ func RegisterConsensusMessages(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&HasVoteMessage{}, "tendermint/HasVote", nil)
 	cdc.RegisterConcrete(&VoteSetMaj23Message{}, "tendermint/VoteSetMaj23", nil)
 	cdc.RegisterConcrete(&VoteSetBitsMessage{}, "tendermint/VoteSetBits", nil)
+	cdc.RegisterConcrete(&dkgAlias.DKGData{}, "dkglib/DKGData", nil)
+	cdc.RegisterConcrete(&dkgtypes.DKGDataMessage{}, "dkgilb/DKGDataMessage", nil)
 }
 
 func decodeMsg(bz []byte) (msg ConsensusMessage, err error) {

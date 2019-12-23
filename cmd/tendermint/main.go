@@ -43,7 +43,7 @@ func main() {
 	nodeFunc := NewBLSNode
 
 	// Create & start node
-	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
+	rootCmd.AddCommand(cmd.NewRunBLSNodeCmd(nodeFunc))
 
 	cmd := cli.PrepareBaseCmd(rootCmd, "TM", os.ExpandEnv(filepath.Join("$HOME", cfg.DefaultTendermintDir)))
 	if err := cmd.Execute(); err != nil {
@@ -51,7 +51,7 @@ func main() {
 	}
 }
 
-func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.BLSNode, error) {
 
 	// Generate node PrivKey
 
@@ -102,10 +102,10 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 		logger,
 		blockStore,
 		stateDB,
-		node.CustomReactors(map[string]p2p.Reactor{
+		node.CustomBLSReactors(map[string]p2p.Reactor{
 			"BLOCKCHAIN": bcReactor,
 			"CONSENSUS":  consensusReactor,
 		}),
-		node.CustomConsensusState(consensusState),
+		node.CustomBLSConsensusState(consensusState),
 	)
 }

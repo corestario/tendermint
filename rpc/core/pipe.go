@@ -5,7 +5,6 @@ import (
 	"time"
 
 	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -71,7 +70,7 @@ var (
 	pubKey           crypto.PubKey
 	genDoc           *types.GenesisDoc // cache the genesis structure
 	txIndexer        txindex.TxIndexer
-	consensusReactor *consensus.ConsensusReactor
+	consensusReactor ConsensusReactorInterface
 	eventBus         *types.EventBus // thread safe
 	mempool          mempl.Mempool
 
@@ -79,6 +78,10 @@ var (
 
 	config cfg.RPCConfig
 )
+
+type ConsensusReactorInterface interface {
+	FastSync() bool
+}
 
 func SetStateDB(db dbm.DB) {
 	stateDB = db
@@ -124,7 +127,7 @@ func SetTxIndexer(indexer txindex.TxIndexer) {
 	txIndexer = indexer
 }
 
-func SetConsensusReactor(conR *consensus.ConsensusReactor) {
+func SetConsensusReactor(conR ConsensusReactorInterface) {
 	consensusReactor = conR
 }
 
