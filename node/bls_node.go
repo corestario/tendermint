@@ -5,7 +5,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/dgamingfoundation/dkglib/lib/basic"
+	dbm "github.com/tendermint/tm-db"
+
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
@@ -33,17 +34,17 @@ func GetBLSReactors(
 	privValidator types.PrivValidator,
 	metricsProvider MetricsProvider,
 	logger log.Logger,
-) (p2p.Reactor, *cs.ConsensusReactor, cs.StateInterface, error) {
+) (*store.BlockStore, dbm.DB, p2p.Reactor, *cs.ConsensusReactor, cs.StateInterface, error) {
 	consensusLogger := logger.With("module", "consensus")
 
 	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, DefaultGenesisDocProviderFunc(config))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	fastSync := config.FastSyncMode && !onlyValidatorIsUs(state, privValidator)
@@ -51,7 +52,7 @@ func GetBLSReactors(
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := createAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	csMetrics, _, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
@@ -62,7 +63,7 @@ func GetBLSReactors(
 	// but before it indexed the txs, or, endblocker panicked)
 	eventBus, err := createAndStartEventBus(logger)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	// Make MempoolReactor
@@ -71,7 +72,7 @@ func GetBLSReactors(
 	// Make Evidence Reactor
 	_, evidencePool, err := createEvidenceReactor(config, DefaultDBProvider, stateDB, logger)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	// make block executor for consensus and blockchain reactors to execute blocks
@@ -86,17 +87,17 @@ func GetBLSReactors(
 
 	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load bls share: %v", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to load bls share: %v", err)
 	}
 
 	keypair, err := blsShare.Deserialize()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to deserialize keypair: %v", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to deserialize keypair: %v", err)
 	}
 
 	masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
 	}
 
 	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
@@ -104,7 +105,7 @@ func GetBLSReactors(
 	// Make BlockchainReactor
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, consensusLogger)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "could not create blockchain reactor")
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "could not create blockchain reactor")
 	}
 
 	// Make ConsensusReactor
@@ -115,7 +116,7 @@ func GetBLSReactors(
 
 	config.DBPath = config.DBPath + ".unused"
 
-	return bcReactor, consensusReactor, consensusState, nil
+	return blockStore, stateDB, bcReactor, consensusReactor, consensusState, nil
 }
 
 func createBLSBlockchainReactor(config *cfg.Config,
@@ -155,20 +156,12 @@ func createBLSConsensus(config *cfg.Config,
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
-	dkg, err := basic.NewDKGBasic(
-		evsw,
-		cdc,
-		"tendermintChain",
-		"tcp://localhost:26657",
-		config.RootDir,
+	offChDKG := dkgOffChain.NewOffChainDKG(evsw, "tendermintChain",
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
-	if err != nil {
-		panic(err)
-	}
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
@@ -179,7 +172,7 @@ func createBLSConsensus(config *cfg.Config,
 		evidencePool,
 		cs.BLSStateMetrics(csMetrics),
 		cs.BLSWithEVSW(evsw),
-		cs.BLSWithDKG(dkg),
+		cs.BLSWithDKG(offChDKG),
 	)
 
 	consensusState.SetLogger(consensusLogger)
@@ -203,12 +196,8 @@ func NewBLSNode(config *cfg.Config,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
 	logger log.Logger,
+	blockStore *store.BlockStore, stateDB dbm.DB,
 	options ...Option) (*Node, error) {
-
-	blockStore, stateDB, err := initDBs(config, dbProvider)
-	if err != nil {
-		return nil, err
-	}
 
 	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
 	if err != nil {

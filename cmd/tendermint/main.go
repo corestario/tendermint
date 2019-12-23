@@ -1,14 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/tendermint/tendermint/libs/cli"
-
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
 	cfg "github.com/tendermint/tendermint/config"
-	nm "github.com/tendermint/tendermint/node"
+	"github.com/tendermint/tendermint/libs/cli"
+	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/node"
+	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/privval"
+	"github.com/tendermint/tendermint/proxy"
 )
 
 func main() {
@@ -36,7 +40,7 @@ func main() {
 	//	* Provide their own DB implementation
 	// can copy this file and use something other than the
 	// DefaultNewNode function
-	nodeFunc := nm.DefaultNewNode
+	nodeFunc := NewBLSNode
 
 	// Create & start node
 	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
@@ -45,4 +49,63 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		panic(err)
 	}
+}
+
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
+
+	// Generate node PrivKey
+
+	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	// Convert old PrivValidator if it exists.
+	oldPrivVal := config.OldPrivValidatorFile()
+	newPrivValKey := config.PrivValidatorKeyFile()
+	newPrivValState := config.PrivValidatorStateFile()
+	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
+		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
+		if err != nil {
+
+			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
+
+		}
+		logger.Info("Upgrading PrivValidator file",
+			"old", oldPrivVal,
+			"newKey", newPrivValKey,
+			"newState", newPrivValState,
+		)
+
+		oldPV.Upgrade(newPrivValKey, newPrivValState)
+	}
+
+	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
+		config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		node.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return node.NewBLSNode(config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		nodeKey,
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		node.DefaultGenesisDocProviderFunc(config),
+		node.DefaultDBProvider,
+		node.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+		blockStore,
+		stateDB,
+		node.CustomReactors(map[string]p2p.Reactor{
+			"BLOCKCHAIN": bcReactor,
+			"CONSENSUS":  consensusReactor,
+		}),
+		node.CustomConsensusState(consensusState),
+	)
 }

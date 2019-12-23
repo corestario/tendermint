@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -19,11 +21,12 @@ import (
 )
 
 var (
-	nValidators    int
-	nNonValidators int
-	configFile     string
-	outputDir      string
-	nodeDirPrefix  string
+	nValidators     int
+	nDeadValidators int
+	nNonValidators  int
+	configFile      string
+	outputDir       string
+	nodeDirPrefix   string
 
 	populatePersistentPeers bool
 	hostnamePrefix          string
@@ -43,6 +46,8 @@ func init() {
 		"Number of validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().StringVar(&configFile, "config", "",
 		"Config file to use (note some options may be overwritten)")
+	TestnetFilesCmd.Flags().IntVar(&nDeadValidators, "d", 0,
+		"Number of 'dead' validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().IntVar(&nNonValidators, "n", 0,
 		"Number of non-validators to initialize the testnet with")
 	TestnetFilesCmd.Flags().StringVar(&outputDir, "o", "./mytestnet",
@@ -114,9 +119,9 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	genVals := make([]types.GenesisValidator, nValidators)
+	genVals := make([]types.GenesisValidator, nValidators+nDeadValidators)
 
-	for i := 0; i < nValidators; i++ {
+	for i := 0; i < nValidators+nDeadValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", nodeDirPrefix, i)
 		nodeDir := filepath.Join(outputDir, nodeDirName)
 		config.SetRoot(nodeDir)
@@ -132,7 +137,10 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		initFilesWithConfig(config)
+		config.NodeID = i
+		if err := initFilesWithConfig(config); err != nil {
+			return fmt.Errorf("failed to initFilesWithConfig: %v", err)
+		}
 
 		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
 		pvStateFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorState)
@@ -147,7 +155,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < nNonValidators; i++ {
-		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators))
+		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i+nValidators+nDeadValidators))
 		config.SetRoot(nodeDir)
 
 		err := os.MkdirAll(filepath.Join(nodeDir, "config"), nodeDirPerm)
@@ -162,19 +170,25 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		initFilesWithConfig(config)
+		if err := initFilesWithConfig(config); err != nil {
+			return fmt.Errorf("failed to initFilesWithConfig: %v", err)
+		}
 	}
 
 	// Generate genesis doc from generated validators
 	genDoc := &types.GenesisDoc{
+		GenesisTime:     tmtime.Now(),
 		ChainID:         "chain-" + cmn.RandStr(6),
 		ConsensusParams: types.DefaultConsensusParams(),
-		GenesisTime:     tmtime.Now(),
 		Validators:      genVals,
+		BLSMasterPubKey: blsShare.TestnetMasterPubKey,
+		BLSThreshold:    3,
+		BLSNumShares:    4,
+		DKGNumBlocks:    10,
 	}
 
 	// Write genesis file.
-	for i := 0; i < nValidators+nNonValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		if err := genDoc.SaveAs(filepath.Join(nodeDir, config.BaseConfig.Genesis)); err != nil {
 			_ = os.RemoveAll(outputDir)
@@ -193,10 +207,14 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 			_ = os.RemoveAll(outputDir)
 			return err
 		}
+
+		if err := writeDockerCompose(nValidators, p2pPort); err != nil {
+			return err
+		}
 	}
 
 	// Overwrite default config.
-	for i := 0; i < nValidators+nNonValidators; i++ {
+	for i := 0; i < nValidators+nNonValidators+nDeadValidators; i++ {
 		nodeDir := filepath.Join(outputDir, fmt.Sprintf("%s%d", nodeDirPrefix, i))
 		config.SetRoot(nodeDir)
 		config.P2P.AddrBookStrict = false
@@ -209,7 +227,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		cfg.WriteConfigFile(filepath.Join(nodeDir, "config", "config.toml"), config)
 	}
 
-	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators)
+	fmt.Printf("Successfully initialized %v node directories\n", nValidators+nNonValidators+nDeadValidators)
 	return nil
 }
 

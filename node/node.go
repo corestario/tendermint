@@ -163,6 +163,12 @@ func CustomReactors(reactors map[string]p2p.Reactor) Option {
 	}
 }
 
+func CustomConsensusState(state cs.StateInterface) Option {
+	return func(n *Node) {
+		n.consensusState = state
+	}
+}
+
 //------------------------------------------------------------------------------
 
 // Node is the highest level interface to a full Tendermint node.

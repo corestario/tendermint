@@ -69,7 +69,7 @@ type evidencePool interface {
 	AddEvidence(types.Evidence) error
 }
 
-var _ StateInterface = ConsensusState{}
+var _ StateInterface = &ConsensusState{}
 
 // ConsensusState handles execution of the consensus algorithm.
 // It processes votes and proposals, and upon reaching agreement,

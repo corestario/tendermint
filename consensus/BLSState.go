@@ -3,9 +3,12 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"time"
+
+	"github.com/prometheus/common/log"
 
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
@@ -76,7 +79,10 @@ func NewBLSConsensusState(
 func (cs *BLSConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
-
+	logger := log.NewLogger(os.Stdout)
+	logger.Info("OLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOL"+
+		"OLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOL"+
+		"OLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLO", "DKG", cs.dkg, "DKG NIL", cs.dkg == nil)
 	// TODO (oopcode): as we make ConsensusState an interface, we will feed different
 	// states (and the standard one will be without this dkg field). Currently update height
 	// is called _before_ the actual start of consensus, which leads to panic (because

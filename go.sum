@@ -36,6 +36,7 @@ github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8Nz
 github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
+github.com/corestario/cosmos-utils/client v0.0.0-20191209221021-bc64f205ca9b/go.mod h1:6QTJUIUyLbepeBbfOmR+t4sKoBtIStwjJT140I9AyCw=
 github.com/cosmos/cosmos-sdk v0.28.2-0.20190827131926-5aacf454e1b6 h1:nuaQIQZrsYF3QKf9bSAC1i5adZG7lPPuhsrpFCKBiQ8=
 github.com/cosmos/cosmos-sdk v0.28.2-0.20190827131926-5aacf454e1b6/go.mod h1:2Wh83L2ncI6JHjbOb4BWEuuNUUFLK/IOdDBVpIw3SCY=
 github.com/cosmos/go-bip39 v0.0.0-20180618194314-52158e4697b8 h1:Iwin12wRQtyZhH6FV3ykFcdGNlYEzoeR0jN8Vn+JWsI=
@@ -52,6 +53,7 @@ github.com/dgamingfoundation/cosmos-utils/client v0.0.0-20191105143510-3ddb0501d
 github.com/dgamingfoundation/cosmos-utils/client v0.0.0-20191105143510-3ddb0501dfbd/go.mod h1:Ihg0N2ZMAC40w1sl2d5LwuP2vJkFN2ZPsHx1nq0jZaQ=
 github.com/dgamingfoundation/dkglib v1.0.1-0.20191218101027-141a77aaab64 h1:qbpWxA62BnSiVI22CEfxBv/O/Cp7ydWjeQGRFHUHtgw=
 github.com/dgamingfoundation/dkglib v1.0.1-0.20191218101027-141a77aaab64/go.mod h1:3el68YtY8RFS4vLJA4jo1ERJ+y/lX8XUCEB1L71sxxQ=
+github.com/dgamingfoundation/tendermint v0.27.3 h1:cWWZIbvk0sATF3v55e0RaWkvIoRdr0bDiraFP3+kxMc=
 github.com/dgamingfoundation/tendermint v0.27.3/go.mod h1:ajgDOTrHZx9EUJcEVEq2lptbH2BB0aHsEWoUAvwyMzk=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
@@ -208,6 +210,7 @@ github.com/spf13/pflag v1.0.3/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnIn
 github.com/spf13/viper v1.0.0/go.mod h1:A8kyI5cUJhb8N+3pkfONlcEcZbueH6nhAm0Fq7SrnBM=
 github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DMA2s=
 github.com/spf13/viper v1.4.0/go.mod h1:PTJ7Z/lr49W6bUbkmS1V3by4uWynFiR9p7+dSq/yZzE=
+github.com/spf13/viper v1.5.0/go.mod h1:AkYRkVJF8TkSG/xet6PzXX+l39KhhXa2pdqVSxnTcn4=
 github.com/spf13/viper v1.6.1 h1:VPZzIkznI1YhVMRi6vNFLHSwhnhReBfgTxIPccpfdZk=
 github.com/spf13/viper v1.6.1/go.mod h1:t3iDnF5Jlj76alVNuyFBk5oUMCvsrkbvZK0WQdfDi5k=
 github.com/square/certstrap v1.2.0/go.mod h1:CUHqV+fxJW0Y5UQFnnbYwQ7bpKXO1AKbic9g73799yw=
@@ -237,6 +240,7 @@ github.com/tendermint/iavl v0.12.4/go.mod h1:8LHakzt8/0G3/I8FUU0ReNx98S/EP6eyPJk
 github.com/tendermint/tendermint v0.32.1/go.mod h1:jmPDAKuNkev9793/ivn/fTBnfpA9mGBww8MPRNPNxnU=
 github.com/tendermint/tendermint v0.32.2/go.mod h1:NwMyx58S8VJ7tEpFKqRVlVWKO9N9zjTHu+Dx96VsnOE=
 github.com/tendermint/tendermint v0.32.6/go.mod h1:D2+A3pNjY+Po72X0mTfaXorFhiVI8dh/Zg640FGyGtE=
+github.com/tendermint/tendermint v0.32.8/go.mod h1:5/B1XZjNYtVBso8o1l/Eg4A0Mhu42lDcmftoQl95j/E=
 github.com/tendermint/tm-db v0.1.1/go.mod h1:0cPKWu2Mou3IlxecH+MEUSYc1Ch537alLe6CpFrKzgw=
 github.com/tendermint/tm-db v0.2.0/go.mod h1:0cPKWu2Mou3IlxecH+MEUSYc1Ch537alLe6CpFrKzgw=
 github.com/tendermint/tm-db v0.3.0 h1:txK8j+sdY+Ml9VfkxU0jW2VUAygKdoODQBS+kTYlWlA=
