@@ -21,7 +21,6 @@ import (
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
 	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/consensus"
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/evidence"
@@ -191,7 +190,7 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   *cs.ConsensusState     // latest consensus state
+	consensusState   cs.StateInterface      // latest consensus state
 	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
 	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
 	evidencePool     *evidence.EvidencePool // tracking evidence
@@ -383,7 +382,7 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	consensusLogger log.Logger) (*cs.ConsensusReactor, *cs.ConsensusState) {
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
@@ -476,7 +475,7 @@ func createSwitch(config *cfg.Config,
 	peerFilters []p2p.PeerFilterFunc,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
-	consensusReactor *consensus.ConsensusReactor,
+	consensusReactor *cs.ConsensusReactor,
 	evidenceReactor *evidence.EvidenceReactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
@@ -986,7 +985,7 @@ func (n *Node) BlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() *cs.ConsensusState {
+func (n *Node) ConsensusState() cs.StateInterface {
 	return n.consensusState
 }
 

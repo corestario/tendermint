@@ -69,6 +69,8 @@ type evidencePool interface {
 	AddEvidence(types.Evidence) error
 }
 
+var _ StateInterface = ConsensusState{}
+
 // ConsensusState handles execution of the consensus algorithm.
 // It processes votes and proposals, and upon reaching agreement,
 // commits blocks to the chain and executes them against the application.
@@ -499,6 +501,10 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 		panic("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
 	cs.LastCommit = lastPrecommits
+}
+
+func (cs *ConsensusState) UpdateToState(state sm.State) {
+	cs.updateToState(state)
 }
 
 // Updates ConsensusState and increments height to match that of state.

@@ -38,6 +38,7 @@ var (
 
 	defaultPrivValKeyName   = "priv_validator_key.json"
 	defaultPrivValStateName = "priv_validator_state.json"
+	defaultBLSKeyName       = "bls_key.json"
 
 	defaultNodeKeyName  = "node_key.json"
 	defaultAddrBookName = "addrbook.json"
@@ -46,6 +47,7 @@ var (
 	defaultGenesisJSONPath  = filepath.Join(defaultConfigDir, defaultGenesisJSONName)
 	defaultPrivValKeyPath   = filepath.Join(defaultConfigDir, defaultPrivValKeyName)
 	defaultPrivValStatePath = filepath.Join(defaultDataDir, defaultPrivValStateName)
+	defaultBLSKeyPath       = filepath.Join(defaultConfigDir, defaultBLSKeyName)
 
 	defaultNodeKeyPath  = filepath.Join(defaultConfigDir, defaultNodeKeyName)
 	defaultAddrBookPath = filepath.Join(defaultConfigDir, defaultAddrBookName)
@@ -199,6 +201,9 @@ type BaseConfig struct { //nolint: maligned
 	// A JSON file containing the private key to use for p2p authenticated encryption
 	NodeKey string `mapstructure:"node_key_file"`
 
+	// A json path to bls key
+	BLSKey string `mapstructure:"bls_key_file"`
+
 	// Mechanism to connect to the ABCI application: socket | grpc
 	ABCI string `mapstructure:"abci"`
 
@@ -216,6 +221,7 @@ func DefaultBaseConfig() BaseConfig {
 		Genesis:            defaultGenesisJSONPath,
 		PrivValidatorKey:   defaultPrivValKeyPath,
 		PrivValidatorState: defaultPrivValStatePath,
+		BLSKey:             defaultBLSKeyPath,
 		NodeKey:            defaultNodeKeyPath,
 		Moniker:            defaultMoniker,
 		ProxyApp:           "tcp://127.0.0.1:26658",
@@ -268,6 +274,11 @@ func (cfg BaseConfig) OldPrivValidatorFile() string {
 // NodeKeyFile returns the full path to the node_key.json file
 func (cfg BaseConfig) NodeKeyFile() string {
 	return rootify(cfg.NodeKey, cfg.RootDir)
+}
+
+// NodeKeyFile returns the full path to the node_key.json file
+func (cfg BaseConfig) BLSKeyFile() string {
+	return rootify(cfg.BLSKey, cfg.RootDir)
 }
 
 // DBDir returns the full path to the database directory
