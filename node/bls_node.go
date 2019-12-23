@@ -13,7 +13,6 @@ import (
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
 	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/consensus"
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/evidence"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -34,7 +33,7 @@ func GetBLSReactors(
 	privValidator types.PrivValidator,
 	metricsProvider MetricsProvider,
 	logger log.Logger,
-) (p2p.Reactor, *consensus.Reactor, consensus.StateInterface, error) {
+) (p2p.Reactor, *cs.ConsensusReactor, cs.StateInterface, error) {
 	consensusLogger := logger.With("module", "consensus")
 
 	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
@@ -152,7 +151,7 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	dkgNumBlocks int64) (*consensus.Reactor, consensus.StateInterface) {
+	dkgNumBlocks int64) (*cs.ConsensusReactor, cs.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
@@ -187,7 +186,7 @@ func createBLSConsensus(config *cfg.Config,
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewReactor(&consensusState.ConsensusState, fastSync, cs.ReactorMetrics(csMetrics))
+	consensusReactor := cs.NewConsensusReactor(&consensusState.ConsensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
@@ -352,7 +351,7 @@ func NewBLSNode(config *cfg.Config,
 	//
 	// If PEX is on, it should handle dialing the seeds. Otherwise the switch does it.
 	// Note we currently use the addrBook regardless at least for AddOurAddress
-	var pexReactor *pex.Reactor
+	var pexReactor *pex.PEXReactor
 	if config.P2P.PexReactor {
 		pexReactor = createPEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
