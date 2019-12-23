@@ -372,6 +372,18 @@ func (pv *FilePV) signProposal(chainID string, proposal *types.Proposal) error {
 	return nil
 }
 
+func (pv *FilePV) SignData(chainID string, data types.DataSigner) error {
+	useChainID := chainID
+
+	signBytes := data.SignBytes(useChainID)
+	sig, err := pv.Key.PrivKey.Sign(signBytes)
+	if err != nil {
+		return err
+	}
+	data.SetSignature(sig)
+	return nil
+}
+
 // Persist height/round/step and signature
 func (pv *FilePV) saveSigned(height int64, round int, step int8,
 	signBytes []byte, sig []byte) {

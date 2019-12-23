@@ -15,8 +15,12 @@ type PrivValidator interface {
 	// TODO: Extend the interface to return errors too. Issue: https://github.com/tendermint/tendermint/issues/3602
 	GetPubKey() crypto.PubKey
 
-	SignVote(chainID string, vote *Vote) error
-	SignProposal(chainID string, proposal *Proposal) error
+	SignData(chainID string, data DataSigner) error
+}
+
+type DataSigner interface {
+	SignBytes(string) []byte
+	SetSignature([]byte)
 }
 
 //----------------------------------------
@@ -67,17 +71,7 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 
 // Implements PrivValidator.
 func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
-	useChainID := chainID
-	if pv.breakVoteSigning {
-		useChainID = "incorrect-chain-id"
-	}
-	signBytes := vote.SignBytes(useChainID)
-	sig, err := pv.privKey.Sign(signBytes)
-	if err != nil {
-		return err
-	}
-	vote.Signature = sig
-	return nil
+	return pv.SignData(chainID, vote)
 }
 
 // Implements PrivValidator.
@@ -92,6 +86,20 @@ func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
 		return err
 	}
 	proposal.Signature = sig
+	return nil
+}
+
+func (pv *MockPV) SignData(chainID string, data DataSigner) error {
+	useChainID := chainID
+	if pv.breakVoteSigning {
+		useChainID = "incorrect-chain-id"
+	}
+	signBytes := data.SignBytes(useChainID)
+	sig, err := pv.privKey.Sign(signBytes)
+	if err != nil {
+		return err
+	}
+	data.SetSignature(sig)
 	return nil
 }
 

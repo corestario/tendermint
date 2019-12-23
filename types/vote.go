@@ -58,6 +58,7 @@ type Vote struct {
 	ValidatorAddress Address       `json:"validator_address"`
 	ValidatorIndex   int           `json:"validator_index"`
 	Signature        []byte        `json:"signature"`
+	BLSSignature     []byte        `json:"bls_signature"`
 }
 
 // CommitSig converts the Vote to a CommitSig.
@@ -81,6 +82,14 @@ func (vote *Vote) SignBytes(chainID string) []byte {
 func (vote *Vote) Copy() *Vote {
 	voteCopy := *vote
 	return &voteCopy
+}
+
+func (vote *Vote) GetHash() []byte {
+	return vote.BlockID.Hash
+}
+
+func (vote *Vote) GetBLSSignature() []byte {
+	return vote.BLSSignature
 }
 
 func (vote *Vote) String() string {
@@ -159,4 +168,8 @@ func (vote *Vote) ValidateBasic() error {
 		return fmt.Errorf("Signature is too big (max: %d)", MaxSignatureSize)
 	}
 	return nil
+}
+
+func (v *Vote) SetSignature(sig []byte) {
+	v.Signature = sig
 }

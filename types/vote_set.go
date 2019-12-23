@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
 	"github.com/pkg/errors"
-
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
@@ -483,6 +483,19 @@ type VoteSetJSON struct {
 	Votes         []string          `json:"votes"`
 	VotesBitArray string            `json:"votes_bit_array"`
 	PeerMaj23s    map[P2PID]BlockID `json:"peer_maj_23s"`
+}
+
+// GetVotes returns all votes in a voteSet, including nil ones (beware!).
+func (voteSet *VoteSet) GetVotes() []blsShare.BLSSigner {
+	res := make([]blsShare.BLSSigner, 0)
+	voteSet.mtx.Lock()
+	defer voteSet.mtx.Unlock()
+	for _, v := range voteSet.votes {
+		v := v
+		res = append(res, v)
+	}
+
+	return res
 }
 
 // Return the bit-array of votes including

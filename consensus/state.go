@@ -8,19 +8,21 @@ import (
 	"sync"
 	"time"
 
+	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/fail"
-	"github.com/tendermint/tendermint/libs/log"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
+	types2 "github.com/tendermint/tendermint/consensus/types"
+	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	tmevents "github.com/tendermint/tendermint/libs/events"
+	"github.com/tendermint/tendermint/libs/fail"
+	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/p2p"
+	"github.com/tendermint/tendermint/state"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	tmtime "github.com/tendermint/tendermint/types/time"
 )
 
 //-----------------------------------------------------------------------------
@@ -479,6 +481,10 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 		cs.Logger.Info("Internal msg queue is full. Using a go-routine")
 		go func() { cs.internalMsgQueue <- mi }()
 	}
+}
+
+func (cs *ConsensusState) ReconstructLastCommit(state sm.State) {
+	cs.reconstructLastCommit(state)
 }
 
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
@@ -971,7 +977,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	// Make proposal
 	propBlockId := types.BlockID{Hash: block.Hash(), PartsHeader: blockParts.Header()}
 	proposal := types.NewProposal(height, round, cs.ValidRound, propBlockId)
-	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal); err == nil {
+	if err := cs.privValidator.SignData(cs.state.ChainID, proposal); err == nil {
 
 		// send proposal and block parts on internal msg queue
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
@@ -1814,7 +1820,7 @@ func (cs *ConsensusState) signVote(
 		Type:             type_,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 	}
-	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
+	err := cs.privValidator.SignData(cs.state.ChainID, vote)
 	return vote, err
 }
 
@@ -1874,4 +1880,48 @@ func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2
 		return 1
 	}
 	return 0
+}
+
+func (cs *ConsensusState) GetMtx() *sync.RWMutex {
+	return &cs.mtx
+}
+
+func (cs *ConsensusState) GetHeight() int64 {
+	return cs.Height
+}
+
+func (cs *ConsensusState) GetVotes() *types2.HeightVoteSet {
+	return cs.Votes
+}
+
+func (cs *ConsensusState) GetLastCommit() *types.VoteSet {
+	return cs.LastCommit
+}
+
+func (cs *ConsensusState) SetDoWALCatchup(value bool) {
+	cs.doWALCatchup = value
+}
+
+func (cs *ConsensusState) GetEventSwitch() events.EventSwitch {
+	return cs.evsw
+}
+
+func (cs *ConsensusState) GetPeerMsgQueue() chan msgInfo {
+	return cs.peerMsgQueue
+}
+
+func (cs *ConsensusState) GetStatsMsgQueue() chan msgInfo {
+	return cs.statsMsgQueue
+}
+
+func (cs *ConsensusState) GetDKGMsgQueue() chan *dkgtypes.DKGDataMessage {
+	return nil
+}
+
+func (cs *ConsensusState) GetBlockStore() state.BlockStore {
+	return cs.blockStore
+}
+
+func (cs *ConsensusState) GetConfig() *cfg.ConsensusConfig {
+	return cs.config
 }

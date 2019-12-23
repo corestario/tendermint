@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -30,6 +29,7 @@ const (
 	// Uvarint length of Data.Txs:          4 bytes
 	// Data.Txs field:                      1 byte
 	MaxAminoOverheadForBlock int64 = 11
+	InitialRandomData              = "dgaming-random-source"
 )
 
 // Block defines the atomic unit of a Tendermint blockchain.
@@ -257,6 +257,18 @@ func (b *Block) StringShort() string {
 	return fmt.Sprintf("Block#%v", b.Hash())
 }
 
+func (h *Header) SetRandomData(randomData []byte) {
+	h.RandomData = randomData
+	h.RandomHash = h.getRandomHash()
+}
+
+func (h *Header) getRandomHash() cmn.HexBytes {
+	return merkle.SimpleHashFromByteSlices([][]byte{
+		cdcEncode(h.RandomData),
+		h.Hash(),
+	})
+}
+
 //-----------------------------------------------------------
 // These methods are for Protobuf Compatibility
 
@@ -361,6 +373,9 @@ type Header struct {
 	// consensus info
 	EvidenceHash    cmn.HexBytes `json:"evidence_hash"`    // evidence included in the block
 	ProposerAddress Address      `json:"proposer_address"` // original proposer of the block
+
+	RandomData []byte       `json:"random_number"`
+	RandomHash cmn.HexBytes `json:"final_hash"`
 }
 
 // Populate the Header with state-derived data.
