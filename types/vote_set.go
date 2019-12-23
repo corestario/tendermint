@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"github.com/dgamingfoundation/dkglib/lib/blsShare"
 	"strings"
 	"sync"
 
@@ -481,6 +482,19 @@ func (voteSet *VoteSet) MarshalJSON() ([]byte, error) {
 		voteSet.bitArrayString(),
 		voteSet.peerMaj23s,
 	})
+}
+
+// GetVotes returns all votes in a voteSet, including nil ones (beware!).
+func (voteSet *VoteSet) GetVotes() []blsShare.BLSSigner {
+	res := make([]blsShare.BLSSigner, 0)
+	voteSet.mtx.Lock()
+	defer voteSet.mtx.Unlock()
+	for _, v := range voteSet.votes {
+		v := v
+		res = append(res, v)
+	}
+
+	return res
 }
 
 // More human readable JSON of the vote set

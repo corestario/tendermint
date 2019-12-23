@@ -37,7 +37,7 @@ const (
 type Reactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
-	conS *State
+	conS *ConsensusState
 
 	mtx      sync.RWMutex
 	fastSync bool
@@ -50,7 +50,7 @@ type ReactorOption func(*Reactor)
 
 // NewReactor returns a new Reactor with the given
 // consensusState.
-func NewReactor(consensusState *State, fastSync bool, options ...ReactorOption) *Reactor {
+func NewReactor(consensusState *ConsensusState, fastSync bool, options ...ReactorOption) *Reactor {
 	conR := &Reactor{
 		conS:     consensusState,
 		fastSync: fastSync,

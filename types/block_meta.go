@@ -9,18 +9,14 @@ import (
 // BlockMeta contains meta information.
 type BlockMeta struct {
 	BlockID   BlockID `json:"block_id"`
-	BlockSize int     `json:"block_size"`
 	Header    Header  `json:"header"`
-	NumTxs    int     `json:"num_txs"`
 }
 
 // NewBlockMeta returns a new BlockMeta.
 func NewBlockMeta(block *Block, blockParts *PartSet) *BlockMeta {
 	return &BlockMeta{
 		BlockID:   BlockID{block.Hash(), blockParts.Header()},
-		BlockSize: block.Size(),
 		Header:    block.Header,
-		NumTxs:    len(block.Data.Txs),
 	}
 }
 

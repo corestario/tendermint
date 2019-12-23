@@ -22,7 +22,7 @@ func DefaultValidationRequestHandler(
 		res = &PubKeyResponse{p, nil}
 
 	case *SignVoteRequest:
-		err = privVal.SignVote(chainID, r.Vote)
+		err = privVal.SignData(chainID, r.Vote)
 		if err != nil {
 			res = &SignedVoteResponse{nil, &RemoteSignerError{0, err.Error()}}
 		} else {
@@ -30,7 +30,7 @@ func DefaultValidationRequestHandler(
 		}
 
 	case *SignProposalRequest:
-		err = privVal.SignProposal(chainID, r.Proposal)
+		err = privVal.SignData(chainID, r.Proposal)
 		if err != nil {
 			res = &SignedProposalResponse{nil, &RemoteSignerError{0, err.Error()}}
 		} else {

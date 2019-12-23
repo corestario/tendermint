@@ -191,10 +191,10 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   *cs.State      // latest consensus state
+	consensusState   rpccore.Consensus      // latest consensus state
 	consensusReactor *cs.Reactor    // for participating in the consensus
 	pexReactor       *pex.Reactor   // for exchanging peer addresses
-	evidencePool     *evidence.Pool // tracking evidence
+	evidencePool     *evidence.EvidencePool // tracking evidence
 	proxyApp         proxy.AppConns // connection to the application
 	rpcListeners     []net.Listener // rpc servers
 	txIndexer        txindex.TxIndexer
@@ -339,14 +339,14 @@ func createMempoolAndMempoolReactor(config *cfg.Config, proxyApp proxy.AppConns,
 }
 
 func createEvidenceReactor(config *cfg.Config, dbProvider DBProvider,
-	stateDB dbm.DB, logger log.Logger) (*evidence.Reactor, *evidence.Pool, error) {
+	stateDB dbm.DB, logger log.Logger) (*evidence.Reactor, *evidence.EvidencePool, error) {
 
 	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
 	if err != nil {
 		return nil, nil, err
 	}
 	evidenceLogger := logger.With("module", "evidence")
-	evidencePool := evidence.NewPool(stateDB, evidenceDB)
+	evidencePool := evidence.NewEvidencePool(stateDB, evidenceDB)
 	evidencePool.SetLogger(evidenceLogger)
 	evidenceReactor := evidence.NewReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
@@ -378,12 +378,12 @@ func createConsensusReactor(config *cfg.Config,
 	blockExec *sm.BlockExecutor,
 	blockStore sm.BlockStore,
 	mempool *mempl.CListMempool,
-	evidencePool *evidence.Pool,
+	evidencePool *evidence.EvidencePool,
 	privValidator types.PrivValidator,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.Reactor, *consensus.State) {
+	consensusLogger log.Logger) (*consensus.Reactor, *consensus.ConsensusState) {
 
 	consensusState := cs.NewState(
 		config.Consensus,
@@ -992,7 +992,7 @@ func (n *Node) BlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() *cs.State {
+func (n *Node) ConsensusState() rpccore.Consensus {
 	return n.consensusState
 }
 
@@ -1017,7 +1017,7 @@ func (n *Node) PEXReactor() *pex.Reactor {
 }
 
 // EvidencePool returns the Node's EvidencePool.
-func (n *Node) EvidencePool() *evidence.Pool {
+func (n *Node) EvidencePool() *evidence.EvidencePool {
 	return n.evidencePool
 }
 

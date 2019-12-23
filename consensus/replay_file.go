@@ -40,7 +40,7 @@ func RunReplayFile(config cfg.BaseConfig, csConfig *cfg.ConsensusConfig, console
 }
 
 // Replay msgs in file or start the console
-func (cs *State) ReplayFile(file string, console bool) error {
+func (cs *ConsensusState) ReplayFile(file string, console bool) error {
 
 	if cs.IsRunning() {
 		return errors.New("cs is already running, cannot replay")
@@ -98,7 +98,7 @@ func (cs *State) ReplayFile(file string, console bool) error {
 // playback manager
 
 type playback struct {
-	cs *State
+	cs *ConsensusState
 
 	fp    *os.File
 	dec   *WALDecoder
@@ -109,7 +109,7 @@ type playback struct {
 	genesisState sm.State // so the replay session knows where to restart from
 }
 
-func newPlayback(fileName string, fp *os.File, cs *State, genState sm.State) *playback {
+func newPlayback(fileName string, fp *os.File, cs *ConsensusState, genState sm.State) *playback {
 	return &playback{
 		cs:           cs,
 		fp:           fp,
@@ -158,7 +158,7 @@ func (pb *playback) replayReset(count int, newStepSub types.Subscription) error 
 	return nil
 }
 
-func (cs *State) startForReplay() {
+func (cs *ConsensusState) startForReplay() {
 	cs.Logger.Error("Replay commands are disabled until someone updates them and writes tests")
 	/* TODO:!
 	// since we replay tocks we just ignore ticks
@@ -274,7 +274,7 @@ func (pb *playback) replayConsoleLoop() int {
 //--------------------------------------------------------------------------------
 
 // convenience for replay mode
-func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusConfig) *State {
+func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusConfig) *ConsensusState {
 	dbType := dbm.BackendType(config.DBBackend)
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", dbType, config.DBDir())
