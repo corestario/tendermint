@@ -10,7 +10,6 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
-	nm "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/rpc/core"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	rpctypes "github.com/tendermint/tendermint/rpc/lib/types"
@@ -49,10 +48,9 @@ type Local struct {
 // you can only have one node per process.  So make sure test cases
 // don't run in parallel, or try to simulate an entire network in
 // one process...
-func NewLocal(node *nm.Node) *Local {
-	node.ConfigureRPC()
+func NewLocal(node interface{}) *Local {
 	return &Local{
-		EventBus: node.EventBus(),
+		EventBus: nil,
 		Logger:   log.NewNopLogger(),
 		ctx:      &rpctypes.Context{},
 	}

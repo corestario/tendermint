@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/dgamingfoundation/dkglib/lib/basic"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
@@ -206,12 +207,20 @@ func createBLSConsensus(config *cfg.Config,
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
-	offChDKG := dkgOffChain.NewOffChainDKG(evsw, "tendermintChain",
+	dkg, err := basic.NewDKGBasic(
+		evsw,
+		cdc,
+		"tendermintChain",
+		"tcp://localhost:26657",
+		config.RootDir,
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
@@ -222,7 +231,7 @@ func createBLSConsensus(config *cfg.Config,
 		evidencePool,
 		cs.BLSStateMetrics(csMetrics),
 		cs.BLSWithEVSW(evsw),
-		cs.BLSWithDKG(offChDKG),
+		cs.BLSWithDKG(dkg),
 	)
 
 	consensusState.SetLogger(consensusLogger)
