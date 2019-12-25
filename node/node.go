@@ -198,12 +198,12 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   core.Consensus         // latest consensus state
-	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
-	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
-	evidencePool     *evidence.EvidencePool // tracking evidence
-	proxyApp         proxy.AppConns         // connection to the application
-	rpcListeners     []net.Listener         // rpc servers
+	consensusState   core.Consensus        // latest consensus state
+	consensusReactor *cs.ConsensusReactor  // for participating in the consensus
+	pexReactor       *pex.PEXReactor       // for exchanging peer addresses
+	evidencePool     evidence.EvidencePool // tracking evidence
+	proxyApp         proxy.AppConns        // connection to the application
+	rpcListeners     []net.Listener        // rpc servers
 	txIndexer        txindex.TxIndexer
 	indexerService   *txindex.IndexerService
 	prometheusSrv    *http.Server
@@ -340,7 +340,7 @@ func createMempoolAndMempoolReactor(config *cfg.Config, proxyApp proxy.AppConns,
 }
 
 func createEvidenceReactor(config *cfg.Config, dbProvider DBProvider,
-	stateDB dbm.DB, logger log.Logger) (*evidence.EvidenceReactor, *evidence.EvidencePool, error) {
+	stateDB dbm.DB, logger log.Logger) (*evidence.EvidenceReactor, *evidence.BaseEvidencePool, error) {
 
 	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
 	if err != nil {
@@ -379,7 +379,7 @@ func createConsensusReactor(config *cfg.Config,
 	blockExec *sm.BlockExecutor,
 	blockStore sm.BlockStore,
 	mempool *mempl.CListMempool,
-	evidencePool *evidence.EvidencePool,
+	evidencePool *evidence.BaseEvidencePool,
 	privValidator types.PrivValidator,
 	csMetrics *cs.Metrics,
 	fastSync bool,
@@ -1004,8 +1004,8 @@ func (n *Node) PEXReactor() *pex.PEXReactor {
 	return n.pexReactor
 }
 
-// EvidencePool returns the Node's EvidencePool.
-func (n *Node) EvidencePool() *evidence.EvidencePool {
+// BaseEvidencePool returns the Node's BaseEvidencePool.
+func (n *Node) EvidencePool() evidence.EvidencePool {
 	return n.evidencePool
 }
 

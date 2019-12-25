@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/dgamingfoundation/tendermint/evidence"
+
 	"github.com/dgamingfoundation/tendermint/state"
 
 	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
@@ -20,7 +22,9 @@ import (
 
 type BLSConsensusState struct {
 	ConsensusState
-	dkg dkgtypes.DKG
+	dkg       dkgtypes.DKG
+	blockExec *sm.BLSBlockExecutor
+	evpool    *evidence.BLSEvidencePool
 }
 
 type BLSStateOption func(*BLSConsensusState)
@@ -30,16 +34,19 @@ var _ StateInterface = &BLSConsensusState{}
 func NewBLSConsensusState(
 	config *cfg.ConsensusConfig,
 	state sm.State,
-	blockExec *sm.BlockExecutor,
+	blockExec *sm.BLSBlockExecutor,
 	blockStore sm.BlockStore,
 	txNotifier txNotifier,
 	evpool evidencePool,
 	options ...BLSStateOption,
 ) *BLSConsensusState {
-	blsCS := &BLSConsensusState{}
+	blsCS := &BLSConsensusState{
+		blockExec: blockExec,
+		evpool:    evpool.(*evidence.BLSEvidencePool),
+	}
 	blsCS.ConsensusState = ConsensusState{
 		config:           config,
-		blockExec:        blockExec,
+		blockExec:        blockExec.BlockExecutor,
 		blockStore:       blockStore,
 		txNotifier:       txNotifier,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
@@ -68,6 +75,7 @@ func NewBLSConsensusState(
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	blsCS.reconstructLastCommit(state)
+	blsCS.evpool.SetDKGInstance(blsCS.dkg)
 
 	return blsCS
 }

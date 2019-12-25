@@ -247,7 +247,7 @@ func TestCreateProposalBlock(t *testing.T) {
 	)
 	mempool.SetLogger(logger)
 
-	// Make EvidencePool
+	// Make BaseEvidencePool
 	types.RegisterMockEvidencesGlobal() // XXX!
 	evidence.RegisterMockEvidences()
 	evidenceDB := dbm.NewMemDB()

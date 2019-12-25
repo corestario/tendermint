@@ -33,7 +33,7 @@ type BlockStore interface {
 //-----------------------------------------------------------------------------------------------------
 // evidence pool
 
-// EvidencePool defines the EvidencePool interface used by the ConsensusState.
+// BaseEvidencePool defines the BaseEvidencePool interface used by the ConsensusState.
 // Get/Set/Commit
 type EvidencePool interface {
 	PendingEvidence(int64) []types.Evidence
@@ -43,7 +43,7 @@ type EvidencePool interface {
 	IsCommitted(types.Evidence) bool
 }
 
-// MockEvidencePool is an empty implementation of EvidencePool, useful for testing.
+// MockEvidencePool is an empty implementation of BaseEvidencePool, useful for testing.
 type MockEvidencePool struct{}
 
 func (m MockEvidencePool) PendingEvidence(int64) []types.Evidence { return nil }

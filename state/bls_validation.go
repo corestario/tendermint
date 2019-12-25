@@ -14,7 +14,7 @@ import (
 //-----------------------------------------------------
 // Validate block
 
-func blsValidateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, block *types.Block) error {
+func blsValidateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, dkgInstance dkgTypes.DKG, block *types.Block) error {
 	// Validate internal consistency.
 	if err := block.ValidateBasic(); err != nil {
 		return err
@@ -140,7 +140,7 @@ func blsValidateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, bl
 
 	// Validate all evidence.
 	for _, ev := range block.Evidence.Evidence {
-		if err := VerifyEvidence(stateDB, state, ev); err != nil {
+		if err := BLSVerifyEvidence(stateDB, state, dkgInstance, ev); err != nil {
 			return types.NewErrEvidenceInvalid(ev, err)
 		}
 		if evidencePool != nil && evidencePool.IsCommitted(ev) {
@@ -166,6 +166,8 @@ func blsValidateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, bl
 // - it is from a key who was a validator at the given height
 // - it is internally consistent
 // - it was properly signed by the alleged equivocator
+//
+// - Also various DKG-related evidence checks are run.
 func BLSVerifyEvidence(stateDB dbm.DB, state State, dkgInstance dkgTypes.DKG, evidence types.Evidence) error {
 	height := state.LastBlockHeight
 
@@ -197,6 +199,18 @@ func BLSVerifyEvidence(stateDB dbm.DB, state State, dkgInstance dkgTypes.DKG, ev
 
 	if err := evidence.Verify(state.ChainID, val.PubKey); err != nil {
 		return err
+	}
+
+	if err := verifyDKGEvidence(dkgInstance, evidence); err != nil {
+		return fmt.Errorf("corrupt DKG evidence: %w", err)
+	}
+
+	return nil
+}
+
+func verifyDKGEvidence(dkgInstance dkgTypes.DKG, evidence types.Evidence) error {
+	if !dkgInstance.IsReady() {
+		return nil
 	}
 
 	// TODO: move these checks to respective evidences' Verify() method.

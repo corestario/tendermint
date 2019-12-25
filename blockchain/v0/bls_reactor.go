@@ -20,7 +20,7 @@ type BLSBlockchainReactor struct {
 	// immutable
 	initialState sm.State
 
-	blockExec *sm.BlockExecutor
+	blockExec *sm.BLSBlockExecutor
 	store     *store.BlockStore
 	pool      *BlockPool
 	fastSync  bool
@@ -32,7 +32,7 @@ type BLSBlockchainReactor struct {
 }
 
 // NewBLSBlockchainReactor returns new reactor instance.
-func NewBLSBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore, verifier dkgtypes.Verifier,
+func NewBLSBlockchainReactor(state sm.State, blockExec *sm.BLSBlockExecutor, store *store.BlockStore, verifier dkgtypes.Verifier,
 	fastSync bool) *BLSBlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {

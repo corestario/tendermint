@@ -12,9 +12,20 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-// EvidencePool maintains a pool of valid evidence
+type EvidencePool interface {
+	SetLogger(l log.Logger)
+	State() sm.State
+	EvidenceWaitChan() <-chan struct{}
+	AddEvidence(evidence types.Evidence) (err error)
+	EvidenceFront() *clist.CElement
+	IsCommitted(evidence types.Evidence) bool
+	PendingEvidence(maxNum int64) []types.Evidence
+	Update(block *types.Block, state sm.State)
+}
+
+// BaseEvidencePool maintains a pool of valid evidence
 // in an EvidenceStore.
-type EvidencePool struct {
+type BaseEvidencePool struct {
 	logger log.Logger
 
 	evidenceStore *EvidenceStore
@@ -28,9 +39,9 @@ type EvidencePool struct {
 	state sm.State
 }
 
-func NewEvidencePool(stateDB, evidenceDB dbm.DB) *EvidencePool {
+func NewEvidencePool(stateDB, evidenceDB dbm.DB) *BaseEvidencePool {
 	evidenceStore := NewEvidenceStore(evidenceDB)
-	evpool := &EvidencePool{
+	evpool := &BaseEvidencePool{
 		stateDB:       stateDB,
 		state:         sm.LoadState(stateDB),
 		logger:        log.NewNopLogger(),
@@ -40,43 +51,43 @@ func NewEvidencePool(stateDB, evidenceDB dbm.DB) *EvidencePool {
 	return evpool
 }
 
-func (evpool *EvidencePool) EvidenceFront() *clist.CElement {
+func (evpool *BaseEvidencePool) EvidenceFront() *clist.CElement {
 	return evpool.evidenceList.Front()
 }
 
-func (evpool *EvidencePool) EvidenceWaitChan() <-chan struct{} {
+func (evpool *BaseEvidencePool) EvidenceWaitChan() <-chan struct{} {
 	return evpool.evidenceList.WaitChan()
 }
 
 // SetLogger sets the Logger.
-func (evpool *EvidencePool) SetLogger(l log.Logger) {
+func (evpool *BaseEvidencePool) SetLogger(l log.Logger) {
 	evpool.logger = l
 }
 
 // PriorityEvidence returns the priority evidence.
-func (evpool *EvidencePool) PriorityEvidence() []types.Evidence {
+func (evpool *BaseEvidencePool) PriorityEvidence() []types.Evidence {
 	return evpool.evidenceStore.PriorityEvidence()
 }
 
 // PendingEvidence returns up to maxNum uncommitted evidence.
 // If maxNum is -1, all evidence is returned.
-func (evpool *EvidencePool) PendingEvidence(maxNum int64) []types.Evidence {
+func (evpool *BaseEvidencePool) PendingEvidence(maxNum int64) []types.Evidence {
 	return evpool.evidenceStore.PendingEvidence(maxNum)
 }
 
 // State returns the current state of the evpool.
-func (evpool *EvidencePool) State() sm.State {
+func (evpool *BaseEvidencePool) State() sm.State {
 	evpool.mtx.Lock()
 	defer evpool.mtx.Unlock()
 	return evpool.state
 }
 
 // Update loads the latest
-func (evpool *EvidencePool) Update(block *types.Block, state sm.State) {
+func (evpool *BaseEvidencePool) Update(block *types.Block, state sm.State) {
 
 	// sanity check
 	if state.LastBlockHeight != block.Height {
-		panic(fmt.Sprintf("Failed EvidencePool.Update sanity check: got state.Height=%d with block.Height=%d", state.LastBlockHeight, block.Height))
+		panic(fmt.Sprintf("Failed BaseEvidencePool.Update sanity check: got state.Height=%d with block.Height=%d", state.LastBlockHeight, block.Height))
 	}
 
 	// update the state
@@ -89,7 +100,7 @@ func (evpool *EvidencePool) Update(block *types.Block, state sm.State) {
 }
 
 // AddEvidence checks the evidence is valid and adds it to the pool.
-func (evpool *EvidencePool) AddEvidence(evidence types.Evidence) (err error) {
+func (evpool *BaseEvidencePool) AddEvidence(evidence types.Evidence) (err error) {
 
 	// TODO: check if we already have evidence for this
 	// validator at this height so we dont get spammed
@@ -119,7 +130,7 @@ func (evpool *EvidencePool) AddEvidence(evidence types.Evidence) (err error) {
 }
 
 // MarkEvidenceAsCommitted marks all the evidence as committed and removes it from the queue.
-func (evpool *EvidencePool) MarkEvidenceAsCommitted(height int64, evidence []types.Evidence) {
+func (evpool *BaseEvidencePool) MarkEvidenceAsCommitted(height int64, evidence []types.Evidence) {
 	// make a map of committed evidence to remove from the clist
 	blockEvidenceMap := make(map[string]struct{})
 	for _, ev := range evidence {
@@ -134,12 +145,12 @@ func (evpool *EvidencePool) MarkEvidenceAsCommitted(height int64, evidence []typ
 }
 
 // IsCommitted returns true if we have already seen this exact evidence and it is already marked as committed.
-func (evpool *EvidencePool) IsCommitted(evidence types.Evidence) bool {
+func (evpool *BaseEvidencePool) IsCommitted(evidence types.Evidence) bool {
 	ei := evpool.evidenceStore.getEvidenceInfo(evidence)
 	return ei.Evidence != nil && ei.Committed
 }
 
-func (evpool *EvidencePool) removeEvidence(height, maxAge int64, blockEvidenceMap map[string]struct{}) {
+func (evpool *BaseEvidencePool) removeEvidence(height, maxAge int64, blockEvidenceMap map[string]struct{}) {
 	for e := evpool.evidenceList.Front(); e != nil; e = e.Next() {
 		ev := e.Value.(types.Evidence)
 

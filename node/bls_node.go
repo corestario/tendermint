@@ -8,7 +8,7 @@ import (
 	"github.com/dgamingfoundation/dkglib/lib/basic"
 	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
 	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgTypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"github.com/pkg/errors"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
@@ -27,6 +27,7 @@ import (
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/version"
+	dbm "github.com/tendermint/tm-db"
 )
 
 func GetBLSReactors(
@@ -76,7 +77,7 @@ func GetBLSReactors(
 	}
 
 	// make block executor for consensus and blockchain reactors to execute blocks
-	blockExec := sm.NewBlockExecutor(
+	blockExec := sm.NewBLSBlockExecutor(
 		stateDB,
 		logger.With("module", "state"),
 		proxyApp.Consensus(),
@@ -121,9 +122,9 @@ func GetBLSReactors(
 
 func createBLSBlockchainReactor(config *cfg.Config,
 	state sm.State,
-	blockExec *sm.BlockExecutor,
+	blockExec *sm.BLSBlockExecutor,
 	blockStore *store.BlockStore,
-	verifier dkgtypes.Verifier,
+	verifier dkgTypes.Verifier,
 	fastSync bool,
 	logger log.Logger) (bcReactor p2p.Reactor, err error) {
 
@@ -131,7 +132,7 @@ func createBLSBlockchainReactor(config *cfg.Config,
 	case "v0":
 		bcReactor = bcv0.NewBLSBlockchainReactor(state.Copy(), blockExec, blockStore, verifier, fastSync)
 	case "v1":
-		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec.BlockExecutor, blockStore, fastSync)
 	default:
 		return nil, fmt.Errorf("unknown fastsync version %s", config.FastSync.Version)
 	}
@@ -142,16 +143,16 @@ func createBLSBlockchainReactor(config *cfg.Config,
 
 func createBLSConsensus(config *cfg.Config,
 	state sm.State,
-	blockExec *sm.BlockExecutor,
+	blockExec *sm.BLSBlockExecutor,
 	blockStore sm.BlockStore,
 	mempool *mempl.CListMempool,
-	evidencePool *evidence.EvidencePool,
+	evidencePool evidence.EvidencePool,
 	privValidator types.PrivValidator,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
-	verifier dkgtypes.Verifier,
+	verifier dkgTypes.Verifier,
 	dkgNumBlocks int64) (*consensus.ConsensusReactor, consensus.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
@@ -170,6 +171,7 @@ func createBLSConsensus(config *cfg.Config,
 	if err != nil {
 		panic(err)
 	}
+	blockExec.SetDKGInstance(dkg)
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
@@ -271,13 +273,13 @@ func NewBLSNode(config *cfg.Config,
 	mempoolReactor, mempool := createMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
 
 	// Make Evidence Reactor
-	evidenceReactor, evidencePool, err := createEvidenceReactor(config, dbProvider, stateDB, logger)
+	evidenceReactor, evidencePool, err := createBLSEvidenceReactor(config, dbProvider, stateDB, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	// make block executor for consensus and blockchain reactors to execute blocks
-	blockExec := sm.NewBlockExecutor(
+	blockExec := sm.NewBLSBlockExecutor(
 		stateDB,
 		logger.With("module", "state"),
 		proxyApp.Consensus(),
@@ -423,4 +425,23 @@ func logBLSNodeStartupInfo(state sm.State, privValidator types.PrivValidator, lo
 	} else {
 		consensusLogger.Info("This node is not a validator", "addr", addr, "pubKey", pubKey)
 	}
+}
+
+func createBLSEvidenceReactor(
+	config *cfg.Config,
+	dbProvider DBProvider,
+	stateDB dbm.DB,
+	logger log.Logger,
+) (*evidence.EvidenceReactor, evidence.EvidencePool, error) {
+
+	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
+	if err != nil {
+		return nil, nil, err
+	}
+	evidenceLogger := logger.With("module", "evidence")
+	evidencePool := evidence.NewBLSEvidencePool(stateDB, evidenceDB)
+	evidencePool.SetLogger(evidenceLogger)
+	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
+	evidenceReactor.SetLogger(evidenceLogger)
+	return evidenceReactor, evidencePool, nil
 }

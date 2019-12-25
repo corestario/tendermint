@@ -98,7 +98,7 @@ func _waitForEvidence(t *testing.T, wg *sync.WaitGroup, evs types.EvidenceList, 
 	wg.Done()
 }
 
-func sendEvidence(t *testing.T, evpool *EvidencePool, valAddr []byte, n int) types.EvidenceList {
+func sendEvidence(t *testing.T, evpool *BaseEvidencePool, valAddr []byte, n int) types.EvidenceList {
 	evList := make([]types.Evidence, n)
 	for i := 0; i < n; i++ {
 		ev := types.NewMockGoodEvidence(int64(i+1), 0, valAddr)

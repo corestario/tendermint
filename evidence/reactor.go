@@ -25,12 +25,12 @@ const (
 // EvidenceReactor handles evpool evidence broadcasting amongst peers.
 type EvidenceReactor struct {
 	p2p.BaseReactor
-	evpool   *EvidencePool
+	evpool   EvidencePool
 	eventBus *types.EventBus
 }
 
 // NewEvidenceReactor returns a new EvidenceReactor with the given config and evpool.
-func NewEvidenceReactor(evpool *EvidencePool) *EvidenceReactor {
+func NewEvidenceReactor(evpool EvidencePool) *EvidenceReactor {
 	evR := &EvidenceReactor{
 		evpool: evpool,
 	}
