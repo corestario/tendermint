@@ -3,7 +3,7 @@ package consensus
 import (
 	"sync"
 
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
 	types2 "github.com/tendermint/tendermint/consensus/types"
 	"github.com/tendermint/tendermint/libs/events"

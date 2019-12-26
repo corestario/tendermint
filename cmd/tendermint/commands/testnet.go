@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dgamingfoundation/dkglib/lib/blsShare"
-
+	"github.com/corestario/dkglib/lib/blsShare"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/p2p"

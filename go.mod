@@ -7,11 +7,11 @@ require (
 	github.com/Workiva/go-datastructures v1.0.50
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
-	github.com/dgamingfoundation/dkglib v0.0.0-00010101000000-000000000000
+	github.com/corestario/dkglib v0.0.0-00010101000000-000000000000
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.9.0
 	github.com/go-logfmt/logfmt v0.4.0
-	github.com/gogo/protobuf v1.3.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/websocket v1.4.1
 	github.com/gtank/merlin v0.1.1-0.20191105220539-8318aed1a79f
@@ -36,6 +36,6 @@ require (
 	google.golang.org/grpc v1.25.1
 )
 
-replace github.com/dgamingfoundation/dkglib => /Users/pr0n00gler/projects/dgamingfoundation/dkglib
+replace github.com/corestario/dkglib => ./../dkglib
 
-replace github.com/dgamingfoundation/cosmos-utils/client => /Users/pr0n00gler/projects/dgamingfoundation/cosmos_utils/client
+replace github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client

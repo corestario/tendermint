@@ -29,7 +29,7 @@ const (
 	// Uvarint length of Data.Txs:          4 bytes
 	// Data.Txs field:                      1 byte
 	MaxAminoOverheadForBlock int64 = 11
-	InitialRandomData              = "dgaming-random-source"
+	InitialRandomData              = "corestario-random-source"
 )
 
 // Block defines the atomic unit of a Tendermint blockchain.

@@ -10,6 +10,7 @@ import (
 	"github.com/tendermint/tendermint/libs/cli"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/node"
+	bls "github.com/tendermint/tendermint/node/bls"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
@@ -51,7 +52,7 @@ func main() {
 	}
 }
 
-func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.BLSNode, error) {
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 
 	// Generate node PrivKey
 
@@ -82,7 +83,7 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.BLSNode, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
+	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := bls.GetBLSReactors(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		node.DefaultMetricsProvider(config.Instrumentation),
@@ -92,7 +93,7 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.BLSNode, error) {
 		panic(err)
 	}
 
-	return node.NewBLSNode(config,
+	return bls.NewBLSNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
@@ -102,10 +103,10 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.BLSNode, error) {
 		logger,
 		blockStore,
 		stateDB,
-		node.CustomBLSReactors(map[string]p2p.Reactor{
+		bls.CustomBLSReactors(map[string]p2p.Reactor{
 			"BLOCKCHAIN": bcReactor,
 			"CONSENSUS":  consensusReactor,
 		}),
-		node.CustomBLSConsensusState(consensusState),
+		bls.CustomBLSConsensusState(consensusState),
 	)
 }

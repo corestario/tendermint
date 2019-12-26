@@ -3,28 +3,20 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/dgamingfoundation/dkglib/lib/basic"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/cors"
-	"github.com/tendermint/go-amino"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	rpccore "github.com/tendermint/tendermint/rpc/core"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	grpccore "github.com/tendermint/tendermint/rpc/grpc"
-	rpcserver "github.com/tendermint/tendermint/rpc/lib/server"
-	tmtime "github.com/tendermint/tendermint/types/time"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
 
-	dbm "github.com/tendermint/tm-db"
-
-	bShare "github.com/dgamingfoundation/dkglib/lib/blsShare"
-	dkgOffChain "github.com/dgamingfoundation/dkglib/lib/offChain"
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	"github.com/corestario/dkglib/lib/basic"
+	bShare "github.com/corestario/dkglib/lib/blsShare"
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/cors"
+	"github.com/tendermint/go-amino"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
 	cfg "github.com/tendermint/tendermint/config"
@@ -33,15 +25,23 @@ import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
+	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	mempl "github.com/tendermint/tendermint/mempool"
+	nd "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
 	"github.com/tendermint/tendermint/proxy"
+	rpccore "github.com/tendermint/tendermint/rpc/core"
+	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	grpccore "github.com/tendermint/tendermint/rpc/grpc"
+	rpcserver "github.com/tendermint/tendermint/rpc/lib/server"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
+	tmtime "github.com/tendermint/tendermint/types/time"
 	"github.com/tendermint/tendermint/version"
+	dbm "github.com/tendermint/tm-db"
 )
 
 type BLSNode struct {
@@ -81,25 +81,25 @@ type BLSNode struct {
 func GetBLSReactors(
 	config *cfg.Config,
 	privValidator types.PrivValidator,
-	metricsProvider MetricsProvider,
+	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
 ) (*store.BlockStore, dbm.DB, p2p.Reactor, *cs.BLSConsensusReactor, cs.StateInterface, error) {
 	consensusLogger := logger.With("module", "consensus")
 
-	blockStore, stateDB, err := initDBs(config, DefaultDBProvider)
+	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, DefaultGenesisDocProviderFunc(config))
+	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, nd.DefaultGenesisDocProviderFunc(config))
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	fastSync := config.FastSyncMode && !onlyValidatorIsUs(state, privValidator)
+	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, privValidator)
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
-	proxyApp, err := createAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
+	proxyApp, err := nd.CreateAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -110,16 +110,16 @@ func GetBLSReactors(
 	// we might need to index the txs of the replayed block as this might not have happened
 	// when the node stopped last time (i.e. the node stopped after it saved the block
 	// but before it indexed the txs, or, endblocker panicked)
-	eventBus, err := createAndStartEventBus(logger)
+	eventBus, err := nd.CreateAndStartEventBus(logger)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
 	// Make MempoolReactor
-	_, mempool := createMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
+	_, mempool := nd.CreateMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
 
 	// Make Evidence Reactor
-	_, evidencePool, err := createEvidenceReactor(config, DefaultDBProvider, stateDB, logger)
+	_, evidencePool, err := nd.CreateEvidenceReactor(config, nd.DefaultDBProvider, stateDB, logger)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -209,7 +209,7 @@ func createBLSConsensus(config *cfg.Config,
 
 	dkg, err := basic.NewDKGBasic(
 		evsw,
-		cdc,
+		nd.Cdc,
 		"tendermintChain",
 		"tcp://localhost:26657",
 		config.RootDir,
@@ -272,20 +272,20 @@ func NewBLSNode(config *cfg.Config,
 	privValidator types.PrivValidator,
 	nodeKey *p2p.NodeKey,
 	clientCreator proxy.ClientCreator,
-	genesisDocProvider GenesisDocProvider,
-	dbProvider DBProvider,
-	metricsProvider MetricsProvider,
+	genesisDocProvider nd.GenesisDocProvider,
+	dbProvider nd.DBProvider,
+	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
 	blockStore *store.BlockStore, stateDB dbm.DB,
 	options ...BLSOption) (*BLSNode, error) {
 
-	state, genDoc, err := LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
+	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
-	proxyApp, err := createAndStartProxyAppConns(clientCreator, logger)
+	proxyApp, err := nd.CreateAndStartProxyAppConns(clientCreator, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -294,13 +294,13 @@ func NewBLSNode(config *cfg.Config,
 	// we might need to index the txs of the replayed block as this might not have happened
 	// when the node stopped last time (i.e. the node stopped after it saved the block
 	// but before it indexed the txs, or, endblocker panicked)
-	eventBus, err := createAndStartEventBus(logger)
+	eventBus, err := nd.CreateAndStartEventBus(logger)
 	if err != nil {
 		return nil, err
 	}
 
 	// Transaction indexing
-	indexerService, txIndexer, err := createAndStartIndexerService(config, dbProvider, eventBus, logger)
+	indexerService, txIndexer, err := nd.CreateAndStartIndexerService(config, dbProvider, eventBus, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func NewBLSNode(config *cfg.Config,
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
 	consensusLogger := logger.With("module", "consensus")
-	if err := doHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
+	if err := nd.DoHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
 		return nil, err
 	}
 
@@ -321,7 +321,7 @@ func NewBLSNode(config *cfg.Config,
 	// external signing process.
 	if config.PrivValidatorListenAddr != "" {
 		// FIXME: we should start services inside OnStart
-		privValidator, err = createAndStartPrivValidatorSocketClient(config.PrivValidatorListenAddr, logger)
+		privValidator, err = nd.CreateAndStartPrivValidatorSocketClient(config.PrivValidatorListenAddr, logger)
 		if err != nil {
 			return nil, errors.Wrap(err, "error with private validator socket client")
 		}
@@ -331,15 +331,15 @@ func NewBLSNode(config *cfg.Config,
 
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
-	fastSync := config.FastSyncMode && !onlyValidatorIsUs(state, privValidator)
+	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, privValidator)
 
 	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
 
 	// Make MempoolReactor
-	mempoolReactor, mempool := createMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
+	mempoolReactor, mempool := nd.CreateMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
 
 	// Make Evidence Reactor
-	evidenceReactor, evidencePool, err := createEvidenceReactor(config, dbProvider, stateDB, logger)
+	evidenceReactor, evidencePool, err := nd.CreateEvidenceReactor(config, dbProvider, stateDB, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -383,13 +383,13 @@ func NewBLSNode(config *cfg.Config,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
 
-	nodeInfo, err := makeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
+	nodeInfo, err := nd.MakeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
 	if err != nil {
 		return nil, err
 	}
 
 	// Setup Transport.
-	transport, peerFilters := createTransport(config, nodeInfo, nodeKey, proxyApp)
+	transport, peerFilters := nd.CreateTransport(config, nodeInfo, nodeKey, proxyApp)
 
 	// Setup Switch.
 	p2pLogger := logger.With("module", "p2p")
@@ -398,12 +398,12 @@ func NewBLSNode(config *cfg.Config,
 		consensusReactor, evidenceReactor, nodeInfo, nodeKey, p2pLogger,
 	)
 
-	err = sw.AddPersistentPeers(splitAndTrimEmpty(config.P2P.PersistentPeers, ",", " "))
+	err = sw.AddPersistentPeers(nd.SplitAndTrimEmpty(config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add peers from persistent_peers field")
 	}
 
-	addrBook, err := createAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
+	addrBook, err := nd.CreateAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create addrbook")
 	}
@@ -422,7 +422,7 @@ func NewBLSNode(config *cfg.Config,
 	// Note we currently use the addrBook regardless at least for AddOurAddress
 	var pexReactor *pex.PEXReactor
 	if config.P2P.PexReactor {
-		pexReactor = createPEXReactorAndAddToSwitch(addrBook, config, sw, logger)
+		pexReactor = nd.CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
 
 	if config.ProfListenAddress != "" {
@@ -534,7 +534,7 @@ func (n *BLSNode) OnStart() error {
 	}
 
 	// Add private IDs to addrbook to block those peers being added
-	n.addrBook.AddPrivateIDs(splitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
+	n.addrBook.AddPrivateIDs(nd.SplitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
 
 	// Start the RPC server before the P2P server
 	// so we can eg. receive txs for the first block
@@ -573,7 +573,7 @@ func (n *BLSNode) OnStart() error {
 	}
 
 	// Always connect to persistent peers
-	err = n.sw.DialPeersAsync(splitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "))
+	err = n.sw.DialPeersAsync(nd.SplitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return errors.Wrap(err, "could not dial peers from persistent_peers field")
 	}
@@ -648,7 +648,7 @@ func (n *BLSNode) ConfigureRPC() {
 
 func (n *BLSNode) startRPC() ([]net.Listener, error) {
 	n.ConfigureRPC()
-	listenAddrs := splitAndTrimEmpty(n.config.RPC.ListenAddress, ",", " ")
+	listenAddrs := nd.SplitAndTrimEmpty(n.config.RPC.ListenAddress, ",", " ")
 	coreCodec := amino.NewCodec()
 	ctypes.RegisterAmino(coreCodec)
 

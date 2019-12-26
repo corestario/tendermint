@@ -2,14 +2,13 @@ package consensus
 
 import (
 	"fmt"
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
 	"reflect"
 	"sync"
 	"time"
 
+	dkgAlias "github.com/corestario/dkglib/lib/alias"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"github.com/pkg/errors"
-
-	dkgAlias "github.com/dgamingfoundation/dkglib/lib/alias"
 	amino "github.com/tendermint/go-amino"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	cmn "github.com/tendermint/tendermint/libs/common"

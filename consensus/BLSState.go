@@ -3,14 +3,11 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"reflect"
 	"runtime/debug"
 	"time"
 
-	"github.com/prometheus/common/log"
-
-	dkgtypes "github.com/dgamingfoundation/dkglib/lib/types"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	"github.com/tendermint/tendermint/libs/common"
@@ -79,10 +76,6 @@ func NewBLSConsensusState(
 func (cs *BLSConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
-	logger := log.NewLogger(os.Stdout)
-	logger.Info("OLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOL"+
-		"OLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOL"+
-		"OLOOLOLOLOLOOLOLOLOLOOLOLOLOLOOLOLOLOLO", "DKG", cs.dkg, "DKG NIL", cs.dkg == nil)
 	// TODO (oopcode): as we make ConsensusState an interface, we will feed different
 	// states (and the standard one will be without this dkg field). Currently update height
 	// is called _before_ the actual start of consensus, which leads to panic (because
@@ -281,8 +274,6 @@ func (cs *BLSConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, 
 // Enter: +2/3 precommits for block
 func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 	logger := cs.Logger.With("height", height, "commitRound", commitRound)
-
-	logger.Info("HUIHUIHUIHUIUHIUHIUH")
 
 	if cs.Height != height || cstypes.RoundStepCommit <= cs.Step {
 		logger.Debug(fmt.Sprintf("enterCommit(%v/%v): Invalid args. Current step: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))

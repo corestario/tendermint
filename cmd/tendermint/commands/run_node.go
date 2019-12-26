@@ -7,6 +7,7 @@ import (
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	nm "github.com/tendermint/tendermint/node"
+	bls "github.com/tendermint/tendermint/node/bls"
 )
 
 // AddNodeFlags exposes some common configuration options on the command-line
@@ -76,7 +77,7 @@ func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
 	return cmd
 }
 
-func NewRunBLSNodeCmd(nodeProvider nm.BLSNodeProvider) *cobra.Command {
+func NewRunBLSNodeCmd(nodeProvider bls.BLSNodeProvider) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Run the tendermint node",

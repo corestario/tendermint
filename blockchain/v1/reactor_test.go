@@ -62,7 +62,7 @@ func makeVote(
 		BlockID:          blockID,
 	}
 
-	_ = privVal.SignVote(header.ChainID, vote)
+	_ = privVal.SignData(header.ChainID, vote)
 
 	return vote
 }
