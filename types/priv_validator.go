@@ -131,6 +131,11 @@ func (pv *erroringMockPV) SignProposal(chainID string, proposal *Proposal) error
 	return ErroringMockPVErr
 }
 
+// Implements PrivValidator.
+func (pv *erroringMockPV) SignData(chainID string, proposal DataSigner) error {
+	return ErroringMockPVErr
+}
+
 // NewErroringMockPV returns a MockPV that fails on each signing request. Again, for testing only.
 func NewErroringMockPV() *erroringMockPV {
 	return &erroringMockPV{&MockPV{ed25519.GenPrivKey(), false, false}}
