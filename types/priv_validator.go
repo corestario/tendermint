@@ -76,22 +76,15 @@ func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
 
 // Implements PrivValidator.
 func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
-	useChainID := chainID
-	if pv.breakProposalSigning {
-		useChainID = "incorrect-chain-id"
-	}
-	signBytes := proposal.SignBytes(useChainID)
-	sig, err := pv.privKey.Sign(signBytes)
-	if err != nil {
-		return err
-	}
-	proposal.Signature = sig
-	return nil
+	return pv.SignData(chainID, proposal)
 }
 
 func (pv *MockPV) SignData(chainID string, data DataSigner) error {
 	useChainID := chainID
-	if pv.breakVoteSigning {
+	if _, ok := data.(*Proposal); ok && pv.breakProposalSigning {
+		useChainID = "incorrect-chain-id"
+	}
+	if _, ok := data.(*Vote); ok && pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
 	}
 	signBytes := data.SignBytes(useChainID)

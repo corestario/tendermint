@@ -42,15 +42,21 @@ type Local struct {
 	ctx    *rpctypes.Context
 }
 
+type LocalNode interface {
+	ConfigureRPC()
+	EventBus() *types.EventBus
+}
+
 // NewLocal configures a client that calls the Node directly.
 //
 // Note that given how rpc/core works with package singletons, that
 // you can only have one node per process.  So make sure test cases
 // don't run in parallel, or try to simulate an entire network in
 // one process...
-func NewLocal(node interface{}) *Local {
+func NewLocal(node LocalNode) *Local {
+	node.ConfigureRPC()
 	return &Local{
-		EventBus: nil,
+		EventBus: node.EventBus(),
 		Logger:   log.NewNopLogger(),
 		ctx:      &rpctypes.Context{},
 	}
