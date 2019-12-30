@@ -498,19 +498,6 @@ type VoteSetJSON struct {
 	PeerMaj23s    map[P2PID]BlockID `json:"peer_maj_23s"`
 }
 
-// GetVotes returns all votes in a voteSet, including nil ones (beware!).
-func (voteSet *VoteSet) GetVotes() []blsShare.BLSSigner {
-	res := make([]blsShare.BLSSigner, 0)
-	voteSet.mtx.Lock()
-	defer voteSet.mtx.Unlock()
-	for _, v := range voteSet.votes {
-		v := v
-		res = append(res, v)
-	}
-
-	return res
-}
-
 // Return the bit-array of votes including
 // the fraction of power that has voted like:
 // "BA{29:xx__x__x_x___x__x_______xxx__} 856/1304 = 0.66"

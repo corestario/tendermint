@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/mock"
 	"github.com/tendermint/tendermint/proxy"
@@ -124,10 +123,9 @@ func (pb *playback) replayReset(count int, newStepSub types.Subscription) error 
 	pb.cs.Stop()
 	pb.cs.Wait()
 
-	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
 	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.blockExec,
-		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool, WithEVSW(evsw))
+		pb.cs.blockStore, pb.cs.txNotifier, pb.cs.evpool)
 
 	newCS.SetEventBus(pb.cs.eventBus)
 	newCS.SetLogger(consensusLogger)
@@ -318,10 +316,9 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	mempool, evpool := mock.Mempool{}, sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
-	evsw := events.NewEventSwitch()
 	consensusLogger := log.TestingLogger().With("module", "consensus")
 	consensusState := NewConsensusState(csConfig, state.Copy(), blockExec,
-		blockStore, mempool, evpool, WithEVSW(evsw))
+		blockStore, mempool, evpool)
 
 	consensusState.SetLogger(consensusLogger)
 	consensusState.SetEventBus(eventBus)

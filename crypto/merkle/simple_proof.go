@@ -2,7 +2,6 @@ package merkle
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -194,12 +193,11 @@ func (spn *SimpleProofNode) FlattenAunts() [][]byte {
 	// Nonrecursive impl.
 	innerHashes := [][]byte{}
 	for spn != nil {
-		switch {
-		case spn.Left != nil:
+		if spn.Left != nil {
 			innerHashes = append(innerHashes, spn.Left.Hash)
-		case spn.Right != nil:
+		} else if spn.Right != nil {
 			innerHashes = append(innerHashes, spn.Right.Hash)
-		default:
+		} else {
 			break
 		}
 		spn = spn.Parent

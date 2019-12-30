@@ -11,7 +11,7 @@ require (
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.9.0
 	github.com/go-logfmt/logfmt v0.4.0
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.0
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/websocket v1.4.1
 	github.com/gtank/merlin v0.1.1-0.20191105220539-8318aed1a79f
@@ -36,6 +36,8 @@ require (
 	google.golang.org/grpc v1.25.1
 )
 
-replace github.com/corestario/dkglib => ./../dkglib
-
-replace github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client
+replace (
+	github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client
+	github.com/corestario/dkglib => ./../dkglib
+	github.com/tendermint/tendermint => ./
+)
