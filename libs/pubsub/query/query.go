@@ -11,16 +11,9 @@ package query
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
-)
-
-var (
-	numRegex = regexp.MustCompile(`([0-9\.]+)`)
 )
 
 // Query holds the query string and the query parser.
@@ -80,8 +73,6 @@ const (
 	OpEqual
 	// "CONTAINS"; used to check if a string contains a certain sub string.
 	OpContains
-	// "EXISTS"; used to check if a certain event attribute is present.
-	OpExists
 )
 
 const (
@@ -91,310 +82,187 @@ const (
 	TimeLayout = time.RFC3339
 )
 
-// Conditions returns a list of conditions. It returns an error if there is any
-// error with the provided grammar in the Query.
-func (q *Query) Conditions() ([]Condition, error) {
-	var (
-		eventAttr string
-		op        Operator
-	)
-
+// Conditions returns a list of conditions.
+func (q *Query) Conditions() []Condition {
 	conditions := make([]Condition, 0)
+
 	buffer, begin, end := q.parser.Buffer, 0, 0
 
+	var tag string
+	var op Operator
+
 	// tokens must be in the following order: tag ("tx.gas") -> operator ("=") -> operand ("7")
-	for token := range q.parser.Tokens() {
+	for _, token := range q.parser.Tokens() {
 		switch token.pegRule {
+
 		case rulePegText:
 			begin, end = int(token.begin), int(token.end)
-
 		case ruletag:
-			eventAttr = buffer[begin:end]
-
+			tag = buffer[begin:end]
 		case rulele:
 			op = OpLessEqual
-
 		case rulege:
 			op = OpGreaterEqual
-
 		case rulel:
 			op = OpLess
-
 		case ruleg:
 			op = OpGreater
-
 		case ruleequal:
 			op = OpEqual
-
 		case rulecontains:
 			op = OpContains
-
-		case ruleexists:
-			op = OpExists
-			conditions = append(conditions, Condition{eventAttr, op, nil})
-
 		case rulevalue:
 			// strip single quotes from value (i.e. "'NewBlock'" -> "NewBlock")
 			valueWithoutSingleQuotes := buffer[begin+1 : end-1]
-			conditions = append(conditions, Condition{eventAttr, op, valueWithoutSingleQuotes})
-
+			conditions = append(conditions, Condition{tag, op, valueWithoutSingleQuotes})
 		case rulenumber:
 			number := buffer[begin:end]
 			if strings.ContainsAny(number, ".") { // if it looks like a floating-point number
 				value, err := strconv.ParseFloat(number, 64)
 				if err != nil {
-					err = fmt.Errorf(
-						"got %v while trying to parse %s as float64 (should never happen if the grammar is correct)",
-						err, number,
-					)
-					return nil, err
+					panic(fmt.Sprintf("got %v while trying to parse %s as float64 (should never happen if the grammar is correct)", err, number))
 				}
-
-				conditions = append(conditions, Condition{eventAttr, op, value})
+				conditions = append(conditions, Condition{tag, op, value})
 			} else {
 				value, err := strconv.ParseInt(number, 10, 64)
 				if err != nil {
-					err = fmt.Errorf(
-						"got %v while trying to parse %s as int64 (should never happen if the grammar is correct)",
-						err, number,
-					)
-					return nil, err
+					panic(fmt.Sprintf("got %v while trying to parse %s as int64 (should never happen if the grammar is correct)", err, number))
 				}
-
-				conditions = append(conditions, Condition{eventAttr, op, value})
+				conditions = append(conditions, Condition{tag, op, value})
 			}
-
 		case ruletime:
 			value, err := time.Parse(TimeLayout, buffer[begin:end])
 			if err != nil {
-				err = fmt.Errorf(
-					"got %v while trying to parse %s as time.Time / RFC3339 (should never happen if the grammar is correct)",
-					err, buffer[begin:end],
-				)
-				return nil, err
+				panic(fmt.Sprintf("got %v while trying to parse %s as time.Time / RFC3339 (should never happen if the grammar is correct)", err, buffer[begin:end]))
 			}
-
-			conditions = append(conditions, Condition{eventAttr, op, value})
-
+			conditions = append(conditions, Condition{tag, op, value})
 		case ruledate:
 			value, err := time.Parse("2006-01-02", buffer[begin:end])
 			if err != nil {
-				err = fmt.Errorf(
-					"got %v while trying to parse %s as time.Time / '2006-01-02' (should never happen if the grammar is correct)",
-					err, buffer[begin:end],
-				)
-				return nil, err
+				panic(fmt.Sprintf("got %v while trying to parse %s as time.Time / '2006-01-02' (should never happen if the grammar is correct)", err, buffer[begin:end]))
 			}
-
-			conditions = append(conditions, Condition{eventAttr, op, value})
+			conditions = append(conditions, Condition{tag, op, value})
 		}
 	}
 
-	return conditions, nil
+	return conditions
 }
 
 // Matches returns true if the query matches against any event in the given set
 // of events, false otherwise. For each event, a match exists if the query is
-// matched against *any* value in a slice of values. An error is returned if
-// any attempted event match returns an error.
+// matched against *any* value in a slice of values.
 //
 // For example, query "name=John" matches events = {"name": ["John", "Eric"]}.
 // More examples could be found in parser_test.go and query_test.go.
-func (q *Query) Matches(events map[string][]string) (bool, error) {
+func (q *Query) Matches(events map[string][]string) bool {
 	if len(events) == 0 {
-		return false, nil
+		return false
 	}
-
-	var (
-		eventAttr string
-		op        Operator
-	)
 
 	buffer, begin, end := q.parser.Buffer, 0, 0
 
-	// tokens must be in the following order:
+	var tag string
+	var op Operator
 
+	// tokens must be in the following order:
 	// tag ("tx.gas") -> operator ("=") -> operand ("7")
-	for token := range q.parser.Tokens() {
+	for _, token := range q.parser.Tokens() {
 		switch token.pegRule {
+
 		case rulePegText:
 			begin, end = int(token.begin), int(token.end)
-
 		case ruletag:
-			eventAttr = buffer[begin:end]
-
+			tag = buffer[begin:end]
 		case rulele:
 			op = OpLessEqual
-
 		case rulege:
 			op = OpGreaterEqual
-
 		case rulel:
 			op = OpLess
-
 		case ruleg:
 			op = OpGreater
-
 		case ruleequal:
 			op = OpEqual
-
 		case rulecontains:
 			op = OpContains
-		case ruleexists:
-			op = OpExists
-			if strings.Contains(eventAttr, ".") {
-				// Searching for a full "type.attribute" event.
-				_, ok := events[eventAttr]
-				if !ok {
-					return false, nil
-				}
-			} else {
-				foundEvent := false
-
-			loop:
-				for compositeKey := range events {
-					if strings.Index(compositeKey, eventAttr) == 0 {
-						foundEvent = true
-						break loop
-					}
-				}
-				if !foundEvent {
-					return false, nil
-				}
-			}
-
 		case rulevalue:
 			// strip single quotes from value (i.e. "'NewBlock'" -> "NewBlock")
 			valueWithoutSingleQuotes := buffer[begin+1 : end-1]
 
-			// see if the triplet (event attribute, operator, operand) matches any event
+			// see if the triplet (tag, operator, operand) matches any tag
 			// "tx.gas", "=", "7", { "tx.gas": 7, "tx.ID": "4AE393495334" }
-			match, err := match(eventAttr, op, reflect.ValueOf(valueWithoutSingleQuotes), events)
-			if err != nil {
-				return false, err
+			if !match(tag, op, reflect.ValueOf(valueWithoutSingleQuotes), events) {
+				return false
 			}
-
-			if !match {
-				return false, nil
-			}
-
 		case rulenumber:
 			number := buffer[begin:end]
 			if strings.ContainsAny(number, ".") { // if it looks like a floating-point number
 				value, err := strconv.ParseFloat(number, 64)
 				if err != nil {
-					err = fmt.Errorf(
-						"got %v while trying to parse %s as float64 (should never happen if the grammar is correct)",
-						err, number,
-					)
-					return false, err
+					panic(fmt.Sprintf("got %v while trying to parse %s as float64 (should never happen if the grammar is correct)", err, number))
 				}
-
-				match, err := match(eventAttr, op, reflect.ValueOf(value), events)
-				if err != nil {
-					return false, err
-				}
-
-				if !match {
-					return false, nil
+				if !match(tag, op, reflect.ValueOf(value), events) {
+					return false
 				}
 			} else {
 				value, err := strconv.ParseInt(number, 10, 64)
 				if err != nil {
-					err = fmt.Errorf(
-						"got %v while trying to parse %s as int64 (should never happen if the grammar is correct)",
-						err, number,
-					)
-					return false, err
+					panic(fmt.Sprintf("got %v while trying to parse %s as int64 (should never happen if the grammar is correct)", err, number))
 				}
-
-				match, err := match(eventAttr, op, reflect.ValueOf(value), events)
-				if err != nil {
-					return false, err
-				}
-
-				if !match {
-					return false, nil
+				if !match(tag, op, reflect.ValueOf(value), events) {
+					return false
 				}
 			}
-
 		case ruletime:
 			value, err := time.Parse(TimeLayout, buffer[begin:end])
 			if err != nil {
-				err = fmt.Errorf(
-					"got %v while trying to parse %s as time.Time / RFC3339 (should never happen if the grammar is correct)",
-					err, buffer[begin:end],
-				)
-				return false, err
+				panic(fmt.Sprintf("got %v while trying to parse %s as time.Time / RFC3339 (should never happen if the grammar is correct)", err, buffer[begin:end]))
 			}
-
-			match, err := match(eventAttr, op, reflect.ValueOf(value), events)
-			if err != nil {
-				return false, err
+			if !match(tag, op, reflect.ValueOf(value), events) {
+				return false
 			}
-
-			if !match {
-				return false, nil
-			}
-
 		case ruledate:
 			value, err := time.Parse("2006-01-02", buffer[begin:end])
 			if err != nil {
-				err = fmt.Errorf(
-					"got %v while trying to parse %s as time.Time / '2006-01-02' (should never happen if the grammar is correct)",
-					err, buffer[begin:end],
-				)
-				return false, err
+				panic(fmt.Sprintf("got %v while trying to parse %s as time.Time / '2006-01-02' (should never happen if the grammar is correct)", err, buffer[begin:end]))
 			}
-
-			match, err := match(eventAttr, op, reflect.ValueOf(value), events)
-			if err != nil {
-				return false, err
-			}
-
-			if !match {
-				return false, nil
+			if !match(tag, op, reflect.ValueOf(value), events) {
+				return false
 			}
 		}
 	}
 
-	return true, nil
+	return true
 }
 
-// match returns true if the given triplet (attribute, operator, operand) matches
-// any value in an event for that attribute. If any match fails with an error,
-// that error is returned.
+// match returns true if the given triplet (tag, operator, operand) matches any
+// value in an event for that key.
 //
 // First, it looks up the key in the events and if it finds one, tries to compare
 // all the values from it to the operand using the operator.
 //
 // "tx.gas", "=", "7", {"tx": [{"gas": 7, "ID": "4AE393495334"}]}
-func match(attr string, op Operator, operand reflect.Value, events map[string][]string) (bool, error) {
+func match(tag string, op Operator, operand reflect.Value, events map[string][]string) bool {
 	// look up the tag from the query in tags
-	values, ok := events[attr]
+	values, ok := events[tag]
 	if !ok {
-		return false, nil
+		return false
 	}
 
 	for _, value := range values {
 		// return true if any value in the set of the event's values matches
-		match, err := matchValue(value, op, operand)
-		if err != nil {
-			return false, err
-		}
-
-		if match {
-			return true, nil
+		if matchValue(value, op, operand) {
+			return true
 		}
 	}
 
-	return false, nil
+	return false
 }
 
-// matchValue will attempt to match a string value against an operator an
-// operand. A boolean is returned representing the match result. It will return
-// an error if the value cannot be parsed and matched against the operand type.
-func matchValue(value string, op Operator, operand reflect.Value) (bool, error) {
+// matchValue will attempt to match a string value against an operation an
+// operand. A boolean is returned representing the match result. It will panic
+// if an error occurs or if the operand is invalid.
+func matchValue(value string, op Operator, operand reflect.Value) bool {
 	switch operand.Kind() {
 	case reflect.Struct: // time
 		operandAsTime := operand.Interface().(time.Time)
@@ -411,94 +279,87 @@ func matchValue(value string, op Operator, operand reflect.Value) (bool, error) 
 			v, err = time.Parse(DateLayout, value)
 		}
 		if err != nil {
-			return false, errors.Wrapf(err, "failed to convert value %v from event attribute to time.Time", value)
+			panic(fmt.Sprintf("failed to convert value %v from tag to time.Time: %v", value, err))
 		}
 
 		switch op {
 		case OpLessEqual:
-			return (v.Before(operandAsTime) || v.Equal(operandAsTime)), nil
+			return v.Before(operandAsTime) || v.Equal(operandAsTime)
 		case OpGreaterEqual:
-			return (v.Equal(operandAsTime) || v.After(operandAsTime)), nil
+			return v.Equal(operandAsTime) || v.After(operandAsTime)
 		case OpLess:
-			return v.Before(operandAsTime), nil
+			return v.Before(operandAsTime)
 		case OpGreater:
-			return v.After(operandAsTime), nil
+			return v.After(operandAsTime)
 		case OpEqual:
-			return v.Equal(operandAsTime), nil
+			return v.Equal(operandAsTime)
 		}
 
 	case reflect.Float64:
+		operandFloat64 := operand.Interface().(float64)
 		var v float64
 
-		operandFloat64 := operand.Interface().(float64)
-		filteredValue := numRegex.FindString(value)
-
 		// try our best to convert value from tags to float64
-		v, err := strconv.ParseFloat(filteredValue, 64)
+		v, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return false, errors.Wrapf(err, "failed to convert value %v from event attribute to float64", filteredValue)
+			panic(fmt.Sprintf("failed to convert value %v from tag to float64: %v", value, err))
 		}
 
 		switch op {
 		case OpLessEqual:
-			return v <= operandFloat64, nil
+			return v <= operandFloat64
 		case OpGreaterEqual:
-			return v >= operandFloat64, nil
+			return v >= operandFloat64
 		case OpLess:
-			return v < operandFloat64, nil
+			return v < operandFloat64
 		case OpGreater:
-			return v > operandFloat64, nil
+			return v > operandFloat64
 		case OpEqual:
-			return v == operandFloat64, nil
+			return v == operandFloat64
 		}
 
 	case reflect.Int64:
-		var v int64
-
 		operandInt := operand.Interface().(int64)
-		filteredValue := numRegex.FindString(value)
-
+		var v int64
 		// if value looks like float, we try to parse it as float
-		if strings.ContainsAny(filteredValue, ".") {
-			v1, err := strconv.ParseFloat(filteredValue, 64)
+		if strings.ContainsAny(value, ".") {
+			v1, err := strconv.ParseFloat(value, 64)
 			if err != nil {
-				return false, errors.Wrapf(err, "failed to convert value %v from event attribute to float64", filteredValue)
+				panic(fmt.Sprintf("failed to convert value %v from tag to float64: %v", value, err))
 			}
-
 			v = int64(v1)
 		} else {
 			var err error
 			// try our best to convert value from tags to int64
-			v, err = strconv.ParseInt(filteredValue, 10, 64)
+			v, err = strconv.ParseInt(value, 10, 64)
 			if err != nil {
-				return false, errors.Wrapf(err, "failed to convert value %v from event attribute to int64", filteredValue)
+				panic(fmt.Sprintf("failed to convert value %v from tag to int64: %v", value, err))
 			}
 		}
-
 		switch op {
 		case OpLessEqual:
-			return v <= operandInt, nil
+			return v <= operandInt
 		case OpGreaterEqual:
-			return v >= operandInt, nil
+			return v >= operandInt
 		case OpLess:
-			return v < operandInt, nil
+			return v < operandInt
 		case OpGreater:
-			return v > operandInt, nil
+			return v > operandInt
 		case OpEqual:
-			return v == operandInt, nil
+			return v == operandInt
 		}
 
 	case reflect.String:
 		switch op {
 		case OpEqual:
-			return value == operand.String(), nil
+			return value == operand.String()
 		case OpContains:
-			return strings.Contains(value, operand.String()), nil
+			return strings.Contains(value, operand.String())
 		}
 
 	default:
-		return false, fmt.Errorf("unknown kind of operand %v", operand.Kind())
+		panic(fmt.Sprintf("unknown kind of operand %v", operand.Kind()))
 	}
 
-	return false, nil
+	return false
 }

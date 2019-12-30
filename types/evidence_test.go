@@ -26,7 +26,7 @@ func makeVote(val PrivValidator, chainID string, valIndex int, height int64, rou
 		Type:             SignedMsgType(step),
 		BlockID:          blockID,
 	}
-	err := val.SignData(chainID, v)
+	err := val.SignVote(chainID, v)
 	if err != nil {
 		panic(err)
 	}

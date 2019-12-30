@@ -79,10 +79,7 @@ func TestLevelContext(t *testing.T) {
 	logger = logger.With("context", "value")
 
 	logger.Error("foo", "bar", "baz")
-
-	want := `{"_msg":"foo","bar":"baz","context":"value","level":"error"}`
-	have := strings.TrimSpace(buf.String())
-	if want != have {
+	if want, have := `{"_msg":"foo","bar":"baz","context":"value","level":"error"}`, strings.TrimSpace(buf.String()); want != have {
 		t.Errorf("\nwant '%s'\nhave '%s'", want, have)
 	}
 
@@ -100,22 +97,13 @@ func TestVariousAllowWith(t *testing.T) {
 
 	logger1 := log.NewFilter(logger, log.AllowError(), log.AllowInfoWith("context", "value"))
 	logger1.With("context", "value").Info("foo", "bar", "baz")
-
-	want := `{"_msg":"foo","bar":"baz","context":"value","level":"info"}`
-	have := strings.TrimSpace(buf.String())
-	if want != have {
+	if want, have := `{"_msg":"foo","bar":"baz","context":"value","level":"info"}`, strings.TrimSpace(buf.String()); want != have {
 		t.Errorf("\nwant '%s'\nhave '%s'", want, have)
 	}
 
 	buf.Reset()
 
-	logger2 := log.NewFilter(
-		logger,
-		log.AllowError(),
-		log.AllowInfoWith("context", "value"),
-		log.AllowNoneWith("user", "Sam"),
-	)
-
+	logger2 := log.NewFilter(logger, log.AllowError(), log.AllowInfoWith("context", "value"), log.AllowNoneWith("user", "Sam"))
 	logger2.With("context", "value", "user", "Sam").Info("foo", "bar", "baz")
 	if want, have := ``, strings.TrimSpace(buf.String()); want != have {
 		t.Errorf("\nwant '%s'\nhave '%s'", want, have)
@@ -123,18 +111,9 @@ func TestVariousAllowWith(t *testing.T) {
 
 	buf.Reset()
 
-	logger3 := log.NewFilter(
-		logger,
-		log.AllowError(),
-		log.AllowInfoWith("context", "value"),
-		log.AllowNoneWith("user", "Sam"),
-	)
-
+	logger3 := log.NewFilter(logger, log.AllowError(), log.AllowInfoWith("context", "value"), log.AllowNoneWith("user", "Sam"))
 	logger3.With("user", "Sam").With("context", "value").Info("foo", "bar", "baz")
-
-	want = `{"_msg":"foo","bar":"baz","context":"value","level":"info","user":"Sam"}`
-	have = strings.TrimSpace(buf.String())
-	if want != have {
+	if want, have := `{"_msg":"foo","bar":"baz","context":"value","level":"info","user":"Sam"}`, strings.TrimSpace(buf.String()); want != have {
 		t.Errorf("\nwant '%s'\nhave '%s'", want, have)
 	}
 }

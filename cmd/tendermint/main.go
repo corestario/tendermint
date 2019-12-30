@@ -3,17 +3,19 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 
-	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
-	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/libs/cli"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/node"
-	bls "github.com/tendermint/tendermint/node/bls"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
+
+	"github.com/tendermint/tendermint/libs/cli"
+
+	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
+	cfg "github.com/tendermint/tendermint/config"
 )
 
 func main() {
@@ -44,23 +46,24 @@ func main() {
 	nodeFunc := NewBLSNode
 
 	// Create & start node
-	rootCmd.AddCommand(cmd.NewRunBLSNodeCmd(nodeFunc))
+	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
 
-	cmd := cli.PrepareBaseCmd(rootCmd, "TM", os.ExpandEnv(filepath.Join("$HOME", cfg.DefaultTendermintDir)))
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	cmd := cli.PrepareBaseCmd(rootCmd, "TM", os.ExpandEnv(filepath.Join(usr.HomeDir, cfg.DefaultTendermintDir)))
 	if err := cmd.Execute(); err != nil {
 		panic(err)
 	}
 }
 
-func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
-
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 	// Generate node PrivKey
-
 	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
 	if err != nil {
-
 		return nil, err
-
 	}
 
 	// Convert old PrivValidator if it exists.
@@ -70,30 +73,24 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
 		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
 		if err != nil {
-
 			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
-
 		}
 		logger.Info("Upgrading PrivValidator file",
 			"old", oldPrivVal,
 			"newKey", newPrivValKey,
 			"newState", newPrivValState,
 		)
-
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := bls.GetBLSReactors(
+	bcReactor, consensusReactor, consensusState, err := node.GetBLSReactors(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
 	)
-	if err != nil {
-		panic(err)
-	}
 
-	return bls.NewBLSNode(config,
+	return node.NewBLSNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
@@ -101,12 +98,10 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 		node.DefaultDBProvider,
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		blockStore,
-		stateDB,
-		bls.CustomBLSReactors(map[string]p2p.Reactor{
+		node.CustomReactors(map[string]p2p.Reactor{
 			"BLOCKCHAIN": bcReactor,
 			"CONSENSUS":  consensusReactor,
 		}),
-		bls.CustomBLSConsensusState(consensusState),
+		node.CustomConsensusState(consensusState),
 	)
 }

@@ -164,7 +164,6 @@ func (sc *schedule) removePeer(peerID p2p.ID) error {
 	return nil
 }
 
-// TODO - keep track of highest height
 func (sc *schedule) setPeerHeight(peerID p2p.ID, height int64) error {
 	peer, ok := sc.peers[peerID]
 	if !ok {

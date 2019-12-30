@@ -1,7 +1,3 @@
----
-order: 1
----
-
 # Creating an application in Go
 
 ## Guide Assumptions

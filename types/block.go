@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -29,7 +30,10 @@ const (
 	// Uvarint length of Data.Txs:          4 bytes
 	// Data.Txs field:                      1 byte
 	MaxAminoOverheadForBlock int64 = 11
-	InitialRandomData              = "corestario-random-source"
+
+	// InitialRandomData is the (non-)random data that will be used as the starting point
+	// by BLS-based random data generation.
+	InitialRandomData = "dgaming-random-source"
 )
 
 // Block defines the atomic unit of a Tendermint blockchain.
@@ -154,6 +158,10 @@ func (b *Block) ValidateBasic() error {
 			crypto.AddressSize, len(b.ProposerAddress))
 	}
 
+	if err := ValidateHash(b.RandomHash); err != nil {
+		return fmt.Errorf("Wrong Header.RandomHash: %v", err)
+	}
+
 	return nil
 }
 
@@ -257,18 +265,6 @@ func (b *Block) StringShort() string {
 	return fmt.Sprintf("Block#%v", b.Hash())
 }
 
-func (h *Header) SetRandomData(randomData []byte) {
-	h.RandomData = randomData
-	h.RandomHash = h.getRandomHash()
-}
-
-func (h *Header) getRandomHash() cmn.HexBytes {
-	return merkle.SimpleHashFromByteSlices([][]byte{
-		cdcEncode(h.RandomData),
-		h.Hash(),
-	})
-}
-
 //-----------------------------------------------------------
 // These methods are for Protobuf Compatibility
 
@@ -367,8 +363,7 @@ type Header struct {
 	NextValidatorsHash cmn.HexBytes `json:"next_validators_hash"` // validators for the next block
 	ConsensusHash      cmn.HexBytes `json:"consensus_hash"`       // consensus params for current block
 	AppHash            cmn.HexBytes `json:"app_hash"`             // state after txs from the previous block
-	// root hash of all results from the txs from the previous block
-	LastResultsHash cmn.HexBytes `json:"last_results_hash"`
+	LastResultsHash    cmn.HexBytes `json:"last_results_hash"`    // root hash of all results from the txs from the previous block
 
 	// consensus info
 	EvidenceHash    cmn.HexBytes `json:"evidence_hash"`    // evidence included in the block
@@ -452,6 +447,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Results:        %v
 %s  Evidence:       %v
 %s  Proposer:       %v
+%s  RandomData:   %v
 %s}#%v`,
 		indent, h.Version,
 		indent, h.ChainID,
@@ -469,7 +465,20 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.LastResultsHash,
 		indent, h.EvidenceHash,
 		indent, h.ProposerAddress,
+		indent, h.RandomData,
 		indent, h.Hash())
+}
+
+func (h *Header) SetRandomData(randomData []byte) {
+	h.RandomData = randomData
+	h.RandomHash = h.getRandomHash()
+}
+
+func (h *Header) getRandomHash() cmn.HexBytes {
+	return merkle.SimpleHashFromByteSlices([][]byte{
+		cdcEncode(h.RandomData),
+		h.Hash(),
+	})
 }
 
 //-------------------------------------

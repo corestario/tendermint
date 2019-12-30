@@ -1,7 +1,3 @@
----
-order: 9
----
-
 # Light Client Protocol
 
 Light clients are an important part of the complete blockchain system

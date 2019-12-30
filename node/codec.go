@@ -5,8 +5,8 @@ import (
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 )
 
-var Cdc = amino.NewCodec()
+var cdc = amino.NewCodec()
 
 func init() {
-	cryptoAmino.RegisterAmino(Cdc)
+	cryptoAmino.RegisterAmino(cdc)
 }

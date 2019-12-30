@@ -7,7 +7,6 @@ import (
 
 	cmn "github.com/tendermint/tendermint/libs/common"
 	nm "github.com/tendermint/tendermint/node"
-	bls "github.com/tendermint/tendermint/node/bls"
 )
 
 // AddNodeFlags exposes some common configuration options on the command-line
@@ -67,37 +66,6 @@ func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
 				return fmt.Errorf("Failed to start node: %v", err)
 			}
 			logger.Info("Started node", "nodeInfo", n.Switch().NodeInfo())
-
-			// Run forever.
-			select {}
-		},
-	}
-
-	AddNodeFlags(cmd)
-	return cmd
-}
-
-func NewRunBLSNodeCmd(nodeProvider bls.BLSNodeProvider) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "node",
-		Short: "Run the tendermint node",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			n, err := nodeProvider(config, logger)
-			if err != nil {
-				return fmt.Errorf("Failed to create node: %v", err)
-			}
-
-			// Stop upon receiving SIGTERM or CTRL-C.
-			cmn.TrapSignal(logger, func() {
-				if n.IsRunning() {
-					n.Stop()
-				}
-			})
-
-			if err := n.Start(); err != nil {
-				return fmt.Errorf("Failed to start node: %v", err)
-			}
-			//logger.Info("Started node", "nodeInfo", n.Switch().NodeInfo())
 
 			// Run forever.
 			select {}

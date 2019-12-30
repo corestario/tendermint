@@ -309,13 +309,7 @@ func TestEndBlockValidatorUpdates(t *testing.T) {
 
 	state, stateDB, _ := makeState(1, 1)
 
-	blockExec := sm.NewBlockExecutor(
-		stateDB,
-		log.TestingLogger(),
-		proxyApp.Consensus(),
-		mock.Mempool{},
-		sm.MockEvidencePool{},
-	)
+	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mock.Mempool{}, sm.MockEvidencePool{})
 
 	eventBus := types.NewEventBus()
 	err = eventBus.Start()
@@ -323,11 +317,7 @@ func TestEndBlockValidatorUpdates(t *testing.T) {
 	defer eventBus.Stop()
 	blockExec.SetEventBus(eventBus)
 
-	updatesSub, err := eventBus.Subscribe(
-		context.Background(),
-		"TestEndBlockValidatorUpdates",
-		types.EventQueryValidatorSetUpdates,
-	)
+	updatesSub, err := eventBus.Subscribe(context.Background(), "TestEndBlockValidatorUpdates", types.EventQueryValidatorSetUpdates)
 	require.NoError(t, err)
 
 	block := makeBlock(state, 1)
@@ -376,13 +366,7 @@ func TestEndBlockValidatorUpdatesResultingInEmptySet(t *testing.T) {
 	defer proxyApp.Stop()
 
 	state, stateDB, _ := makeState(1, 1)
-	blockExec := sm.NewBlockExecutor(
-		stateDB,
-		log.TestingLogger(),
-		proxyApp.Consensus(),
-		mock.Mempool{},
-		sm.MockEvidencePool{},
-	)
+	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mock.Mempool{}, sm.MockEvidencePool{})
 
 	block := makeBlock(state, 1)
 	blockID := types.BlockID{Hash: block.Hash(), PartsHeader: block.MakePartSet(testPartSize).Header()}
