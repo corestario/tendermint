@@ -14,6 +14,13 @@ import (
 	"go.dedis.ch/kyber/v3/sign/tbls"
 
 	cmn "github.com/tendermint/tendermint/libs/common"
+
+	dkgBLS "github.com/corestario/dkglib/lib/blsShare"
+)
+
+const (
+	storeMasterKey = "master.pub"
+	storeShare     = "share.%s"
 )
 
 func TestDumpLoad(t *testing.T) {
@@ -29,13 +36,13 @@ func TestDumpLoad(t *testing.T) {
 	}
 
 	var threshold, numHolders = 1, 4
-	keyring, err := NewBLSKeyring(threshold, numHolders)
+	keyring, err := dkgBLS.NewBLSKeyring(threshold, numHolders)
 	if err != nil {
 		t.Errorf("failed to generate keyring: %v", err)
 		return
 	}
 
-	if err := DumpBLSKeyring(keyring, targetDir); err != nil {
+	if err := dkgBLS.DumpBLSKeyring(keyring, targetDir); err != nil {
 		t.Errorf("failed to dump keyring: %v", err)
 		return
 	}
@@ -44,7 +51,7 @@ func TestDumpLoad(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to read public key file: %v", err)
 	}
-	if _, err := LoadPubKey(string(pubKeyBytes), numHolders); err != nil {
+	if _, err := dkgBLS.LoadPubKey(string(pubKeyBytes), numHolders); err != nil {
 		t.Errorf("failed to load public key: %v", err)
 		return
 	}
@@ -54,7 +61,7 @@ func TestDumpLoad(t *testing.T) {
 		t.Errorf("failed to read keypair file: %v", err)
 		return
 	}
-	skp := &BLSShareJSON{}
+	skp := &dkgBLS.BLSShareJSON{}
 	if err := json.Unmarshal(keyPairBytes, skp); err != nil {
 		t.Errorf("failed to unmarshal to BLSShareJSON: %v", err)
 		return
@@ -84,14 +91,14 @@ func TestRecover(t *testing.T) {
 }
 
 func testRecover(st *testing.T, t, n int) {
-	var testVerifiers []*BLSVerifier
+	var testVerifiers []*dkgBLS.BLSVerifier
 	for i := 0; i < n; i++ {
-		testVerifiers = append(testVerifiers, NewTestBLSVerifierByID("TestRecover4", i, t, n))
+		testVerifiers = append(testVerifiers, dkgBLS.NewTestBLSVerifierByID("TestRecover4", i, t, n))
 	}
 
 	var err error
 	signs := make([][]byte, n)
-	votes := make([]*Vote, n)
+	votes := make([]dkgBLS.BLSSigner, n)
 	msg := []byte("test")
 
 	for i := 0; i < n; i++ {
@@ -146,10 +153,10 @@ func testRecover(st *testing.T, t, n int) {
 
 func TestRecover2of4(t *testing.T) {
 	var (
-		pubKey, _ = LoadPubKey(TestnetMasterPubKey, 4)
-		share0, _ = TestnetShares[0].Deserialize()
-		share1, _ = TestnetShares[1].Deserialize()
-		share2, _ = TestnetShares[2].Deserialize()
+		pubKey, _ = dkgBLS.LoadPubKey(dkgBLS.TestnetMasterPubKey, 4)
+		share0, _ = dkgBLS.TestnetShares[0].Deserialize()
+		share1, _ = dkgBLS.TestnetShares[1].Deserialize()
+		share2, _ = dkgBLS.TestnetShares[2].Deserialize()
 		msg       = []byte(InitialRandomData)
 		suite     = bn256.NewSuite()
 		sig0, _   = tbls.Sign(suite, share0.Priv, msg)

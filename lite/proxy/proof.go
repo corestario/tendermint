@@ -4,7 +4,7 @@ import (
 	"github.com/tendermint/tendermint/crypto/merkle"
 )
 
-func defaultProofRuntime() *merkle.ProofRuntime {
+func DefaultProofRuntime() *merkle.ProofRuntime {
 	prt := merkle.NewProofRuntime()
 	prt.RegisterOpDecoder(
 		merkle.ProofOpSimpleValue,

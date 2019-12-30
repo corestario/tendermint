@@ -1,14 +1,15 @@
-package client
+package client_test
 
 import (
-	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
+	liteClient "github.com/tendermint/tendermint/lite/client"
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
@@ -17,7 +18,7 @@ import (
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("TestMain", 0))
+	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("TestMain", 0))
 	code := m.Run()
 
 	rpctest.StopTendermint(node)
@@ -36,11 +37,11 @@ func TestProvider(t *testing.T) {
 	}
 	chainID := genDoc.ChainID
 	t.Log("chainID:", chainID)
-	p := NewHTTPProvider(chainID, rpcAddr)
+	p := liteClient.NewHTTPProvider(chainID, rpcAddr)
 	require.NotNil(t, p)
 
 	// let it produce some blocks
-	err = rpcclient.WaitForHeight(p.(*provider).client, 6, nil)
+	err = rpcclient.WaitForHeight(p.(*liteClient.Provider).Client, 6, nil)
 	require.Nil(err)
 
 	// let's get the highest block

@@ -39,4 +39,5 @@ type StateInterface interface {
 	GetBlockStore() state.BlockStore
 	GetConfig() *cfg.ConsensusConfig
 	GetDKGMsgQueue() chan *dkgtypes.DKGDataMessage
+	SetVerifier(dkgtypes.Verifier)
 }

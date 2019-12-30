@@ -139,6 +139,10 @@ type ConsensusState struct {
 	metrics *Metrics
 }
 
+func (cs *ConsensusState) SetVerifier(verifier dkgtypes.Verifier) {
+	return
+}
+
 // StateOption sets an optional parameter on the ConsensusState.
 type StateOption func(*ConsensusState)
 
