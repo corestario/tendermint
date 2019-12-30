@@ -17,7 +17,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	cmn "github.com/tendermint/tendermint/libs/common"
-	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/rpc/client"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -313,7 +312,7 @@ func TestUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
 	mempool := node.Mempool()
-	_ = mempool.CheckTx(tx, nil, mempl.TxInfo{})
+	_ = mempool.CheckTx(tx, nil)
 
 	for i, c := range GetClients() {
 		mc, ok := c.(client.MempoolClient)
@@ -334,7 +333,7 @@ func TestNumUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
 	mempool := node.Mempool()
-	_ = mempool.CheckTx(tx, nil, mempl.TxInfo{})
+	_ = mempool.CheckTx(tx, nil)
 	mempoolSize := mempool.Size()
 
 	for i, c := range GetClients() {
@@ -489,13 +488,7 @@ func deepcpVote(vote *types.Vote) (res *types.Vote) {
 	return
 }
 
-func newEvidence(
-	t *testing.T,
-	val *privval.FilePV,
-	vote *types.Vote,
-	vote2 *types.Vote,
-	chainID string,
-) types.DuplicateVoteEvidence {
+func newEvidence(t *testing.T, val *privval.FilePV, vote *types.Vote, vote2 *types.Vote, chainID string) types.DuplicateVoteEvidence {
 	var err error
 	vote2_ := deepcpVote(vote2)
 	vote2_.Signature, err = val.Key.PrivKey.Sign(vote2_.SignBytes(chainID))
@@ -508,11 +501,7 @@ func newEvidence(
 	}
 }
 
-func makeEvidences(
-	t *testing.T,
-	val *privval.FilePV,
-	chainID string,
-) (ev types.DuplicateVoteEvidence, fakes []types.DuplicateVoteEvidence) {
+func makeEvidences(t *testing.T, val *privval.FilePV, chainID string) (ev types.DuplicateVoteEvidence, fakes []types.DuplicateVoteEvidence) {
 	vote := &types.Vote{
 		ValidatorAddress: val.Key.Address,
 		ValidatorIndex:   0,

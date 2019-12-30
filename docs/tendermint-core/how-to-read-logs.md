@@ -1,7 +1,3 @@
----
-order: 7
----
-
 # How to read logs
 
 ## Walkabout example

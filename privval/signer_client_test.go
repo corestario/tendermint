@@ -95,7 +95,7 @@ func TestSignerProposal(t *testing.T) {
 		defer tc.signerServer.Stop()
 		defer tc.signerClient.Close()
 
-		require.NoError(t, tc.mockPV.SignData(tc.chainID, want))
+		require.NoError(t, tc.mockPV.SignProposal(tc.chainID, want))
 		require.NoError(t, tc.signerClient.SignProposal(tc.chainID, have))
 
 		assert.Equal(t, want.Signature, have.Signature)
@@ -111,7 +111,7 @@ func TestSignerVote(t *testing.T) {
 		defer tc.signerServer.Stop()
 		defer tc.signerClient.Close()
 
-		require.NoError(t, tc.mockPV.SignData(tc.chainID, want))
+		require.NoError(t, tc.mockPV.SignVote(tc.chainID, want))
 		require.NoError(t, tc.signerClient.SignVote(tc.chainID, have))
 
 		assert.Equal(t, want.Signature, have.Signature)
@@ -129,7 +129,7 @@ func TestSignerVoteResetDeadline(t *testing.T) {
 
 		time.Sleep(testTimeoutReadWrite2o3)
 
-		require.NoError(t, tc.mockPV.SignData(tc.chainID, want))
+		require.NoError(t, tc.mockPV.SignVote(tc.chainID, want))
 		require.NoError(t, tc.signerClient.SignVote(tc.chainID, have))
 		assert.Equal(t, want.Signature, have.Signature)
 
@@ -138,7 +138,7 @@ func TestSignerVoteResetDeadline(t *testing.T) {
 		// This would exceed the deadline if it was not extended by the previous message
 		time.Sleep(testTimeoutReadWrite2o3)
 
-		require.NoError(t, tc.mockPV.SignData(tc.chainID, want))
+		require.NoError(t, tc.mockPV.SignVote(tc.chainID, want))
 		require.NoError(t, tc.signerClient.SignVote(tc.chainID, have))
 		assert.Equal(t, want.Signature, have.Signature)
 	}
@@ -162,7 +162,7 @@ func TestSignerVoteKeepAlive(t *testing.T) {
 		time.Sleep(testTimeoutReadWrite * 3)
 		tc.signerServer.Logger.Debug("TEST: Forced Wait DONE---------------------------------------------")
 
-		require.NoError(t, tc.mockPV.SignData(tc.chainID, want))
+		require.NoError(t, tc.mockPV.SignVote(tc.chainID, want))
 		require.NoError(t, tc.signerClient.SignVote(tc.chainID, have))
 
 		assert.Equal(t, want.Signature, have.Signature)
@@ -183,7 +183,7 @@ func TestSignerSignProposalErrors(t *testing.T) {
 		err := tc.signerClient.SignProposal(tc.chainID, proposal)
 		require.Equal(t, err.(*RemoteSignerError).Description, types.ErroringMockPVErr.Error())
 
-		err = tc.mockPV.SignData(tc.chainID, proposal)
+		err = tc.mockPV.SignProposal(tc.chainID, proposal)
 		require.Error(t, err)
 
 		err = tc.signerClient.SignProposal(tc.chainID, proposal)
@@ -206,7 +206,7 @@ func TestSignerSignVoteErrors(t *testing.T) {
 		err := tc.signerClient.SignVote(tc.chainID, vote)
 		require.Equal(t, err.(*RemoteSignerError).Description, types.ErroringMockPVErr.Error())
 
-		err = tc.mockPV.SignData(tc.chainID, vote)
+		err = tc.mockPV.SignVote(tc.chainID, vote)
 		require.Error(t, err)
 
 		err = tc.signerClient.SignVote(tc.chainID, vote)

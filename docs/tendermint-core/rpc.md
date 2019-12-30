@@ -1,7 +1,3 @@
----
-order: 4
----
-
 # RPC
 
 The RPC documentation is hosted here:

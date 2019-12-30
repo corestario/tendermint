@@ -27,7 +27,6 @@ func MakeTxKV() ([]byte, []byte, []byte) {
 func TestHeaderEvents(t *testing.T) {
 	for i, c := range GetClients() {
 		i, c := i, c // capture params
-
 		t.Run(reflect.TypeOf(c).String(), func(t *testing.T) {
 			// start for this test it if it wasn't already running
 			if !c.IsRunning() {

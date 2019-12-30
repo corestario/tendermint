@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	// amino overhead + time.Time + max consensus msg size
-	// TODO: Can we clarify better where 24 comes from precisely?
-	maxMsgSizeBytes = maxMsgSize + 24
+	// must be greater than types.BlockPartSizeBytes + a few bytes
+	maxMsgSizeBytes = 1024 * 1024 // 1MB
 
 	// how often the WAL should be sync'd during period sync'ing
 	walDefaultFlushInterval = 2 * time.Second
@@ -30,9 +29,8 @@ const (
 //--------------------------------------------------------
 // types and functions for savings consensus messages
 
-// TimedWALMessage wraps WALMessage and adds Time for debugging purposes.
 type TimedWALMessage struct {
-	Time time.Time  `json:"time"`
+	Time time.Time  `json:"time"` // for debugging purposes
 	Msg  WALMessage `json:"msg"`
 }
 
@@ -57,8 +55,8 @@ func RegisterWALMessages(cdc *amino.Codec) {
 
 // WAL is an interface for any write-ahead logger.
 type WAL interface {
-	Write(WALMessage) error
-	WriteSync(WALMessage) error
+	Write(WALMessage)
+	WriteSync(WALMessage)
 	FlushAndSync() error
 
 	SearchForEndHeight(height int64, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error)
@@ -176,39 +174,29 @@ func (wal *baseWAL) Wait() {
 // Write is called in newStep and for each receive on the
 // peerMsgQueue and the timeoutTicker.
 // NOTE: does not call fsync()
-func (wal *baseWAL) Write(msg WALMessage) error {
+func (wal *baseWAL) Write(msg WALMessage) {
 	if wal == nil {
-		return nil
+		return
 	}
 
+	// Write the wal message
 	if err := wal.enc.Encode(&TimedWALMessage{tmtime.Now(), msg}); err != nil {
-		wal.Logger.Error("Error writing msg to consensus wal. WARNING: recover may not be possible for the current height",
-			"err", err, "msg", msg)
-		return err
+		panic(fmt.Sprintf("Error writing msg to consensus wal: %v \n\nMessage: %v", err, msg))
 	}
-
-	return nil
 }
 
 // WriteSync is called when we receive a msg from ourselves
 // so that we write to disk before sending signed messages.
 // NOTE: calls fsync()
-func (wal *baseWAL) WriteSync(msg WALMessage) error {
+func (wal *baseWAL) WriteSync(msg WALMessage) {
 	if wal == nil {
-		return nil
+		return
 	}
 
-	if err := wal.Write(msg); err != nil {
-		return err
-	}
-
+	wal.Write(msg)
 	if err := wal.FlushAndSync(); err != nil {
-		wal.Logger.Error("WriteSync failed to flush consensus wal. WARNING: may result in creating alternative proposals / votes for the current height iff the node restarted",
-			"err", err)
-		return err
+		panic(fmt.Sprintf("Error flushing consensus wal buf to file. Error: %v \n", err))
 	}
-
-	return nil
 }
 
 // WALSearchOptions are optional arguments to SearchForEndHeight.
@@ -222,9 +210,7 @@ type WALSearchOptions struct {
 // Group reader will be nil if found equals false.
 //
 // CONTRACT: caller must close group reader.
-func (wal *baseWAL) SearchForEndHeight(
-	height int64,
-	options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
+func (wal *baseWAL) SearchForEndHeight(height int64, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
 	var (
 		msg *TimedWALMessage
 		gr  *auto.GroupReader
@@ -299,7 +285,7 @@ func (enc *WALEncoder) Encode(v *TimedWALMessage) error {
 	crc := crc32.Checksum(data, crc32c)
 	length := uint32(len(data))
 	if length > maxMsgSizeBytes {
-		return fmt.Errorf("msg is too big: %d bytes, max: %d bytes", length, maxMsgSizeBytes)
+		return fmt.Errorf("Msg is too big: %d bytes, max: %d bytes", length, maxMsgSizeBytes)
 	}
 	totalLength := 8 + int(length)
 
@@ -309,6 +295,7 @@ func (enc *WALEncoder) Encode(v *TimedWALMessage) error {
 	copy(msg[8:], data)
 
 	_, err := enc.wr.Write(msg)
+
 	return err
 }
 
@@ -368,10 +355,7 @@ func (dec *WALDecoder) Decode() (*TimedWALMessage, error) {
 	length := binary.BigEndian.Uint32(b)
 
 	if length > maxMsgSizeBytes {
-		return nil, DataCorruptionError{fmt.Errorf(
-			"length %d exceeded maximum possible value of %d bytes",
-			length,
-			maxMsgSizeBytes)}
+		return nil, DataCorruptionError{fmt.Errorf("length %d exceeded maximum possible value of %d bytes", length, maxMsgSizeBytes)}
 	}
 
 	data := make([]byte, length)
@@ -399,9 +383,9 @@ type nilWAL struct{}
 
 var _ WAL = nilWAL{}
 
-func (nilWAL) Write(m WALMessage) error     { return nil }
-func (nilWAL) WriteSync(m WALMessage) error { return nil }
-func (nilWAL) FlushAndSync() error          { return nil }
+func (nilWAL) Write(m WALMessage)     {}
+func (nilWAL) WriteSync(m WALMessage) {}
+func (nilWAL) FlushAndSync() error    { return nil }
 func (nilWAL) SearchForEndHeight(height int64, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
 	return nil, false, nil
 }

@@ -59,7 +59,7 @@ func BenchmarkLoadValidators(b *testing.B) {
 
 	config := cfg.ResetTestRoot("state_")
 	defer os.RemoveAll(config.RootDir)
-	dbType := dbm.BackendType(config.DBBackend)
+	dbType := dbm.DBBackendType(config.DBBackend)
 	stateDB := dbm.NewDB("state", dbType, config.DBDir())
 	state, err := sm.LoadStateFromDBOrGenesisFile(stateDB, config.GenesisFile())
 	if err != nil {

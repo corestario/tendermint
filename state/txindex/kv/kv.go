@@ -103,7 +103,7 @@ func (txi *TxIndex) AddBatch(b *txindex.Batch) error {
 		storeBatch.Set(hash, rawBytes)
 	}
 
-	storeBatch.WriteSync()
+	storeBatch.Write()
 	return nil
 }
 
@@ -132,7 +132,7 @@ func (txi *TxIndex) Index(result *types.TxResult) error {
 	}
 
 	b.Set(hash, rawBytes)
-	b.WriteSync()
+	b.Write()
 
 	return nil
 }
@@ -168,10 +168,7 @@ func (txi *TxIndex) Search(q *query.Query) ([]*types.TxResult, error) {
 	filteredHashes := make(map[string][]byte)
 
 	// get a list of conditions (like "tx.height > 5")
-	conditions, err := q.Conditions()
-	if err != nil {
-		return nil, errors.Wrap(err, "error during parsing conditions from query")
-	}
+	conditions := q.Conditions()
 
 	// if there is a hash condition, return the result immediately
 	hash, err, ok := lookForHash(conditions)
@@ -179,14 +176,10 @@ func (txi *TxIndex) Search(q *query.Query) ([]*types.TxResult, error) {
 		return nil, errors.Wrap(err, "error during searching for a hash in the query")
 	} else if ok {
 		res, err := txi.Get(hash)
-		switch {
-		case err != nil:
-			return []*types.TxResult{}, errors.Wrap(err, "error while retrieving the result")
-		case res == nil:
+		if res == nil {
 			return []*types.TxResult{}, nil
-		default:
-			return []*types.TxResult{res}, nil
 		}
+		return []*types.TxResult{res}, errors.Wrap(err, "error while retrieving the result")
 	}
 
 	// conditions to skip because they're handled before "everything else"
@@ -377,12 +370,7 @@ func isRangeOperation(op query.Operator) bool {
 // non-intersecting matches are removed.
 //
 // NOTE: filteredHashes may be empty if no previous condition has matched.
-func (txi *TxIndex) match(
-	c query.Condition,
-	startKeyBz []byte,
-	filteredHashes map[string][]byte,
-	firstRun bool,
-) map[string][]byte {
+func (txi *TxIndex) match(c query.Condition, startKeyBz []byte, filteredHashes map[string][]byte, firstRun bool) map[string][]byte {
 	// A previous match was attempted but resulted in no matches, so we return
 	// no matches (assuming AND operand).
 	if !firstRun && len(filteredHashes) == 0 {
@@ -447,12 +435,7 @@ func (txi *TxIndex) match(
 // any non-intersecting matches are removed.
 //
 // NOTE: filteredHashes may be empty if no previous condition has matched.
-func (txi *TxIndex) matchRange(
-	r queryRange,
-	startKey []byte,
-	filteredHashes map[string][]byte,
-	firstRun bool,
-) map[string][]byte {
+func (txi *TxIndex) matchRange(r queryRange, startKey []byte, filteredHashes map[string][]byte, firstRun bool) map[string][]byte {
 	// A previous match was attempted but resulted in no matches, so we return
 	// no matches (assuming AND operand).
 	if !firstRun && len(filteredHashes) == 0 {

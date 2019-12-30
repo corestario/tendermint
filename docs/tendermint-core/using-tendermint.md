@@ -1,7 +1,3 @@
----
-order: 2
----
-
 # Using Tendermint
 
 This is a guide to using the `tendermint` program from the command line.

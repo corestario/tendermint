@@ -1,7 +1,3 @@
----
-order: 6
----
-
 # Fast Sync
 
 In a proof of work blockchain, syncing with the chain is the same

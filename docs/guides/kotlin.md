@@ -1,6 +1,3 @@
----
-order: 4
----
 # Creating an application in Kotlin
 
 ## Guide Assumptions

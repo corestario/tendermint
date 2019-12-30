@@ -61,6 +61,10 @@ type Vote struct {
 	BLSSignature     []byte        `json:"bls_signature"`
 }
 
+func (vote *Vote) GetHash() []byte {
+	return vote.BlockID.Hash
+}
+
 // CommitSig converts the Vote to a CommitSig.
 // If the Vote is nil, the CommitSig will be nil.
 func (vote *Vote) CommitSig() *CommitSig {
@@ -79,13 +83,13 @@ func (vote *Vote) SignBytes(chainID string) []byte {
 	return bz
 }
 
+func (v *Vote) SetSignature(sig []byte) {
+	v.Signature = sig
+}
+
 func (vote *Vote) Copy() *Vote {
 	voteCopy := *vote
 	return &voteCopy
-}
-
-func (vote *Vote) GetHash() []byte {
-	return vote.BlockID.Hash
 }
 
 func (vote *Vote) GetBLSSignature() []byte {
@@ -106,7 +110,7 @@ func (vote *Vote) String() string {
 		panic("Unknown vote type")
 	}
 
-	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s}",
+	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %X @ %s BLSSignature: %+v}",
 		vote.ValidatorIndex,
 		cmn.Fingerprint(vote.ValidatorAddress),
 		vote.Height,
@@ -116,6 +120,7 @@ func (vote *Vote) String() string {
 		cmn.Fingerprint(vote.BlockID.Hash),
 		cmn.Fingerprint(vote.Signature),
 		CanonicalTime(vote.Timestamp),
+		vote.BLSSignature,
 	)
 }
 
@@ -167,9 +172,6 @@ func (vote *Vote) ValidateBasic() error {
 	if len(vote.Signature) > MaxSignatureSize {
 		return fmt.Errorf("Signature is too big (max: %d)", MaxSignatureSize)
 	}
-	return nil
-}
 
-func (v *Vote) SetSignature(sig []byte) {
-	v.Signature = sig
+	return nil
 }
