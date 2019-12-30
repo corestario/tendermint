@@ -298,9 +298,13 @@ func TestHeaderHash(t *testing.T) {
 				byteSlices := [][]byte{}
 				s := reflect.ValueOf(*tc.header)
 				for i := 0; i < s.NumField(); i++ {
+					fieldName := s.Type().Field(i).Name
+					if fieldName == "RandomHash" || fieldName == "RandomData" {
+						continue
+					}
 					f := s.Field(i)
 					assert.False(t, f.IsZero(), "Found zero-valued field %v",
-						s.Type().Field(i).Name)
+						fieldName)
 					byteSlices = append(byteSlices, cdcEncode(f.Interface()))
 				}
 				assert.Equal(t,

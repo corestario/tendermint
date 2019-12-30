@@ -5,10 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tendermint/tendermint/types"
-
 	"github.com/stretchr/testify/require"
 
+	dkgTypes "github.com/corestario/dkglib/lib/types"
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	core_grpc "github.com/tendermint/tendermint/rpc/grpc"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
@@ -18,7 +17,7 @@ func TestMain(m *testing.M) {
 	// start a tendermint node in the background to test against
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(&types.MockVerifier{})
+	node.ConsensusState().SetVerifier(&dkgTypes.MockVerifier{})
 
 	code := m.Run()
 

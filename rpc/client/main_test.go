@@ -5,11 +5,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tendermint/tendermint/consensus"
-
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	nm "github.com/tendermint/tendermint/node"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
+
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 )
 
 var node *nm.Node
@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 	app := kvstore.NewPersistentKVStoreApplication(dir)
 	node = rpctest.StartTendermint(app)
 
-	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("rpc_client_tests", 0))
+	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("rpc_client_tests", 0))
 	code := m.Run()
 
 	// and shut down proper at the end

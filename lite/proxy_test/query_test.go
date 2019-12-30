@@ -1,8 +1,7 @@
-package proxy
+package proxy_test
 
 import (
 	"fmt"
-	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 	"time"
@@ -18,6 +17,10 @@ import (
 	"github.com/tendermint/tendermint/rpc/client"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
+
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
+
+	proxy "github.com/tendermint/tendermint/lite/proxy"
 )
 
 var node *nm.Node
@@ -30,7 +33,7 @@ var waitForEventTimeout = 5 * time.Second
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node = rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("lite_proxy_tests", 0))
+	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("lite_proxy_tests", 0))
 
 	code := m.Run()
 
@@ -48,7 +51,7 @@ func kvstoreTx(k, v []byte) []byte {
 func _TestAppProofs(t *testing.T) {
 	assert, require := assert.New(t), require.New(t)
 
-	prt := defaultProofRuntime()
+	prt := proxy.DefaultProofRuntime()
 	cl := client.NewLocal(node)
 	client.WaitForHeight(cl, 1, nil)
 
@@ -93,7 +96,7 @@ func _TestAppProofs(t *testing.T) {
 	require.NotNil(rootHash)
 
 	// verify a query before the tx block has no data (and valid non-exist proof)
-	bs, height, proof, err := GetWithProof(prt, k, brh-1, cl, cert)
+	bs, height, proof, err := proxy.GetWithProof(prt, k, brh-1, cl, cert)
 	require.NoError(err, "%#v", err)
 	require.NotNil(proof)
 	require.Equal(height, brh-1)
@@ -104,7 +107,7 @@ func _TestAppProofs(t *testing.T) {
 	require.Nil(bs)
 
 	// but given that block it is good
-	bs, height, proof, err = GetWithProof(prt, k, brh, cl, cert)
+	bs, height, proof, err = proxy.GetWithProof(prt, k, brh, cl, cert)
 	require.NoError(err, "%#v", err)
 	require.NotNil(proof)
 	require.Equal(height, brh)
@@ -115,7 +118,7 @@ func _TestAppProofs(t *testing.T) {
 
 	// Test non-existing key.
 	missing := []byte("my-missing-key")
-	bs, _, proof, err = GetWithProof(prt, missing, 0, cl, cert)
+	bs, _, proof, err = proxy.GetWithProof(prt, missing, 0, cl, cert)
 	require.NoError(err)
 	require.Nil(bs)
 	require.NotNil(proof)
@@ -158,7 +161,7 @@ func TestTxProofs(t *testing.T) {
 	err = res.Proof.Validate(keyHash)
 	assert.NoError(err, "%#v", err)
 
-	commit, err := GetCertifiedCommit(br.Height, cl, cert)
+	commit, err := proxy.GetCertifiedCommit(br.Height, cl, cert)
 	require.Nil(err, "%#v", err)
 	require.Equal(res.Proof.RootHash, commit.Header.DataHash)
 }

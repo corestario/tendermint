@@ -28,7 +28,7 @@ type Wrapper struct {
 //
 // If it is wrapping an HTTP rpcclient, it will also wrap the websocket interface
 func SecureClient(c rpcclient.Client, cert *lite.DynamicVerifier) Wrapper {
-	prt := defaultProofRuntime()
+	prt := DefaultProofRuntime()
 	wrap := Wrapper{c, cert, prt}
 	// TODO: no longer possible as no more such interface exposed....
 	// if we wrap http client, then we can swap out the event switch to filter

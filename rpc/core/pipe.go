@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"time"
 
 	cfg "github.com/tendermint/tendermint/config"
@@ -35,6 +36,7 @@ type Consensus interface {
 	GetLastHeight() int64
 	GetRoundStateJSON() ([]byte, error)
 	GetRoundStateSimpleJSON() ([]byte, error)
+	SetVerifier(dkgtypes.Verifier)
 }
 
 type transport interface {
