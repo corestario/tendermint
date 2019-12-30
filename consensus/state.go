@@ -41,8 +41,6 @@ var (
 	msgQueueSize = 1000
 )
 
-var _ StateInterface = &ConsensusState{}
-
 // msgs from the reactor which may update the state
 type msgInfo struct {
 	Msg    ConsensusMessage `json:"msg"`
@@ -70,6 +68,8 @@ type txNotifier interface {
 type evidencePool interface {
 	AddEvidence(types.Evidence) error
 }
+
+var _ StateInterface = &ConsensusState{}
 
 // ConsensusState handles execution of the consensus algorithm.
 // It processes votes and proposals, and upon reaching agreement,
@@ -653,7 +653,10 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			cs.handleMsg(mi)
 		case mi = <-cs.internalMsgQueue:
-			cs.wal.WriteSync(mi) // NOTE: fsync
+			err := cs.wal.WriteSync(mi) // NOTE: fsync
+			if err != nil {
+				panic(fmt.Sprintf("Failed to write %v msg to consensus wal due to %v. Check your FS and restart the node", mi, err))
+			}
 
 			if _, ok := mi.Msg.(*VoteMessage); ok {
 				// we actually want to simulate failing during
@@ -1418,7 +1421,11 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	// Either way, the ConsensusState should not be resumed until we
 	// successfully call ApplyBlock (ie. later here, or in Handshake after
 	// restart).
-	cs.wal.WriteSync(EndHeightMessage{height}) // NOTE: fsync
+	endMsg := EndHeightMessage{height}
+	if err := cs.wal.WriteSync(endMsg); err != nil { // NOTE: fsync
+		panic(fmt.Sprintf("Failed to write %v msg to consensus wal due to %v. Check your FS and restart the node",
+			endMsg, err))
+	}
 
 	fail.Fail() // XXX
 
@@ -1623,12 +1630,9 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) (bool, err
 			if bytes.Equal(vote.ValidatorAddress, addr) {
 				cs.Logger.Error(
 					"Found conflicting vote from ourselves. Did you unsafe_reset a validator?",
-					"height",
-					vote.Height,
-					"round",
-					vote.Round,
-					"type",
-					vote.Type)
+					"height", vote.Height,
+					"round", vote.Round,
+					"type", vote.Type)
 				return added, err
 			}
 			cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence)
@@ -1653,14 +1657,10 @@ func (cs *ConsensusState) addVote(
 	peerID p2p.ID) (added bool, err error) {
 	cs.Logger.Debug(
 		"addVote",
-		"voteHeight",
-		vote.Height,
-		"voteType",
-		vote.Type,
-		"valIndex",
-		vote.ValidatorIndex,
-		"csHeight",
-		cs.Height)
+		"voteHeight", vote.Height,
+		"voteType", vote.Type,
+		"valIndex", vote.ValidatorIndex,
+		"csHeight", cs.Height)
 
 	// A precommit for the previous height?
 	// These come in while we wait timeoutCommit
@@ -1867,6 +1867,27 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	return nil
 }
 
+//---------------------------------------------------------
+
+func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2 cstypes.RoundStepType) int {
+	if h1 < h2 {
+		return -1
+	} else if h1 > h2 {
+		return 1
+	}
+	if r1 < r2 {
+		return -1
+	} else if r1 > r2 {
+		return 1
+	}
+	if s1 < s2 {
+		return -1
+	} else if s1 > s2 {
+		return 1
+	}
+	return 0
+}
+
 func (cs *ConsensusState) GetMtx() *sync.RWMutex {
 	return &cs.mtx
 }
@@ -1909,29 +1930,4 @@ func (cs *ConsensusState) GetBlockStore() state.BlockStore {
 
 func (cs *ConsensusState) GetConfig() *cfg.ConsensusConfig {
 	return cs.config
-}
-
-//---------------------------------------------------------
-
-func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2 cstypes.RoundStepType) int {
-	if h1 < h2 {
-		return -1
-	} else if h1 > h2 {
-		return 1
-	}
-	if r1 < r2 {
-		return -1
-	} else if r1 > r2 {
-		return 1
-	}
-	if s1 < s2 {
-		return -1
-	} else if s1 > s2 {
-		return 1
-	}
-	return 0
-}
-
-func WithEVSW(evsw tmevents.EventSwitch) StateOption {
-	return func(cs *ConsensusState) { cs.evsw = evsw }
 }

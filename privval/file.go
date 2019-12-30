@@ -96,7 +96,13 @@ func (lss *FilePVLastSignState) CheckHRS(height int64, round int, step int8) (bo
 
 		if lss.Round == round {
 			if lss.Step > step {
-				return false, fmt.Errorf("step regression at height %v round %v. Got %v, last step %v", height, round, step, lss.Step)
+				return false, fmt.Errorf(
+					"step regression at height %v round %v. Got %v, last step %v",
+					height,
+					round,
+					step,
+					lss.Step,
+				)
 			} else if lss.Step == step {
 				if lss.SignBytes != nil {
 					if lss.Signature == nil {
@@ -285,7 +291,13 @@ func (pv *FilePV) Reset() {
 
 // String returns a string representation of the FilePV.
 func (pv *FilePV) String() string {
-	return fmt.Sprintf("PrivValidator{%v LH:%v, LR:%v, LS:%v}", pv.GetAddress(), pv.LastSignState.Height, pv.LastSignState.Round, pv.LastSignState.Step)
+	return fmt.Sprintf(
+		"PrivValidator{%v LH:%v, LR:%v, LS:%v}",
+		pv.GetAddress(),
+		pv.LastSignState.Height,
+		pv.LastSignState.Round,
+		pv.LastSignState.Step,
+	)
 }
 
 //------------------------------------------------------------------------------------
@@ -371,6 +383,18 @@ func (pv *FilePV) signProposal(chainID string, proposal *types.Proposal) error {
 	}
 	pv.saveSigned(height, round, step, signBytes, sig)
 	proposal.Signature = sig
+	return nil
+}
+
+func (pv *FilePV) SignData(chainID string, data types.DataSigner) error {
+	useChainID := chainID
+
+	signBytes := data.SignBytes(useChainID)
+	sig, err := pv.Key.PrivKey.Sign(signBytes)
+	if err != nil {
+		return err
+	}
+	data.SetSignature(sig)
 	return nil
 }
 

@@ -88,7 +88,7 @@ func TestSplitAndTrimEmpty(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		assert.Equal(t, tc.expected, splitAndTrimEmpty(tc.s, tc.sep, tc.cutset), "%s", tc.s)
+		assert.Equal(t, tc.expected, SplitAndTrimEmpty(tc.s, tc.sep, tc.cutset), "%s", tc.s)
 	}
 }
 
@@ -269,7 +269,7 @@ func TestCreateProposalBlock(t *testing.T) {
 	txLength := 1000
 	for i := 0; i < maxBytes/txLength; i++ {
 		tx := cmn.RandBytes(txLength)
-		err := mempool.CheckTx(tx, nil)
+		err := mempool.CheckTx(tx, nil, mempl.TxInfo{})
 		assert.NoError(t, err)
 	}
 

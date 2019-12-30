@@ -45,7 +45,11 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	}, privValidators
 }
 
-func makeVote(header *types.Header, blockID types.BlockID, valset *types.ValidatorSet, privVal types.PrivValidator) *types.Vote {
+func makeVote(
+	header *types.Header,
+	blockID types.BlockID,
+	valset *types.ValidatorSet,
+	privVal types.PrivValidator) *types.Vote {
 	addr := privVal.GetPubKey().Address()
 	idx, _ := valset.GetByAddress(addr)
 	vote := &types.Vote{
@@ -58,7 +62,7 @@ func makeVote(header *types.Header, blockID types.BlockID, valset *types.Validat
 		BlockID:          blockID,
 	}
 
-	_ = privVal.SignVote(header.ChainID, vote)
+	_ = privVal.SignData(header.ChainID, vote)
 
 	return vote
 }
@@ -68,7 +72,11 @@ type BlockchainReactorPair struct {
 	conR *consensusReactorTest
 }
 
-func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals []types.PrivValidator, maxBlockHeight int64) *BlockchainReactor {
+func newBlockchainReactor(
+	logger log.Logger,
+	genDoc *types.GenesisDoc,
+	privVals []types.PrivValidator,
+	maxBlockHeight int64) *BlockchainReactor {
 	if len(privVals) != 1 {
 		panic("only support one validator")
 	}
@@ -129,7 +137,11 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 	return bcReactor
 }
 
-func newBlockchainReactorPair(logger log.Logger, genDoc *types.GenesisDoc, privVals []types.PrivValidator, maxBlockHeight int64) BlockchainReactorPair {
+func newBlockchainReactorPair(
+	logger log.Logger,
+	genDoc *types.GenesisDoc,
+	privVals []types.PrivValidator,
+	maxBlockHeight int64) BlockchainReactorPair {
 
 	consensusReactor := &consensusReactorTest{}
 	consensusReactor.BaseReactor = *p2p.NewBaseReactor("Consensus reactor", consensusReactor)
