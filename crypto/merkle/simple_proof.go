@@ -5,6 +5,14 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.com/tendermint/tendermint/crypto/tmhash"
+)
+
+const (
+	// MaxAunts is the maximum number of aunts that can be included in a SimpleProof.
+	// This corresponds to a tree of size 2^100, which should be sufficient for all conceivable purposes.
+	// This maximum helps prevent Denial-of-Service attacks by limitting the size of the proofs.
+	MaxAunts = 100
 )
 
 // SimpleProof represents a simple Merkle proof.
@@ -108,6 +116,30 @@ func (sp *SimpleProof) StringIndented(indent string) string {
 		indent)
 }
 
+// ValidateBasic performs basic validation.
+// NOTE: it expects the LeafHash and the elements of Aunts to be of size tmhash.Size,
+// and it expects at most MaxAunts elements in Aunts.
+func (sp *SimpleProof) ValidateBasic() error {
+	if sp.Total < 0 {
+		return errors.New("negative Total")
+	}
+	if sp.Index < 0 {
+		return errors.New("negative Index")
+	}
+	if len(sp.LeafHash) != tmhash.Size {
+		return errors.Errorf("expected LeafHash size to be %d, got %d", tmhash.Size, len(sp.LeafHash))
+	}
+	if len(sp.Aunts) > MaxAunts {
+		return errors.Errorf("expected no more than %d aunts, got %d", MaxAunts, len(sp.Aunts))
+	}
+	for i, auntHash := range sp.Aunts {
+		if len(auntHash) != tmhash.Size {
+			return errors.Errorf("expected Aunts#%d size to be %d, got %d", i, tmhash.Size, len(auntHash))
+		}
+	}
+	return nil
+}
+
 // Use the leafHash and innerHashes to get the root merkle hash.
 // If the length of the innerHashes slice isn't exactly correct, the result is nil.
 // Recursive impl.
@@ -161,12 +193,11 @@ func (spn *SimpleProofNode) FlattenAunts() [][]byte {
 	// Nonrecursive impl.
 	innerHashes := [][]byte{}
 	for spn != nil {
-		switch {
-		case spn.Left != nil:
+		if spn.Left != nil {
 			innerHashes = append(innerHashes, spn.Left.Hash)
-		case spn.Right != nil:
+		} else if spn.Right != nil {
 			innerHashes = append(innerHashes, spn.Right.Hash)
-		default:
+		} else {
 			break
 		}
 		spn = spn.Parent

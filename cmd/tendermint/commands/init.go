@@ -3,8 +3,8 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"os"
+	"text/template"
 
 	"github.com/corestario/dkglib/lib/blsShare"
 	"github.com/spf13/cobra"
@@ -92,30 +92,21 @@ func initFilesWithConfig(config *cfg.Config) error {
 			Power:   10,
 		}}
 
-		// This keypair allows for single-node execution, e.g. `$ tendermint node`.
+		// This keypair allows for single-node execution, e.g. $ tendermint node.
 		genDoc.BLSMasterPubKey = blsShare.DefaultBLSVerifierMasterPubKey
 		genDoc.BLSThreshold = 2
 		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 1000
-		genDoc.NodeEndpoint = "tcp://localhost:26657"
+		logger.Info("Generated geneAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsis file", "path", genDoc)
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
 		}
 		logger.Info("Generated genesis file", "path", genFile)
+		logger.Info("Generated geneAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsis file", "path", genDoc)
 	}
 
 	return nil
-}
-
-type Nodes struct {
-	Nodes []Node
-}
-
-type Node struct {
-	StartPort int
-	EndPort   int
-	IP        int
 }
 
 func writeDockerCompose(nValidators int, p2pPort int) error {
@@ -140,6 +131,16 @@ func writeDockerCompose(nValidators int, p2pPort int) error {
 	return composeTmpl.Execute(f, Nodes{nodes})
 }
 
+type Nodes struct {
+	Nodes []Node
+}
+
+type Node struct {
+	StartPort int
+	EndPort   int
+	IP        int
+}
+
 const templ = `version: '3'
 
 services:{{range $i, $e := .Nodes}}
@@ -153,7 +154,7 @@ services:{{range $i, $e := .Nodes}}
       - LOG=tendermint.log
     volumes:
       - ./build:/tendermint:Z
-    command: node --proxy_app=kvstore --log_level=info
+    command: node --proxy_app=kvstore --log_level=debug
     networks:
       localnet:
         ipv4_address: 192.167.10.{{.IP}}

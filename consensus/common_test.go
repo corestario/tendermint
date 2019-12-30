@@ -7,19 +7,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/tendermint/tendermint/libs/events"
-
 	"github.com/go-kit/kit/log/term"
 
 	"path"
-
-	"github.com/go-kit/kit/log/term"
 
 	abcicli "github.com/tendermint/tendermint/abci/client"
 	"github.com/tendermint/tendermint/abci/example/counter"
@@ -41,8 +36,7 @@ import (
 )
 
 const (
-	testSubscriber       = "test-client"
-	testSkipDKGNumBlocks = 100
+	testSubscriber = "test-client"
 )
 
 // A cleanupFunc cleans up any config / test files created for a particular
@@ -83,7 +77,10 @@ func NewValidatorStub(privValidator types.PrivValidator, valIndex int) *validato
 	}
 }
 
-func (vs *validatorStub) signVote(voteType types.SignedMsgType, hash []byte, header types.PartSetHeader) (*types.Vote, error) {
+func (vs *validatorStub) signVote(
+	voteType types.SignedMsgType,
+	hash []byte,
+	header types.PartSetHeader) (*types.Vote, error) {
 	addr := vs.PrivValidator.GetPubKey().Address()
 	vote := &types.Vote{
 		ValidatorIndex:   vs.Index,
@@ -94,7 +91,7 @@ func (vs *validatorStub) signVote(voteType types.SignedMsgType, hash []byte, hea
 		Type:             voteType,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 	}
-	err := vs.PrivValidator.SignVote(config.ChainID(), vote)
+	err := vs.PrivValidator.SignData(config.ChainID(), vote)
 	return vote, err
 }
 
@@ -107,7 +104,11 @@ func signVote(vs *validatorStub, voteType types.SignedMsgType, hash []byte, head
 	return v
 }
 
-func signVotes(voteType types.SignedMsgType, hash []byte, header types.PartSetHeader, vss ...*validatorStub) []*types.Vote {
+func signVotes(
+	voteType types.SignedMsgType,
+	hash []byte,
+	header types.PartSetHeader,
+	vss ...*validatorStub) []*types.Vote {
 	votes := make([]*types.Vote, len(vss))
 	for i, vs := range vss {
 		votes[i] = signVote(vs, voteType, hash, header)
@@ -154,7 +155,11 @@ func startTestRound(cs *ConsensusState, height int64, round int) {
 }
 
 // Create proposal block from cs1 but sign it with vs.
-func decideProposal(cs1 *ConsensusState, vs *validatorStub, height int64, round int) (proposal *types.Proposal, block *types.Block) {
+func decideProposal(
+	cs1 *ConsensusState,
+	vs *validatorStub,
+	height int64,
+	round int) (proposal *types.Proposal, block *types.Block) {
 	cs1.mtx.Lock()
 	block, blockParts := cs1.createProposalBlock()
 	validRound := cs1.ValidRound
@@ -167,7 +172,7 @@ func decideProposal(cs1 *ConsensusState, vs *validatorStub, height int64, round 
 	// Make proposal
 	polRound, propBlockID := validRound, types.BlockID{Hash: block.Hash(), PartsHeader: blockParts.Header()}
 	proposal = types.NewProposal(height, round, polRound, propBlockID)
-	if err := vs.SignProposal(chainID, proposal); err != nil {
+	if err := vs.SignData(chainID, proposal); err != nil {
 		panic(err)
 	}
 	return
@@ -179,7 +184,12 @@ func addVotes(to *ConsensusState, votes ...*types.Vote) {
 	}
 }
 
-func signAddVotes(to *ConsensusState, voteType types.SignedMsgType, hash []byte, header types.PartSetHeader, vss ...*validatorStub) {
+func signAddVotes(
+	to *ConsensusState,
+	voteType types.SignedMsgType,
+	hash []byte,
+	header types.PartSetHeader,
+	vss ...*validatorStub) {
 	votes := signVotes(voteType, hash, header, vss...)
 	addVotes(to, votes...)
 }
@@ -214,7 +224,14 @@ func validateLastPrecommit(t *testing.T, cs *ConsensusState, privVal *validatorS
 	}
 }
 
-func validatePrecommit(t *testing.T, cs *ConsensusState, thisRound, lockRound int, privVal *validatorStub, votedBlockHash, lockedBlockHash []byte) {
+func validatePrecommit(
+	t *testing.T,
+	cs *ConsensusState,
+	thisRound,
+	lockRound int,
+	privVal *validatorStub,
+	votedBlockHash,
+	lockedBlockHash []byte) {
 	precommits := cs.Votes.Precommits(thisRound)
 	address := privVal.GetPubKey().Address()
 	var vote *types.Vote
@@ -234,17 +251,33 @@ func validatePrecommit(t *testing.T, cs *ConsensusState, thisRound, lockRound in
 
 	if lockedBlockHash == nil {
 		if cs.LockedRound != lockRound || cs.LockedBlock != nil {
-			panic(fmt.Sprintf("Expected to be locked on nil at round %d. Got locked at round %d with block %v", lockRound, cs.LockedRound, cs.LockedBlock))
+			panic(fmt.Sprintf(
+				"Expected to be locked on nil at round %d. Got locked at round %d with block %v",
+				lockRound,
+				cs.LockedRound,
+				cs.LockedBlock))
 		}
 	} else {
 		if cs.LockedRound != lockRound || !bytes.Equal(cs.LockedBlock.Hash(), lockedBlockHash) {
-			panic(fmt.Sprintf("Expected block to be locked on round %d, got %d. Got locked block %X, expected %X", lockRound, cs.LockedRound, cs.LockedBlock.Hash(), lockedBlockHash))
+			panic(fmt.Sprintf(
+				"Expected block to be locked on round %d, got %d. Got locked block %X, expected %X",
+				lockRound,
+				cs.LockedRound,
+				cs.LockedBlock.Hash(),
+				lockedBlockHash))
 		}
 	}
 
 }
 
-func validatePrevoteAndPrecommit(t *testing.T, cs *ConsensusState, thisRound, lockRound int, privVal *validatorStub, votedBlockHash, lockedBlockHash []byte) {
+func validatePrevoteAndPrecommit(
+	t *testing.T,
+	cs *ConsensusState,
+	thisRound,
+	lockRound int,
+	privVal *validatorStub,
+	votedBlockHash,
+	lockedBlockHash []byte) {
 	// verify the prevote
 	validatePrevote(t, cs, thisRound, privVal, votedBlockHash)
 	// verify precommit
@@ -274,17 +307,26 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) <-chan tmpubsub.Message {
 //-------------------------------------------------------------------------------
 // consensus states
 
-func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, dkgNumBlocks int64) *ConsensusState {
+func newConsensusState(state sm.State, pv types.PrivValidator, app abci.Application) *ConsensusState {
 	config := cfg.ResetTestRoot("consensus_state_test")
-	return newConsensusStateWithConfig(config, state, pv, app, verifier, nil, dkgNumBlocks)
+	return newConsensusStateWithConfig(config, state, pv, app)
 }
 
-func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, verifier types.Verifier, newDealer DKGDealerConstructor, dkgNumBlocks int64) *ConsensusState {
+func newConsensusStateWithConfig(
+	thisConfig *cfg.Config,
+	state sm.State,
+	pv types.PrivValidator,
+	app abci.Application) *ConsensusState {
 	blockDB := dbm.NewMemDB()
-	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, verifier, newDealer, dkgNumBlocks)
+	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB)
 }
 
-func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB, verifier types.Verifier, newDealer DKGDealerConstructor, dkgNumBlocks int64) *ConsensusState {
+func newConsensusStateWithConfigAndBlockStore(
+	thisConfig *cfg.Config,
+	state sm.State,
+	pv types.PrivValidator,
+	app abci.Application,
+	blockDB dbm.DB) *ConsensusState {
 	// Get BlockStore
 	blockStore := store.NewBlockStore(blockDB)
 
@@ -307,21 +349,14 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 	stateDB := blockDB
 	sm.SaveState(stateDB, state) //for save height 1's validators info
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-
-	evsw := events.NewEventSwitch()
-	consensusLogger := log.TestingLogger().With("module", "consensus")
-	dkg := NewDKG(evsw, WithVerifier(verifier), WithDKGDealerConstructor(newDealer), WithDKGNumBlocks(dkgNumBlocks),
-		WithLogger(consensusLogger.With("state", "dkg")), WithPVKey(pv))
-
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, BLSWithEVSW(evsw), BLSWithDKG(dkg))
-	cs.SetLogger(consensusLogger)
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool)
+	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 	cs.SetPrivValidator(pv)
 
 	eventBus := types.NewEventBus()
 	eventBus.SetLogger(log.TestingLogger().With("module", "events"))
 	eventBus.Start()
 	cs.SetEventBus(eventBus)
-
 	return cs
 }
 
@@ -340,10 +375,7 @@ func randConsensusState(nValidators int) (*ConsensusState, []*validatorStub) {
 
 	vss := make([]*validatorStub, nValidators)
 
-	pc, _, _, _ := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
-
-	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true), GetMockVerifier()(details.Name(), 0), testSkipDKGNumBlocks)
+	cs := newConsensusState(state, privVals[0], counter.NewCounterApplication(true))
 
 	for i := 0; i < nValidators; i++ {
 		vss[i] = NewValidatorStub(privVals[i], i)
@@ -583,44 +615,42 @@ func consensusLogger() log.Logger {
 }
 
 func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker,
-	appFunc func() abci.Application, dkgFunc func(int) DKGDealerConstructor, verifierFunc func(string, int) types.Verifier, dkgNumBlocks int64, configOpts ...func(*cfg.Config)) ([]*ConsensusState, cleanupFunc) {
+	appFunc func() abci.Application, configOpts ...func(*cfg.Config)) ([]*ConsensusState, cleanupFunc) {
 	genDoc, privVals := randGenesisDoc(nValidators, false, 30)
 	css := make([]*ConsensusState, nValidators)
 	logger := consensusLogger()
 	configRootDirs := make([]string, 0, nValidators)
-	if dkgFunc == nil {
-		dkgFunc = func(i int) DKGDealerConstructor {
-			return NewDKGDealer
+	for i := 0; i < nValidators; i++ {
+		stateDB := dbm.NewMemDB() // each state needs its own db
+		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+		thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
+		configRootDirs = append(configRootDirs, thisConfig.RootDir)
+		for _, opt := range configOpts {
+			opt(thisConfig)
+		}
+		ensureDir(filepath.Dir(thisConfig.Consensus.WalFile()), 0700) // dir for wal
+		app := appFunc()
+		vals := types.TM2PB.ValidatorUpdates(state.Validators)
+		app.InitChain(abci.RequestInitChain{Validators: vals})
+
+		css[i] = newConsensusStateWithConfigAndBlockStore(thisConfig, state, privVals[i], app, stateDB)
+		css[i].SetTimeoutTicker(tickerFunc())
+		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
+	}
+	return css, func() {
+		for _, dir := range configRootDirs {
+			os.RemoveAll(dir)
 		}
 	}
-
-	for i := 0; i < nValidators; i++ {
-		consensusNode(genDoc, testName, i, configOpts, appFunc, verifierFunc, css, privVals, dkgFunc, dkgNumBlocks, tickerFunc, logger)
-	}
-	return css
-}
-
-func consensusNode(genDoc *types.GenesisDoc, testName string, i int, configOpts []func(*cfg.Config), appFunc func() abci.Application, getVerifier verifierFunc, css []*ConsensusState, privVals []types.PrivValidator, dkgFunc func(int) DKGDealerConstructor, dkgNumBlocks int64, tickerFunc func() TimeoutTicker, logger log.Logger) {
-	stateDB := dbm.NewMemDB() // each state needs its own db
-	state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
-	thisConfig := ResetConfig(fmt.Sprintf("%s_%d", testName, i))
-	configRootDirs = append(configRootDirs, thisConfig.RootDir)
-	for _, opt := range configOpts {
-		opt(thisConfig)
-	}
-	ensureDir(filepath.Dir(thisConfig.Consensus.WalFile()), 0700) // dir for wal
-	app := appFunc()
-	vals := types.TM2PB.ValidatorUpdates(state.Validators)
-	app.InitChain(abci.RequestInitChain{Validators: vals})
-
-	verifier := getVerifier(testName, i)
-	css[i] = newConsensusStateWithConfigAndBlockStore(thisConfig, state, privVals[i], app, verifier, dkgFunc(i), dkgNumBlocks, stateDB)
-	css[i].SetTimeoutTicker(tickerFunc())
-	css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 }
 
 // nPeers = nValidators + nNotValidator
-func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerFunc func() TimeoutTicker, appFunc func(string) abci.Application) ([]*ConsensusState, *types.GenesisDoc, *cfg.Config, cleanupFunc) {
+func randConsensusNetWithPeers(
+	nValidators,
+	nPeers int,
+	testName string,
+	tickerFunc func() TimeoutTicker,
+	appFunc func(string) abci.Application) ([]*ConsensusState, *types.GenesisDoc, *cfg.Config, cleanupFunc) {
 	genDoc, privVals := randGenesisDoc(nValidators, false, testMinPower)
 	css := make([]*ConsensusState, nPeers)
 	logger := consensusLogger()
@@ -654,12 +684,13 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 		app := appFunc(path.Join(config.DBDir(), fmt.Sprintf("%s_%d", testName, i)))
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		if _, ok := app.(*kvstore.PersistentKVStoreApplication); ok {
-			state.Version.Consensus.App = kvstore.ProtocolVersion //simulate handshake, receive app version. If don't do this, replay test will fail
+			// simulate handshake, receive app version. If don't do this, replay test will fail
+			state.Version.Consensus.App = kvstore.ProtocolVersion
 		}
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 		//sm.SaveState(stateDB,state)	//height 1's validatorsInfo already saved in LoadStateFromDBOrGenesisDoc above
 
-		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app, &types.MockVerifier{}, nil, testSkipDKGNumBlocks)
+		css[i] = newConsensusStateWithConfig(thisConfig, state, privVal, app)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}

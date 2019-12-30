@@ -61,7 +61,7 @@ For the purpose of this lite client specification, we assume that the Tendermint
 
 ### Definitions
 
-* *tp*: trusting period   
+* *tp*: trusting period
 * for realtime *t*, the predicate *correct(v,t)* is true if the validator *v*
   follows the protocol until time *t* (we will see about recovery later).
 
@@ -78,7 +78,7 @@ Formally,
 2/3 \sum_{(v,p) \in h.Header.NextV} p
 \]
 
-*Assumption*: "correct" is defined w.r.t. realtime (some Newtonian global notion of time, i.e., wall time), while *bfttime* corresponds to the reading of the local clock of a validator (how this time is computed may change when the Tendermint consensus is modified). In this note, we assume that all clocks are synchronized to realtime. We can make this more precise eventually (incorporating clock drift, accuracy, precision, etc.). Right now, we consider this assumption sufficient, as clock synchronization (under NTP) is in the order of milliseconds and *tp* is in the order of weeks.  
+*Assumption*: "correct" is defined w.r.t. realtime (some Newtonian global notion of time, i.e., wall time), while *bfttime* corresponds to the reading of the local clock of a validator (how this time is computed may change when the Tendermint consensus is modified). In this note, we assume that all clocks are synchronized to realtime. We can make this more precise eventually (incorporating clock drift, accuracy, precision, etc.). Right now, we consider this assumption sufficient, as clock synchronization (under NTP) is in the order of milliseconds and *tp* is in the order of weeks.
 
 *Remark*: This failure model might change to a hybrid version that takes heights into account in the future.
 
@@ -146,7 +146,7 @@ We consider the following use case:
 
 This can be used in several settings:
   - someone tells the lite client that application data that is relevant for it can be read in the block of height *k*.
-  - the lite clients wants the latest state. It asks a full nude for the current height, and uses the response for *k*.
+  - the lite clients wants the latest state. It asks a full node for the current height, and uses the response for *k*.
 
 
 ## Details
@@ -199,7 +199,7 @@ We further use the function ```signers(Commit)``` that returns the set of valida
   func CheckSupport(h1,h2,trustlevel) bool {
     if h1.Header.bfttime + tp < now { // Observation 1
       return false // old header was once trusted but it is expired
-    }  
+    }
     vp_all := totalVotingPower(h1.Header.NextV)
       // total sum of voting power of validators in h2
 
@@ -223,7 +223,7 @@ We further use the function ```signers(Commit)``` that returns the set of valida
   }
 ```
 
-  *Remark*: Basic header verification must be done for *h2*. Similar checks are done in:  
+  *Remark*: Basic header verification must be done for *h2*. Similar checks are done in:
   https://github.com/tendermint/tendermint/blob/master/types/validator_set.go#L591-L633
 
   *Remark*: There are some sanity checks which are not in the code:
@@ -270,7 +270,7 @@ func Bisection(h1,h2,trustlevel) bool{
   pivot := (h1.Header.height + h2.Header.height) / 2
   hp := Commit(pivot)
     // ask a full node for header of height pivot
-  Store(hp)  
+  Store(hp)
     // store header hp locally
   if Bisection(h1,hp,trustlevel) {
     // only check right branch if hp is trusted
@@ -281,7 +281,7 @@ func Bisection(h1,h2,trustlevel) bool{
     return false
   }
 }
-```  
+```
 
 
 
