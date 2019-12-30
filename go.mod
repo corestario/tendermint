@@ -15,9 +15,9 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/websocket v1.4.1
 	github.com/gtank/merlin v0.1.1-0.20191105220539-8318aed1a79f
+	github.com/json-iterator/go v1.1.9
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/magiconair/properties v1.8.1
-	github.com/mitchellh/gox v1.0.1 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
@@ -27,10 +27,10 @@ require (
 	github.com/snikch/goodman v0.0.0-20171125024755-10e37e294daa
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.6.1
-	github.com/square/certstrap v1.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/tendermint/go-amino v0.15.1
 	github.com/tendermint/tm-db v0.3.0
+	go.dedis.ch/kyber/v3 v3.0.4
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	google.golang.org/grpc v1.25.1
