@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tendermint/tendermint/types"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/tendermint/tendermint/abci/example/kvstore"
@@ -16,6 +18,7 @@ func TestMain(m *testing.M) {
 	// start a tendermint node in the background to test against
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
+	node.ConsensusState().SetVerifier(&types.MockVerifier{})
 
 	code := m.Run()
 

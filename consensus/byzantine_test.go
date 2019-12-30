@@ -26,7 +26,7 @@ import (
 func TestByzantine(t *testing.T) {
 	N := 4
 	logger := consensusLogger().With("test", "byzantine")
-	css, cleanup := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter)
+	css, cleanup := randConsensusNet(N, "consensus_byzantine_test", newMockTickerFunc(false), newCounter, nil, GetMockVerifier(), testSkipDKGNumBlocks)
 	defer cleanup()
 
 	// give the byzantine validator a normal ticker
@@ -86,11 +86,15 @@ func TestByzantine(t *testing.T) {
 	}
 
 	defer func() {
-		for _, r := range reactors {
+		for i, r := range reactors {
 			if rr, ok := r.(*ByzantineReactor); ok {
-				rr.reactor.Switch.Stop()
+				if err := rr.reactor.Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			} else {
-				r.(*ConsensusReactor).Switch.Stop()
+				if err := r.(*ConsensusReactor).Switch.Stop(); err != nil {
+					logger.Error("event bus closed with error", "index", i, "err", err)
+				}
 			}
 		}
 	}()
@@ -164,7 +168,7 @@ func TestByzantine(t *testing.T) {
 			t.Log(fmt.Sprintf("Consensus Reactor %v", i))
 			t.Log(fmt.Sprintf("%v", reactor))
 		}
-		t.Fatalf("Timed out waiting for all validators to commit first block")
+		t.Errorf("Timed out waiting for all validators to commit first block")
 	}
 }
 
@@ -231,8 +235,8 @@ func sendProposalAndParts(
 
 	// votes
 	cs.mtx.Lock()
-	prevote, _ := cs.signVote(types.PrevoteType, blockHash, parts.Header())
-	precommit, _ := cs.signVote(types.PrecommitType, blockHash, parts.Header())
+	prevote, _ := cs.signVote(types.PrevoteType, blockHash, parts.Header(), nil)
+	precommit, _ := cs.signVote(types.PrecommitType, blockHash, parts.Header(), nil)
 	cs.mtx.Unlock()
 
 	peer.Send(VoteChannel, cdc.MustMarshalBinaryBare(&VoteMessage{prevote}))

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ var waitForEventTimeout = 5 * time.Second
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node = rpctest.StartTendermint(app)
+	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("lite_proxy_tests", 0))
 
 	code := m.Run()
 

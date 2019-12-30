@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"

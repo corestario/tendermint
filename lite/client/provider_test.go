@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/tendermint/tendermint/consensus"
 	"os"
 	"testing"
 
@@ -16,7 +17,7 @@ import (
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-
+	node.ConsensusState().SetVerifier(consensus.GetVerifier(1, 1)("TestMain", 0))
 	code := m.Run()
 
 	rpctest.StopTendermint(node)

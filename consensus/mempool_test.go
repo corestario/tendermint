@@ -22,12 +22,18 @@ func assertMempool(txn txNotifier) mempl.Mempool {
 	return txn.(mempl.Mempool)
 }
 
+// for testing
+func assertMempool(txn txNotifier) sm.Mempool {
+	return txn.(sm.Mempool)
+}
+
 func TestMempoolNoProgressUntilTxsAvailable(t *testing.T) {
-	config := ResetConfig("consensus_mempool_txs_available_test")
+	testName := "consensus_mempool_txs_available_test"
+	config := ResetConfig(testName)
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication())
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -42,11 +48,12 @@ func TestMempoolNoProgressUntilTxsAvailable(t *testing.T) {
 }
 
 func TestMempoolProgressAfterCreateEmptyBlocksInterval(t *testing.T) {
-	config := ResetConfig("consensus_mempool_txs_available_test")
+	testName := "consensus_mempool_txs_available_test"
+	config := ResetConfig(testName)
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocksInterval = ensureTimeout
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication())
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -58,11 +65,12 @@ func TestMempoolProgressAfterCreateEmptyBlocksInterval(t *testing.T) {
 }
 
 func TestMempoolProgressInHigherRound(t *testing.T) {
-	config := ResetConfig("consensus_mempool_txs_available_test")
+	testName := "consensus_mempool_txs_available_test"
+	config := ResetConfig(testName)
 	defer os.RemoveAll(config.RootDir)
 	config.Consensus.CreateEmptyBlocks = false
 	state, privVals := randGenesisState(1, false, 10)
-	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication())
+	cs := newConsensusStateWithConfig(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)(testName, 0), nil, testSkipDKGNumBlocks)
 	assertMempool(cs.txNotifier).EnableTxsAvailable()
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -109,7 +117,7 @@ func deliverTxsRange(cs *ConsensusState, start, end int) {
 func TestMempoolTxConcurrentWithCommit(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
 	blockDB := dbm.NewMemDB()
-	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], NewCounterApplication(), blockDB)
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], NewCounterApplication(), GetVerifier(1, 1)("TestMempoolTxConcurrentWithCommit", 0), testSkipDKGNumBlocks, blockDB)
 	sm.SaveState(blockDB, state)
 	height, round := cs.Height, cs.Round
 	newBlockCh := subscribe(cs.eventBus, types.EventQueryNewBlock)
@@ -134,7 +142,7 @@ func TestMempoolRmBadTx(t *testing.T) {
 	state, privVals := randGenesisState(1, false, 10)
 	app := NewCounterApplication()
 	blockDB := dbm.NewMemDB()
-	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], app, blockDB)
+	cs := newConsensusStateWithConfigAndBlockStore(config, state, privVals[0], app, &types.MockVerifier{}, testSkipDKGNumBlocks, blockDB)
 	sm.SaveState(blockDB, state)
 
 	// increment the counter by 1

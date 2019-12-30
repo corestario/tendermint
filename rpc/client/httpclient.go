@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	amino "github.com/tendermint/go-amino"
-
 	cmn "github.com/tendermint/tendermint/libs/common"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"

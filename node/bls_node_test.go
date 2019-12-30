@@ -36,6 +36,7 @@ func TestNodeStartStop(t *testing.T) {
 
 	// create & start node
 	n, err := DefaultNewNode(config, log.TestingLogger())
+	n.ConsensusState().SetVerifier(&types.MockVerifier{})
 	require.NoError(t, err)
 	err = n.Start()
 	require.NoError(t, err)
@@ -191,6 +192,7 @@ func TestNodeSetPrivValIPC(t *testing.T) {
 	pvsc := privval.NewSignerServer(
 		dialerEndpoint,
 		config.ChainID(),
+		tmpfile,
 		types.NewMockPV(),
 	)
 

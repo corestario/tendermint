@@ -209,6 +209,19 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	return added, nil
 }
 
+// GetVotes returns all votes in a voteSet, including nil ones (beware!).
+func (voteSet *VoteSet) GetVotes() []blsShare.BLSSigner {
+	res := make([]blsShare.BLSSigner, 0)
+	voteSet.mtx.Lock()
+	defer voteSet.mtx.Unlock()
+	for _, v := range voteSet.votes {
+		v := v
+		res = append(res, v)
+	}
+
+	return res
+}
+
 // Returns (vote, true) if vote exists for valIndex and blockKey.
 func (voteSet *VoteSet) getVote(valIndex int, blockKey string) (vote *Vote, ok bool) {
 	if existing := voteSet.votes[valIndex]; existing != nil && existing.BlockID.Key() == blockKey {

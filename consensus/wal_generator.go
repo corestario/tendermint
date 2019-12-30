@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	"github.com/pkg/errors"
-
 	"github.com/tendermint/tendermint/abci/example/kvstore"
 	cfg "github.com/tendermint/tendermint/config"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/mock"
 	"github.com/tendermint/tendermint/privval"
@@ -74,7 +75,11 @@ func WALGenerateNBlocks(t *testing.T, wr io.Writer, numBlocks int) (err error) {
 	mempool := mock.Mempool{}
 	evpool := sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
-	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool)
+
+	evsw := events.NewEventSwitch()
+	dkg := dkgOffChain.NewOffChainDKG(evsw, "localchain", dkgOffChain.WithVerifier(dkgOffChain.GetVerifier(1, 1)("wal_generator", 0)), dkgOffChain.WithLogger(logger.With("dkg")))
+
+	consensusState := NewBLSConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool, BLSWithDKG(dkg), BLSWithEVSW(evsw))
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)
 	if privValidator != nil {
