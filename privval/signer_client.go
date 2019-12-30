@@ -87,6 +87,11 @@ func (sc *SignerClient) GetPubKey() crypto.PubKey {
 	return pubKeyResp.PubKey
 }
 
+func (sc *SignerClient) SignData(chainID string, data types.DataSigner) error {
+	// TODO: @programmer10110 implement this.
+	return nil
+}
+
 // SignVote requests a remote signer to sign a vote
 func (sc *SignerClient) SignVote(chainID string, vote *types.Vote) error {
 	response, err := sc.endpoint.SendRequest(&SignVoteRequest{Vote: vote})
@@ -106,11 +111,6 @@ func (sc *SignerClient) SignVote(chainID string, vote *types.Vote) error {
 	}
 	*vote = *resp.Vote
 
-	return nil
-}
-
-func (sc *SignerClient) SignData(chainID string, data types.DataSigner) error {
-	// TODO: @programmer10110 implement this.
 	return nil
 }
 

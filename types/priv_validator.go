@@ -9,11 +9,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
 
-type DataSigner interface {
-	SignBytes(string) []byte
-	SetSignature([]byte)
-}
-
 // PrivValidator defines the functionality of a local Tendermint validator
 // that signs votes and proposals, and never double signs.
 type PrivValidator interface {
@@ -21,6 +16,11 @@ type PrivValidator interface {
 	GetPubKey() crypto.PubKey
 
 	SignData(chainID string, data DataSigner) error
+}
+
+type DataSigner interface {
+	SignBytes(string) []byte
+	SetSignature([]byte)
 }
 
 //----------------------------------------
@@ -69,12 +69,24 @@ func (pv *MockPV) GetPubKey() crypto.PubKey {
 	return pv.privKey.PubKey()
 }
 
+// Implements PrivValidator.
 func (pv *MockPV) SignVote(chainID string, vote *Vote) error {
 	return pv.SignData(chainID, vote)
 }
 
+// Implements PrivValidator.
 func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
-	return pv.SignData(chainID, proposal)
+	useChainID := chainID
+	if pv.breakProposalSigning {
+		useChainID = "incorrect-chain-id"
+	}
+	signBytes := proposal.SignBytes(useChainID)
+	sig, err := pv.privKey.Sign(signBytes)
+	if err != nil {
+		return err
+	}
+	proposal.Signature = sig
+	return nil
 }
 
 func (pv *MockPV) SignData(chainID string, data DataSigner) error {
@@ -82,7 +94,6 @@ func (pv *MockPV) SignData(chainID string, data DataSigner) error {
 	if pv.breakVoteSigning {
 		useChainID = "incorrect-chain-id"
 	}
-
 	signBytes := data.SignBytes(useChainID)
 	sig, err := pv.privKey.Sign(signBytes)
 	if err != nil {
