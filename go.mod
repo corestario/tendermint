@@ -39,5 +39,6 @@ require (
 replace (
 	github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client
 	github.com/corestario/dkglib => ./../dkglib
+	github.com/cosmos/cosmos-sdk => ./../cosmos-sdk
 	github.com/tendermint/tendermint => ./
 )

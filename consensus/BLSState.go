@@ -461,9 +461,8 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
-	fmt.Println("Sending block notify!!!!!")
-	//cs.dkg.GetBlockNotifier() <- true
-	fmt.Println("Block notify sent!!!!!!!!!")
+	// notify dkg about new block
+	cs.dkg.NewBlockNotify()
 
 	fail.Fail() // XXX
 
