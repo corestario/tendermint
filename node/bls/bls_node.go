@@ -3,9 +3,11 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/tendermint/tendermint/privval"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"time"
 
 	"github.com/corestario/dkglib/lib/basic"
@@ -267,6 +269,63 @@ func CustomBLSConsensusState(state cs.StateInterface) BLSOption {
 
 type BLSOption func(*BLSNode)
 
+func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error) {
+	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	// Convert old PrivValidator if it exists.
+	oldPrivVal := config.OldPrivValidatorFile()
+	newPrivValKey := config.PrivValidatorKeyFile()
+	newPrivValState := config.PrivValidatorStateFile()
+	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
+		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
+		if err != nil {
+
+			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
+
+		}
+		logger.Info("Upgrading PrivValidator file",
+			"old", oldPrivVal,
+			"newKey", newPrivValKey,
+			"newState", newPrivValState,
+		)
+
+		oldPV.Upgrade(newPrivValKey, newPrivValState)
+	}
+
+	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := GetBLSReactors(
+		config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		nd.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return NewBLSNode(config,
+		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		nodeKey,
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		nd.DefaultGenesisDocProviderFunc(config),
+		nd.DefaultDBProvider,
+		nd.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+		blockStore,
+		stateDB,
+		CustomBLSReactors(map[string]p2p.Reactor{
+			"BLOCKCHAIN": bcReactor,
+			"CONSENSUS":  consensusReactor,
+		}),
+		CustomBLSConsensusState(consensusState),
+	)
+}
+
+
 // NewNode returns a new, ready to go, Tendermint Node.
 func NewBLSNode(config *cfg.Config,
 	privValidator types.PrivValidator,
@@ -276,7 +335,8 @@ func NewBLSNode(config *cfg.Config,
 	dbProvider nd.DBProvider,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
-	blockStore *store.BlockStore, stateDB dbm.DB,
+	blockStore *store.BlockStore,
+	stateDB dbm.DB,
 	options ...BLSOption) (*BLSNode, error) {
 
 	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
