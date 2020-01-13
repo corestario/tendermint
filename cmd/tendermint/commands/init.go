@@ -97,6 +97,8 @@ func initFilesWithConfig(config *cfg.Config) error {
 		genDoc.BLSThreshold = 2
 		genDoc.BLSNumShares = 4
 		genDoc.DKGNumBlocks = 1000
+		genDoc.NodeEndpoint = "tcp://localhost:26657"
+		genDoc.RandappDir = "~/.rd"
 		logger.Info("Generated geneAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsis file", "path", genDoc)
 
 		if err := genDoc.SaveAs(genFile); err != nil {
