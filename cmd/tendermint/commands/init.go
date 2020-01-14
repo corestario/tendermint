@@ -27,6 +27,10 @@ func initFiles(cmd *cobra.Command, args []string) error {
 	return initFilesWithConfig(config)
 }
 
+func InitFilesWithConfig(config *cfg.Config) error {
+	return initFilesWithConfig(config)
+}
+
 func initFilesWithConfig(config *cfg.Config) error {
 	// private validator
 	privValKeyFile := config.PrivValidatorKeyFile()

@@ -3,14 +3,16 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/privval"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"time"
 
-	"github.com/corestario/dkglib/lib/basic"
+	abci "github.com/tendermint/tendermint/abci/types"
+
+	"github.com/tendermint/tendermint/privval"
+
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	dkgtypes "github.com/corestario/dkglib/lib/types"
@@ -85,6 +87,7 @@ func GetBLSReactors(
 	privValidator types.PrivValidator,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
+	clientCreator proxy.ClientCreator,
 ) (*store.BlockStore, dbm.DB, p2p.Reactor, *cs.BLSConsensusReactor, cs.StateInterface, error) {
 	consensusLogger := logger.With("module", "consensus")
 
@@ -101,7 +104,7 @@ func GetBLSReactors(
 	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, privValidator)
 
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
-	proxyApp, err := nd.CreateAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
+	proxyApp, err := nd.CreateAndStartProxyAppConns(clientCreator, logger)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
@@ -208,22 +211,30 @@ func createBLSConsensus(config *cfg.Config,
 	dkgNumBlocks int64) (*cs.BLSConsensusReactor, cs.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-
-	dkg, err := basic.NewDKGBasic(
+	/*
+		dkg, err := basic.NewDKGBasic(
+			evsw,
+			nd.Cdc,
+			"tendermintChain",
+			"tcp://localhost:26657",
+			config.RootDir,
+			dkgOffChain.WithVerifier(verifier),
+			dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
+			dkgOffChain.WithLogger(consensusLogger.With("dkg")),
+			dkgOffChain.WithPVKey(privValidator),
+		)
+		if err != nil {
+			panic(err)
+		}
+	*/
+	dkg := dkgOffChain.NewOffChainDKG(
 		evsw,
-		nd.Cdc,
 		"tendermintChain",
-		"tcp://localhost:26657",
-		config.RootDir,
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
-	if err != nil {
-		panic(err)
-	}
-
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
 		state.Copy(),
@@ -269,7 +280,7 @@ func CustomBLSConsensusState(state cs.StateInterface) BLSOption {
 
 type BLSOption func(*BLSNode)
 
-func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error) {
+func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger, app abci.Application) (*BLSNode, error) {
 	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
 	if err != nil {
 
@@ -302,15 +313,18 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nd.DefaultMetricsProvider(config.Instrumentation),
 		logger,
+		proxy.NewLocalClientCreator(app),
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	return NewBLSNode(config,
+	return NewBLSNode(
+		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		proxy.NewLocalClientCreator(app),
+		//proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		nd.DefaultGenesisDocProviderFunc(config),
 		nd.DefaultDBProvider,
 		nd.DefaultMetricsProvider(config.Instrumentation),
@@ -324,7 +338,6 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error
 		CustomBLSConsensusState(consensusState),
 	)
 }
-
 
 // NewNode returns a new, ready to go, Tendermint Node.
 func NewBLSNode(config *cfg.Config,
