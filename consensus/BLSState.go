@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"reflect"
 	"runtime/debug"
 	"time"
@@ -63,8 +64,10 @@ func NewBLSConsensusState(
 	for _, option := range options {
 		option(blsCS)
 	}
+	log.Printf("blsCS state vals: %#+v", state.Validators)
 
 	blsCS.updateToState(state)
+	log.Printf("after blsCS vals: %#+v", state.Validators)
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
@@ -1432,6 +1435,7 @@ func (cs *BLSConsensusState) UpdateToState(state sm.State) {
 // Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
 func (cs *BLSConsensusState) updateToState(state sm.State) {
+	log.Printf("update to state vals: %#+v", state.Validators)
 	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
 		panic(fmt.Sprintf("updateToState() expected state height of %v but found %v",
 			cs.Height, state.LastBlockHeight))

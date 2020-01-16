@@ -3,15 +3,12 @@ package node
 import (
 	"context"
 	"fmt"
+	lg "log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"time"
-
-	abci "github.com/tendermint/tendermint/abci/types"
-
-	"github.com/tendermint/tendermint/privval"
 
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
@@ -21,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"github.com/tendermint/go-amino"
+	abci "github.com/tendermint/tendermint/abci/types"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
 	cfg "github.com/tendermint/tendermint/config"
@@ -34,6 +32,7 @@ import (
 	nd "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
+	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
 	rpccore "github.com/tendermint/tendermint/rpc/core"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -163,6 +162,8 @@ func GetBLSReactors(
 	}
 
 	// Make ConsensusReactor
+	lg.Printf("create state in getBLSreactors vals: %#+v", state.Validators)
+
 	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
@@ -235,6 +236,8 @@ func createBLSConsensus(config *cfg.Config,
 		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
 		dkgOffChain.WithPVKey(privValidator),
 	)
+	lg.Printf("new bls cs  state vals: %#+v", state.Validators)
+
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
 		state.Copy(),
@@ -323,8 +326,8 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger, app abci.Applica
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		proxy.NewLocalClientCreator(app),
-		//proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		//proxy.NewLocalClientCreator(app),
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		nd.DefaultGenesisDocProviderFunc(config),
 		nd.DefaultDBProvider,
 		nd.DefaultMetricsProvider(config.Instrumentation),
@@ -357,6 +360,8 @@ func NewBLSNode(config *cfg.Config,
 		return nil, err
 	}
 
+	lg.Printf("state1 validators: %#+v", state.Validators)
+
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := nd.CreateAndStartProxyAppConns(clientCreator, logger)
 	if err != nil {
@@ -384,11 +389,13 @@ func NewBLSNode(config *cfg.Config,
 	if err := nd.DoHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
 		return nil, err
 	}
+	lg.Printf("state2 validators: %#+v", state.Validators)
 
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
 	// what happened during block replay).
 	state = sm.LoadState(stateDB)
+	lg.Printf("state3 validators: %#+v", state.Validators)
 
 	// If an address is provided, listen on the socket for a connection from an
 	// external signing process.
@@ -455,32 +462,41 @@ func NewBLSNode(config *cfg.Config,
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
+	_, vals := consensusState.GetValidators()
+	lg.Printf("consensus state validators: %#+v", vals)
 
 	nodeInfo, err := nd.MakeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
 	if err != nil {
 		return nil, err
 	}
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 1: %#+v", vals)
 
 	// Setup Transport.
 	transport, peerFilters := nd.CreateTransport(config, nodeInfo, nodeKey, proxyApp)
-
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 2: %#+v", vals)
 	// Setup Switch.
 	p2pLogger := logger.With("module", "p2p")
 	sw := createBLSSwitch(
 		config, transport, p2pMetrics, peerFilters, mempoolReactor, bcReactor,
 		consensusReactor, evidenceReactor, nodeInfo, nodeKey, p2pLogger,
 	)
-
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 3: %#+v", vals)
 	err = sw.AddPersistentPeers(nd.SplitAndTrimEmpty(config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add peers from persistent_peers field")
 	}
-
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 4: %#+v", vals)
 	addrBook, err := nd.CreateAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create addrbook")
 	}
 
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 5: %#+v", vals)
 	// Optionally, start the pex reactor
 	//
 	// TODO:
@@ -497,7 +513,8 @@ func NewBLSNode(config *cfg.Config,
 	if config.P2P.PexReactor {
 		pexReactor = nd.CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
-
+	_, vals = consensusState.GetValidators()
+	lg.Printf("consensus state validators 6: %#+v", vals)
 	if config.ProfListenAddress != "" {
 		go func() {
 			logger.Error("Profile server", "err", http.ListenAndServe(config.ProfListenAddress, nil))
@@ -529,12 +546,16 @@ func NewBLSNode(config *cfg.Config,
 		indexerService:   indexerService,
 		eventBus:         eventBus,
 	}
+	_, vals = node.consensusState.GetValidators()
+	lg.Printf("consensus state validators 7: %#+v", vals)
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
-
+	_, vals = node.consensusState.GetValidators()
+	lg.Printf("consensus state validators 8: %#+v", vals)
 	for _, option := range options {
 		option(node)
 	}
-
+	_, vals = node.consensusState.GetValidators()
+	lg.Printf("consensus state validators 9: %#+v", vals)
 	return node, nil
 }
 

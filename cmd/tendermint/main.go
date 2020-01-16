@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tendermint/tendermint/proxy"
+
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/cli"
@@ -13,7 +15,6 @@ import (
 	bls "github.com/tendermint/tendermint/node/bls"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
-	"github.com/tendermint/tendermint/proxy"
 )
 
 func main() {
@@ -83,11 +84,15 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
+	//cc := proxy.NewLocalClientCreator(app)
+	cc := proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir())
+
 	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := bls.GetBLSReactors(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
+		cc,
 	)
 	if err != nil {
 		panic(err)
@@ -96,7 +101,7 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 	return bls.NewBLSNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		cc,
 		node.DefaultGenesisDocProviderFunc(config),
 		node.DefaultDBProvider,
 		node.DefaultMetricsProvider(config.Instrumentation),
