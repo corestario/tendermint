@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"fmt"
+	lg "log"
 	"reflect"
 	"sync"
 	"time"
@@ -86,10 +87,14 @@ func (conR *BLSConsensusReactor) OnStop() {
 // It resets the state, turns off fast_sync, and starts the consensus state-machine
 func (conR *BLSConsensusReactor) SwitchToConsensus(state sm.State, blocksSynced int) {
 	conR.Logger.Info("SwitchToConsensus")
+	lg.Printf("step 1 switch to consensus state vals: %#+v, \n cons.vals: %#+v, \n cons.state.vals: %#+v", state.Validators, conR.conS.Validators, conR.conS.state.Validators)
+
 	conR.conS.reconstructLastCommit(state)
 	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
 	// broadcast a NewRoundStepMessage.
+	lg.Printf("step 2 switch to consensus state vals: %#+v, \n cons.vals: %#+v, \n cons.state.vals: %#+v", state.Validators, conR.conS.Validators, conR.conS.state.Validators)
 	conR.conS.updateToState(state)
+	lg.Printf("step 3 switch to consensus state vals: %#+v, \n cons.vals: %#+v, \n cons.state.vals: %#+v", state.Validators, conR.conS.Validators, conR.conS.state.Validators)
 
 	conR.mtx.Lock()
 	conR.fastSync = false
@@ -110,6 +115,8 @@ conS:
 conR:
 %+v`, err, conR.conS, conR))
 	}
+	lg.Printf("step 4 switch to consensus state vals: %#+v, \n cons.vals: %#+v, \n cons.state.vals: %#+v", state.Validators, conR.conS.Validators, conR.conS.state.Validators)
+
 }
 
 // GetChannels implements Reactor

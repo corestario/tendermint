@@ -156,6 +156,8 @@ func GetBLSReactors(
 	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 
 	// Make BlockchainReactor
+	lg.Printf("GETBLSREACTORS befor create bsl bc reactor state vals: %#+v, \n", state.Validators)
+
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, consensusLogger)
 	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Wrap(err, "could not create blockchain reactor")
@@ -183,6 +185,7 @@ func createBLSBlockchainReactor(config *cfg.Config,
 	verifier dkgtypes.Verifier,
 	fastSync bool,
 	logger log.Logger) (bcReactor p2p.Reactor, err error) {
+	lg.Printf("create bls bcReactor state vals: %#+v", state.Validators)
 
 	switch config.FastSync.Version {
 	case "v0":
@@ -311,34 +314,16 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger, app abci.Applica
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := GetBLSReactors(
-		config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
-		nd.DefaultMetricsProvider(config.Instrumentation),
-		logger,
-		proxy.NewLocalClientCreator(app),
-	)
-	if err != nil {
-		panic(err)
-	}
-
 	return NewBLSNode(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		//proxy.NewLocalClientCreator(app),
-		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		proxy.NewLocalClientCreator(app),
+		//proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		nd.DefaultGenesisDocProviderFunc(config),
 		nd.DefaultDBProvider,
 		nd.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		blockStore,
-		stateDB,
-		CustomBLSReactors(map[string]p2p.Reactor{
-			"BLOCKCHAIN": bcReactor,
-			"CONSENSUS":  consensusReactor,
-		}),
-		CustomBLSConsensusState(consensusState),
 	)
 }
 
@@ -351,9 +336,14 @@ func NewBLSNode(config *cfg.Config,
 	dbProvider nd.DBProvider,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
-	blockStore *store.BlockStore,
-	stateDB dbm.DB,
+	//blockStore *store.BlockStore,
+	//stateDB dbm.DB,
 	options ...BLSOption) (*BLSNode, error) {
+
+	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)
+	if err != nil {
+		return nil, err
+	}
 
 	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
 	if err != nil {
@@ -452,6 +442,8 @@ func NewBLSNode(config *cfg.Config,
 
 	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	// Make BlockchainReactor
+	lg.Printf("NEWBLSNODE befor create bsl bc reactor state vals: %#+v, \n", state.Validators)
+
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create blockchain reactor")
@@ -546,14 +538,13 @@ func NewBLSNode(config *cfg.Config,
 		indexerService:   indexerService,
 		eventBus:         eventBus,
 	}
-	_, vals = node.consensusState.GetValidators()
-	lg.Printf("consensus state validators 7: %#+v", vals)
+
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
-	_, vals = node.consensusState.GetValidators()
-	lg.Printf("consensus state validators 8: %#+v", vals)
+
 	for _, option := range options {
 		option(node)
 	}
+
 	_, vals = node.consensusState.GetValidators()
 	lg.Printf("consensus state validators 9: %#+v", vals)
 	return node, nil
@@ -661,11 +652,14 @@ func (n *BLSNode) OnStart() error {
 	}
 
 	// Start the switch (the P2P server).
+	_, vals := n.consensusState.GetValidators()
+	lg.Printf("bls node before START validators: %#+v", vals)
 	err = n.sw.Start()
 	if err != nil {
 		return err
 	}
-
+	_, vals = n.consensusState.GetValidators()
+	lg.Printf("bls node after START validators: %#+v", vals)
 	// Always connect to persistent peers
 	err = n.sw.DialPeersAsync(nd.SplitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "))
 	if err != nil {

@@ -84,34 +84,13 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	//cc := proxy.NewLocalClientCreator(app)
-	cc := proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir())
-
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := bls.GetBLSReactors(
-		config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
-		node.DefaultMetricsProvider(config.Instrumentation),
-		logger,
-		cc,
-	)
-	if err != nil {
-		panic(err)
-	}
-
 	return bls.NewBLSNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		cc,
+		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		node.DefaultGenesisDocProviderFunc(config),
 		node.DefaultDBProvider,
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		blockStore,
-		stateDB,
-		bls.CustomBLSReactors(map[string]p2p.Reactor{
-			"BLOCKCHAIN": bcReactor,
-			"CONSENSUS":  consensusReactor,
-		}),
-		bls.CustomBLSConsensusState(consensusState),
 	)
 }
