@@ -3,12 +3,14 @@ package node
 import (
 	"context"
 	"fmt"
-	lg "log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path"
 	"time"
+
+	"github.com/corestario/dkglib/lib/basic"
 
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
@@ -81,6 +83,7 @@ type BLSNode struct {
 	prometheusSrv    *http.Server
 }
 
+/*
 func GetBLSReactors(
 	config *cfg.Config,
 	privValidator types.PrivValidator,
@@ -171,10 +174,12 @@ func GetBLSReactors(
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
 
+
 	config.DBPath = config.DBPath + ".unused"
 
 	return blockStore, stateDB, bcReactor, consensusReactor, consensusState, nil
 }
+*/
 
 type BLSNodeProvider func(*cfg.Config, log.Logger) (*BLSNode, error)
 
@@ -185,7 +190,6 @@ func createBLSBlockchainReactor(config *cfg.Config,
 	verifier dkgtypes.Verifier,
 	fastSync bool,
 	logger log.Logger) (bcReactor p2p.Reactor, err error) {
-	lg.Printf("create bls bcReactor state vals: %#+v", state.Validators)
 
 	switch config.FastSync.Version {
 	case "v0":
@@ -215,31 +219,24 @@ func createBLSConsensus(config *cfg.Config,
 	dkgNumBlocks int64) (*cs.BLSConsensusReactor, cs.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
-	/*
-		dkg, err := basic.NewDKGBasic(
-			evsw,
-			nd.Cdc,
-			"tendermintChain",
-			"tcp://localhost:26657",
-			config.RootDir,
-			dkgOffChain.WithVerifier(verifier),
-			dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
-			dkgOffChain.WithLogger(consensusLogger.With("dkg")),
-			dkgOffChain.WithPVKey(privValidator),
-		)
-		if err != nil {
-			panic(err)
-		}
-	*/
-	dkg := dkgOffChain.NewOffChainDKG(
+
+	rootDir := path.Join(config.RootDir, "..", "rcli")
+	logger := log.NewTMLogger(os.Stdout)
+	logger.Info("DKG BASIC", "HOMEDIR", rootDir)
+	dkg, err := basic.NewDKGBasic(
 		evsw,
-		"tendermintChain",
+		nd.Cdc,
+		"rchain",
+		"tcp://localhost:26657",
+		rootDir,
 		dkgOffChain.WithVerifier(verifier),
 		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
-		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
+		dkgOffChain.WithLogger(logger),
 		dkgOffChain.WithPVKey(privValidator),
 	)
-	lg.Printf("new bls cs  state vals: %#+v", state.Validators)
+	if err != nil {
+		panic(err)
+	}
 
 	consensusState := cs.NewBLSConsensusState(
 		config.Consensus,
@@ -350,8 +347,6 @@ func NewBLSNode(config *cfg.Config,
 		return nil, err
 	}
 
-	lg.Printf("state1 validators: %#+v", state.Validators)
-
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := nd.CreateAndStartProxyAppConns(clientCreator, logger)
 	if err != nil {
@@ -379,13 +374,11 @@ func NewBLSNode(config *cfg.Config,
 	if err := nd.DoHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
 		return nil, err
 	}
-	lg.Printf("state2 validators: %#+v", state.Validators)
 
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
 	// what happened during block replay).
 	state = sm.LoadState(stateDB)
-	lg.Printf("state3 validators: %#+v", state.Validators)
 
 	// If an address is provided, listen on the socket for a connection from an
 	// external signing process.
@@ -442,7 +435,6 @@ func NewBLSNode(config *cfg.Config,
 
 	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	// Make BlockchainReactor
-	lg.Printf("NEWBLSNODE befor create bsl bc reactor state vals: %#+v, \n", state.Validators)
 
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)
 	if err != nil {
@@ -454,41 +446,29 @@ func NewBLSNode(config *cfg.Config,
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
 	)
-	_, vals := consensusState.GetValidators()
-	lg.Printf("consensus state validators: %#+v", vals)
 
 	nodeInfo, err := nd.MakeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
 	if err != nil {
 		return nil, err
 	}
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 1: %#+v", vals)
 
 	// Setup Transport.
 	transport, peerFilters := nd.CreateTransport(config, nodeInfo, nodeKey, proxyApp)
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 2: %#+v", vals)
 	// Setup Switch.
 	p2pLogger := logger.With("module", "p2p")
 	sw := createBLSSwitch(
 		config, transport, p2pMetrics, peerFilters, mempoolReactor, bcReactor,
 		consensusReactor, evidenceReactor, nodeInfo, nodeKey, p2pLogger,
 	)
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 3: %#+v", vals)
 	err = sw.AddPersistentPeers(nd.SplitAndTrimEmpty(config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add peers from persistent_peers field")
 	}
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 4: %#+v", vals)
 	addrBook, err := nd.CreateAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create addrbook")
 	}
 
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 5: %#+v", vals)
 	// Optionally, start the pex reactor
 	//
 	// TODO:
@@ -505,8 +485,6 @@ func NewBLSNode(config *cfg.Config,
 	if config.P2P.PexReactor {
 		pexReactor = nd.CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
-	_, vals = consensusState.GetValidators()
-	lg.Printf("consensus state validators 6: %#+v", vals)
 	if config.ProfListenAddress != "" {
 		go func() {
 			logger.Error("Profile server", "err", http.ListenAndServe(config.ProfListenAddress, nil))
@@ -545,8 +523,6 @@ func NewBLSNode(config *cfg.Config,
 		option(node)
 	}
 
-	_, vals = node.consensusState.GetValidators()
-	lg.Printf("consensus state validators 9: %#+v", vals)
 	return node, nil
 }
 
@@ -652,14 +628,11 @@ func (n *BLSNode) OnStart() error {
 	}
 
 	// Start the switch (the P2P server).
-	_, vals := n.consensusState.GetValidators()
-	lg.Printf("bls node before START validators: %#+v", vals)
 	err = n.sw.Start()
 	if err != nil {
 		return err
 	}
-	_, vals = n.consensusState.GetValidators()
-	lg.Printf("bls node after START validators: %#+v", vals)
+
 	// Always connect to persistent peers
 	err = n.sw.DialPeersAsync(nd.SplitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "))
 	if err != nil {

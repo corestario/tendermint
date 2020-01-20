@@ -64,10 +64,8 @@ func NewBLSConsensusState(
 	for _, option := range options {
 		option(blsCS)
 	}
-	log.Printf("blsCS state vals: %#+v", state.Validators)
 
 	blsCS.updateToState(state)
-	log.Printf("after blsCS vals: %#+v", state.Validators)
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
@@ -203,7 +201,6 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			fmt.Println("RECEIVED DKG MESSAGE")
 			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
@@ -287,6 +284,7 @@ func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 	defer func() {
 		if err := recover(); err != nil {
 			logger.Info("PANIC HANDLED", "PANIC HANDLED", err)
+			log.Println("PANIC HANDLED", "PANIC HANDLED", err)
 		}
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
@@ -666,7 +664,6 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	if cs.dkg.Verifier() == nil {
 		return nil
 	}
-
 	var randomData []byte
 	var err error
 	if type_ == types.PrecommitType {
@@ -687,6 +684,7 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	//if !cs.replayMode {
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
+
 	return nil
 }
 
@@ -948,16 +946,13 @@ func (cs *BLSConsensusState) enterNewRound(height int64, round int) {
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 	cs.TriggeredTimeoutPrecommit = false
-	log.Println("BEFORE PUBLISHED")
 
 	cs.eventBus.PublishEventNewRound(cs.NewRoundEvent())
-	log.Println("PUBLISHED")
 	cs.metrics.Rounds.Set(float64(round))
 
 	// Wait for txs to be available in the mempool
 	// before we enterPropose in round 0. If the last block changed the app hash,
 	// we may need an empty "proof" block, and enterPropose immediately.
-	log.Println("BEFORE WAIT")
 
 	waitForTxs := cs.config.WaitForTxs() && round == 0 && !cs.needProofBlock(height)
 	if waitForTxs {
@@ -968,8 +963,6 @@ func (cs *BLSConsensusState) enterNewRound(height int64, round int) {
 	} else {
 		cs.enterPropose(height, round)
 	}
-	log.Println("AFTER WAIT")
-
 }
 
 // needProofBlock returns true on the first height (so the genesis app hash is signed right away)
@@ -1441,9 +1434,6 @@ func (cs *BLSConsensusState) UpdateToState(state sm.State) {
 // Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
 func (cs *BLSConsensusState) updateToState(state sm.State) {
-	log.Printf("update to state vals: %#+v", state.Validators)
-	log.Printf("update to state cs vals: %#+v", cs.Validators)
-	log.Printf("update to state cs  state vals: %#+v", cs.state.Validators)
 	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
 		panic(fmt.Sprintf("updateToState() expected state height of %v but found %v",
 			cs.Height, state.LastBlockHeight))
@@ -1455,15 +1445,12 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 			cs.state.LastBlockHeight+1, cs.Height))
 	}
 
-	log.Println("step 1")
 	// If state isn't further out than cs.state, just ignore.
 	// This happens when SwitchToConsensus() is called in the reactor.
 	// We don't want to reset e.g. the Votes, but we still want to
 	// signal the new round step, because other services (eg. txNotifier)
 	// depend on having an up-to-date peer state!
 	if !cs.state.IsEmpty() && (state.LastBlockHeight <= cs.state.LastBlockHeight) {
-		log.Println("step if block", !cs.state.IsEmpty(), state.LastBlockHeight, cs.state.LastBlockHeight)
-
 		cs.Logger.Info(
 			"Ignoring updateToState()",
 			"newHeight",
@@ -1475,7 +1462,6 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 		log.Printf("new step done, cs state Vals: %#+v", cs.state.Validators)
 		return
 	}
-	log.Println("step 2")
 
 	// Reset fields based on state.
 	validators := state.Validators
@@ -1486,17 +1472,13 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 		}
 		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
 	}
-	log.Println("step 3")
 
 	// Next desired block height
 	height := state.LastBlockHeight + 1
 
 	// RoundState fields
 	cs.updateHeight(height)
-	log.Println("step 4")
-
 	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
-	log.Println("step 5")
 
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
@@ -1508,9 +1490,6 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 	} else {
 		cs.StartTime = cs.config.Commit(cs.CommitTime)
 	}
-
-	log.Printf("update to state cs Validators before, vals: %#+v", cs.Validators)
-	log.Printf("update to state cs state Validators before, vals: %#+v", cs.state.Validators)
 
 	cs.Validators = validators
 	cs.Proposal = nil
@@ -1530,8 +1509,6 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 
 	cs.state = state
 
-	log.Printf("update to state cs Validators after, vals: %#+v", cs.Validators)
-	log.Printf("update to state cs state Validators after, vals: %#+v", cs.state.Validators)
 	// Finally, broadcast RoundState
 	cs.newStep()
 }
