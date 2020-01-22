@@ -59,6 +59,7 @@ type Vote struct {
 	ValidatorIndex   int           `json:"validator_index"`
 	Signature        []byte        `json:"signature"`
 	BLSSignature     []byte        `json:"bls_signature"`
+	Seed             []byte        `json:"seed"`
 }
 
 // CommitSig converts the Vote to a CommitSig.

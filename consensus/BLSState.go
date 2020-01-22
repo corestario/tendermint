@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dkgtypes "github.com/corestario/dkglib/lib/types"
+	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
 	cstypes "github.com/tendermint/tendermint/consensus/types"
 	"github.com/tendermint/tendermint/libs/common"
@@ -21,10 +22,15 @@ import (
 
 type BLSConsensusState struct {
 	ConsensusState
-	dkg dkgtypes.DKG
+	dkg         dkgtypes.DKG
+	reseedingCb ReseedingCallback
 }
 
 type BLSStateOption func(*BLSConsensusState)
+
+type ReseedingCallback func() ([]byte, error)
+
+var ErrReseedingValueNotReady = errors.New("Reseeding value not ready")
 
 var _ StateInterface = &BLSConsensusState{}
 
@@ -35,6 +41,7 @@ func NewBLSConsensusState(
 	blockStore sm.BlockStore,
 	txNotifier txNotifier,
 	evpool evidencePool,
+	reseedingCb ReseedingCallback,
 	options ...BLSStateOption,
 ) *BLSConsensusState {
 	blsCS := &BLSConsensusState{}
@@ -59,6 +66,7 @@ func NewBLSConsensusState(
 	blsCS.decideProposal = blsCS.defaultDecideProposal
 	blsCS.doPrevote = blsCS.defaultDoPrevote
 	blsCS.setProposal = blsCS.defaultSetProposal
+	blsCS.reseedingCb = reseedingCb
 
 	for _, option := range options {
 		option(blsCS)
@@ -654,7 +662,7 @@ func (cs *BLSConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added boo
 }
 
 // sign the vote and publish on internalMsgQueue
-func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader) *types.Vote {
+func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, seed []byte) *types.Vote {
 	// if we don't have a key or we're not in the validator set, do nothing
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
@@ -666,7 +674,9 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 
 	var randomData []byte
 	var err error
-	if type_ == types.PrecommitType {
+
+	switch type_ {
+	case types.PrecommitType:
 		randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
 		if err != nil || len(randomData) == 0 {
 			cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
@@ -675,7 +685,7 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 		}
 	}
 
-	vote, err := cs.signVote(type_, hash, header, randomData)
+	vote, err := cs.signVote(type_, hash, header, randomData, seed)
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
@@ -687,7 +697,7 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	return nil
 }
 
-func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data []byte) (*types.Vote, error) {
+func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, header types.PartSetHeader, data, seed []byte) (*types.Vote, error) {
 	// Flush the WAL. Otherwise, we may not recompute the same vote to sign, and the privValidator will refuse to sign anything.
 	cs.wal.FlushAndSync()
 
@@ -703,6 +713,7 @@ func (cs *BLSConsensusState) signVote(type_ types.SignedMsgType, hash []byte, he
 		Type:             type_,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 		BLSSignature:     data,
+		Seed:             seed,
 	}
 	err := cs.privValidator.SignData(cs.state.ChainID, vote)
 	return vote, err
@@ -1140,26 +1151,35 @@ func (cs *BLSConsensusState) enterPrevote(height int64, round int) {
 func (cs *BLSConsensusState) defaultDoPrevote(height int64, round int) {
 	logger := cs.Logger.With("height", height, "round", round)
 
+	randomSeed, err := cs.reseedingCb()
+	if err != nil {
+		if err == ErrReseedingValueNotReady {
+			cs.Logger.Debug("reseeding value not ready")
+		} else {
+			cs.Logger.Error("failed to get random seed", "error", err)
+		}
+	}
+
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		logger.Info("enterPrevote: Block was locked")
-		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header())
+		cs.signAddVote(types.PrevoteType, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header(), randomSeed)
 		return
 	}
 
 	// If ProposalBlock is nil, prevote nil.
 	if cs.ProposalBlock == nil {
 		logger.Info("enterPrevote: ProposalBlock is nil")
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, randomSeed)
 		return
 	}
 
 	// Validate proposal block
-	err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock)
+	err = cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
-		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrevoteType, nil, types.PartSetHeader{}, randomSeed)
 		return
 	}
 
@@ -1167,7 +1187,8 @@ func (cs *BLSConsensusState) defaultDoPrevote(height int64, round int) {
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
 	logger.Info("enterPrevote: ProposalBlock is valid")
-	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
+
+	cs.signAddVote(types.PrevoteType, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header(), randomSeed)
 }
 
 // Enter: any +2/3 prevotes at next round.
@@ -1237,7 +1258,7 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 		} else {
 			logger.Info("enterPrecommit: No +2/3 prevotes during enterPrecommit. Precommitting nil.")
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 		return
 	}
 
@@ -1261,7 +1282,7 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 			cs.LockedBlockParts = nil
 			cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
 		}
-		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 		return
 	}
 
@@ -1272,7 +1293,7 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
 		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, nil)
 		return
 	}
 
@@ -1287,7 +1308,7 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
 		cs.eventBus.PublishEventLock(cs.RoundStateEvent())
-		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader)
+		cs.signAddVote(types.PrecommitType, blockID.Hash, blockID.PartsHeader, nil)
 		return
 	}
 
@@ -1303,7 +1324,7 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
 	cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
-	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{})
+	cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 }
 
 // Enter: any +2/3 precommits for next round.
