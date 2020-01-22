@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -319,10 +320,18 @@ func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
-	randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+	votes := precommits.GetVotes()
+	randomData := cs.getPreviousBlock().RandomData
+	// TODO: implement this call.
+	if seed, ok := votes[0].GetSeed(); ok {
+		reseededRandomDataArray := sha256.Sum256(append(randomData, seed))
+		randomData = reseededRandomDataArray[:]
+	}
+	randomData, err := cs.dkg.Verifier().Recover(randomData, votes)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 	}
+
 	cs.Logger.Info("Generated random data", "rand_data", randomData)
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
@@ -1249,7 +1258,8 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 	}()
 
 	// check for a polka
-	blockID, ok := cs.Votes.Prevotes(round).TwoThirdsMajority()
+	prevotes := cs.Votes.Prevotes(round)
+	blockID, ok := prevotes.TwoThirdsMajority()
 
 	// If we don't have a polka, we must precommit nil.
 	if !ok {
@@ -1260,6 +1270,16 @@ func (cs *BLSConsensusState) enterPrecommit(height int64, round int) {
 		}
 		cs.signAddVote(types.PrecommitType, nil, types.PartSetHeader{}, nil)
 		return
+	}
+
+	ownVote := prevotes.GetByAddress(cs.privValidator.GetPubKey().Address())
+	// TODO: is it possible to have nil for own vote? I think not so.
+	if ownVote != nil {
+		for _, vote := range prevotes.GetVotes() {
+			if ownVote.Seed != vote.GetSeed() {
+				// TODO: implement reseeded value complaints.
+			}
+		}
 	}
 
 	// At this point +2/3 prevoted for a particular block or nil.
