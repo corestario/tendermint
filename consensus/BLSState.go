@@ -201,7 +201,9 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			if !cs.dkg.IsOnChain() {
+				cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -368,6 +370,17 @@ func (cs *BLSConsensusState) tryFinalizeCommit(height int64) {
 
 	//	go
 	cs.finalizeCommit(height)
+	if cs.dkg.IsOnChain() {
+		log.Println("BEFORE PROCESS BLOCK")
+		if err, ok := cs.dkg.ProcessBlock(); err != nil {
+			cs.Logger.Info("on-chain DKG process block failed", "error", err)
+			log.Println("on-chain DKG process block failed", "error", err)
+		} else if ok {
+			cs.Logger.Info("All instances finished on-chain DKG, O.K.")
+			log.Println("All instances finished on-chain DKG, O.K.")
+			return
+		}
+	}
 }
 
 // Increment height and goto cstypes.RoundStepNewHeight

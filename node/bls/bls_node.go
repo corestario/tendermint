@@ -226,7 +226,7 @@ func createBLSConsensus(config *cfg.Config,
 	dkg, err := basic.NewDKGBasic(
 		evsw,
 		nd.Cdc,
-		"rchain",
+		state.ChainID,
 		"tcp://localhost:26657",
 		rootDir,
 		dkgOffChain.WithVerifier(verifier),
