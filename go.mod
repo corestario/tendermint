@@ -30,7 +30,7 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/tendermint/go-amino v0.15.1
 	github.com/tendermint/tm-db v0.3.0
-	go.dedis.ch/kyber/v3 v3.0.4
+	go.dedis.ch/kyber/v3 v3.0.9
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	google.golang.org/grpc v1.25.1

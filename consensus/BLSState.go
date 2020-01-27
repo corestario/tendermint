@@ -171,8 +171,6 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 		close(cs.done)
 	}
 
-	fmt.Println("START ROUTINE!!!!!!!!!!!!!")
-
 	defer func() {
 		if r := recover(); r != nil {
 			cs.Logger.Error("CONSENSUS FAILURE!!!", "err", r, "stack", string(debug.Stack()))
@@ -187,6 +185,32 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 			onExit(cs)
 		}
 	}()
+
+	if cs.dkg.Verifier().IsNil() {
+		if cs.Height < 1 {
+			cs.Logger.Error("nil verifier was found, but there's blocks in the chain")
+			panic("nil verifier was found, but there's blocks in the chain")
+		}
+		if err := cs.dkg.StartDKGRound(cs.Validators); err != nil {
+			cs.Logger.Error("failed to start DKG round at chain initialization")
+			panic("failed to start DKG round at chain initialization")
+		}
+
+		func() {
+			for {
+				select {
+				case msg := <-cs.dkg.MsgQueue():
+					cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+					// This means that we got a verifier to work with, we can run the blockchain now.
+					if !cs.dkg.Verifier().IsNil() {
+						cs.Logger.Info("successfully run initial DKG round, verifier ready")
+						return
+					}
+					cs.Logger.Info("handled off-chain dkg message, verifier is not ready yet")
+				}
+			}
+		}()
+	}
 
 	for {
 		if maxSteps > 0 {
