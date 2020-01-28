@@ -370,19 +370,6 @@ func (cs *BLSConsensusState) tryFinalizeCommit(height int64) {
 
 	//	go
 	cs.finalizeCommit(height)
-	go func() {
-		if cs.dkg.IsOnChain() {
-			log.Println("BEFORE PROCESS BLOCK")
-			if err, ok := cs.dkg.ProcessBlock(); err != nil {
-				cs.Logger.Info("on-chain DKG process block failed", "error", err)
-				log.Println("on-chain DKG process block failed", "error", err)
-			} else if ok {
-				cs.Logger.Info("All instances finished on-chain DKG, O.K.")
-				log.Println("All instances finished on-chain DKG, O.K.")
-				return
-			}
-		}
-	}()
 }
 
 // Increment height and goto cstypes.RoundStepNewHeight
@@ -478,7 +465,9 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 	}
 
 	fmt.Println("Sending block notify!!!!!")
-	//cs.dkg.GetBlockNotifier() <- true
+	if cs.dkg.IsOnChain() {
+		cs.dkg.NewBlockNotify()
+	}
 	fmt.Println("Block notify sent!!!!!!!!!")
 
 	fail.Fail() // XXX
