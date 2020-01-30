@@ -80,6 +80,10 @@ const defaultConfigTemplate = `# This is a TOML config file.
 # or the name of an ABCI application compiled in with the Tendermint binary
 proxy_app = "{{ .BaseConfig.ProxyApp }}"
 
+node_endpoint_for_context = "{{ .BaseConfig.NodeEndpointForContext }}"
+
+randapp_cli_directory = "{{ .BaseConfig.RandappCLIDirectory }}"
+
 # A custom human readable name for this node
 moniker = "{{ .BaseConfig.Moniker }}"
 

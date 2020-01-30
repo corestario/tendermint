@@ -150,6 +150,12 @@ type BaseConfig struct { //nolint: maligned
 	// This should be set in viper so it can unmarshal into this struct
 	RootDir string `mapstructure:"home"`
 
+	// Endpoint to a Randapp app for context
+	NodeEndpointForContext string `mapstructure:"node_endpoint_for_context"`
+
+	// Directory of Randapp's CLI files
+	RandappCLIDirectory string `mapstructure:"randapp_cli_directory"`
+
 	// TCP or UNIX socket address of the ABCI application,
 	// or the name of an ABCI application compiled in with the Tendermint binary
 	ProxyApp string `mapstructure:"proxy_app"`
@@ -220,21 +226,22 @@ type BaseConfig struct { //nolint: maligned
 // DefaultBaseConfig returns a default base configuration for a Tendermint node
 func DefaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		Genesis:            defaultGenesisJSONPath,
-		PrivValidatorKey:   defaultPrivValKeyPath,
-		PrivValidatorState: defaultPrivValStatePath,
-		BLSKey:             defaultBLSKeyPath,
-		NodeKey:            defaultNodeKeyPath,
-		Moniker:            defaultMoniker,
-		ProxyApp:           "tcp://127.0.0.1:26658",
-		ABCI:               "socket",
-		LogLevel:           DefaultPackageLogLevels(),
-		LogFormat:          LogFormatPlain,
-		ProfListenAddress:  "",
-		FastSyncMode:       true,
-		FilterPeers:        false,
-		DBBackend:          "goleveldb",
-		DBPath:             "data",
+		Genesis:                defaultGenesisJSONPath,
+		PrivValidatorKey:       defaultPrivValKeyPath,
+		PrivValidatorState:     defaultPrivValStatePath,
+		BLSKey:                 defaultBLSKeyPath,
+		NodeKey:                defaultNodeKeyPath,
+		Moniker:                defaultMoniker,
+		ProxyApp:               "tcp://127.0.0.1:26658",
+		ABCI:                   "socket",
+		LogLevel:               DefaultPackageLogLevels(),
+		LogFormat:              LogFormatPlain,
+		ProfListenAddress:      "",
+		FastSyncMode:           true,
+		FilterPeers:            false,
+		DBBackend:              "goleveldb",
+		DBPath:                 "data",
+		NodeEndpointForContext: "tcp://localhost:26657",
 	}
 }
 
