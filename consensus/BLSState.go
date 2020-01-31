@@ -458,6 +458,10 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
+	if cs.dkg.IsOnChain() {
+		go cs.dkg.NewBlockNotify()
+	}
+
 	fail.Fail() // XXX
 
 	// must be called before we update state
