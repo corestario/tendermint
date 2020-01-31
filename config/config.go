@@ -64,26 +64,28 @@ type Config struct {
 	BaseConfig `mapstructure:",squash"`
 
 	// Options for services
-	RPC             *RPCConfig             `mapstructure:"rpc"`
-	P2P             *P2PConfig             `mapstructure:"p2p"`
-	Mempool         *MempoolConfig         `mapstructure:"mempool"`
-	FastSync        *FastSyncConfig        `mapstructure:"fastsync"`
-	Consensus       *ConsensusConfig       `mapstructure:"consensus"`
-	TxIndex         *TxIndexConfig         `mapstructure:"tx_index"`
-	Instrumentation *InstrumentationConfig `mapstructure:"instrumentation"`
+	RPC              *RPCConfig             `mapstructure:"rpc"`
+	P2P              *P2PConfig             `mapstructure:"p2p"`
+	Mempool          *MempoolConfig         `mapstructure:"mempool"`
+	FastSync         *FastSyncConfig        `mapstructure:"fastsync"`
+	Consensus        *ConsensusConfig       `mapstructure:"consensus"`
+	TxIndex          *TxIndexConfig         `mapstructure:"tx_index"`
+	Instrumentation  *InstrumentationConfig `mapstructure:"instrumentation"`
+	DKGOnChainConfig *DKGOnChainConfig      `mapstructure:"dkg_onchain"`
 }
 
 // DefaultConfig returns a default configuration for a Tendermint node
 func DefaultConfig() *Config {
 	return &Config{
-		BaseConfig:      DefaultBaseConfig(),
-		RPC:             DefaultRPCConfig(),
-		P2P:             DefaultP2PConfig(),
-		Mempool:         DefaultMempoolConfig(),
-		FastSync:        DefaultFastSyncConfig(),
-		Consensus:       DefaultConsensusConfig(),
-		TxIndex:         DefaultTxIndexConfig(),
-		Instrumentation: DefaultInstrumentationConfig(),
+		BaseConfig:       DefaultBaseConfig(),
+		RPC:              DefaultRPCConfig(),
+		P2P:              DefaultP2PConfig(),
+		Mempool:          DefaultMempoolConfig(),
+		FastSync:         DefaultFastSyncConfig(),
+		Consensus:        DefaultConsensusConfig(),
+		TxIndex:          DefaultTxIndexConfig(),
+		Instrumentation:  DefaultInstrumentationConfig(),
+		DKGOnChainConfig: DefaultDKGOnChainConfig(),
 	}
 }
 
@@ -149,12 +151,6 @@ type BaseConfig struct { //nolint: maligned
 	// The root directory for all data.
 	// This should be set in viper so it can unmarshal into this struct
 	RootDir string `mapstructure:"home"`
-
-	// Endpoint to a Randapp app for context
-	NodeEndpointForContext string `mapstructure:"node_endpoint_for_context"`
-
-	// Directory of Randapp's CLI files
-	RandappCLIDirectory string `mapstructure:"randapp_cli_directory"`
 
 	// TCP or UNIX socket address of the ABCI application,
 	// or the name of an ABCI application compiled in with the Tendermint binary
@@ -226,22 +222,21 @@ type BaseConfig struct { //nolint: maligned
 // DefaultBaseConfig returns a default base configuration for a Tendermint node
 func DefaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		Genesis:                defaultGenesisJSONPath,
-		PrivValidatorKey:       defaultPrivValKeyPath,
-		PrivValidatorState:     defaultPrivValStatePath,
-		BLSKey:                 defaultBLSKeyPath,
-		NodeKey:                defaultNodeKeyPath,
-		Moniker:                defaultMoniker,
-		ProxyApp:               "tcp://127.0.0.1:26658",
-		ABCI:                   "socket",
-		LogLevel:               DefaultPackageLogLevels(),
-		LogFormat:              LogFormatPlain,
-		ProfListenAddress:      "",
-		FastSyncMode:           true,
-		FilterPeers:            false,
-		DBBackend:              "goleveldb",
-		DBPath:                 "data",
-		NodeEndpointForContext: "tcp://localhost:26657",
+		Genesis:            defaultGenesisJSONPath,
+		PrivValidatorKey:   defaultPrivValKeyPath,
+		PrivValidatorState: defaultPrivValStatePath,
+		BLSKey:             defaultBLSKeyPath,
+		NodeKey:            defaultNodeKeyPath,
+		Moniker:            defaultMoniker,
+		ProxyApp:           "tcp://127.0.0.1:26658",
+		ABCI:               "socket",
+		LogLevel:           DefaultPackageLogLevels(),
+		LogFormat:          LogFormatPlain,
+		ProfListenAddress:  "",
+		FastSyncMode:       true,
+		FilterPeers:        false,
+		DBBackend:          "goleveldb",
+		DBPath:             "data",
 	}
 }
 
@@ -968,6 +963,24 @@ func DefaultInstrumentationConfig() *InstrumentationConfig {
 		PrometheusListenAddr: ":26660",
 		MaxOpenConnections:   3,
 		Namespace:            "tendermint",
+	}
+}
+
+type DKGOnChainConfig struct {
+	// Endpoint to a Randapp app for context
+	NodeEndpointForContext string `mapstructure:"node_endpoint_for_context"`
+
+	// Directory of Randapp's CLI files
+	RandappCLIDirectory string `mapstructure:"randapp_cli_directory"`
+
+	// Passphrase for tx signing
+	Passphrase string `mapstructure:"passphrase"`
+}
+
+func DefaultDKGOnChainConfig() *DKGOnChainConfig {
+	return &DKGOnChainConfig{
+		NodeEndpointForContext: "tcp://localhost:26657",
+		Passphrase:             "12345678",
 	}
 }
 

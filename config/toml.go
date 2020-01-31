@@ -80,10 +80,6 @@ const defaultConfigTemplate = `# This is a TOML config file.
 # or the name of an ABCI application compiled in with the Tendermint binary
 proxy_app = "{{ .BaseConfig.ProxyApp }}"
 
-node_endpoint_for_context = "{{ .BaseConfig.NodeEndpointForContext }}"
-
-randapp_cli_directory = "{{ .BaseConfig.RandappCLIDirectory }}"
-
 # A custom human readable name for this node
 moniker = "{{ .BaseConfig.Moniker }}"
 
@@ -389,6 +385,15 @@ max_open_connections = {{ .Instrumentation.MaxOpenConnections }}
 
 # Instrumentation namespace
 namespace = "{{ .Instrumentation.Namespace }}"
+
+## DKG OnChain configuration options
+[dkg_onchain]
+
+node_endpoint_for_context = "{{ .DKGOnChainConfig.NodeEndpointForContext }}"
+
+randapp_cli_directory = "{{ .DKGOnChainConfig.RandappCLIDirectory }}"
+
+passphrase = "{{ .DKGOnChainConfig.Passphrase }}"
 `
 
 /****** these are for test settings ***********/
