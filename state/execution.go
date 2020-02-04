@@ -162,7 +162,6 @@ func (blockExec *BlockExecutor) ApplyBlock(state State, blockID types.BlockID, b
 	if err != nil {
 		return state, fmt.Errorf("Commit failed for application: %v", err)
 	}
-	blockExec.logger.Debug("state update in applyBlock", "validators", state.Validators)
 
 	// Lock mempool, commit app state, update mempoool.
 	appHash, err := blockExec.Commit(state, block, abciResponses.DeliverTx)

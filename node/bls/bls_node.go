@@ -213,8 +213,6 @@ func NewBLSNode(config *cfg.Config,
 	dbProvider nd.DBProvider,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
-	//blockStore *store.BlockStore,
-	//stateDB dbm.DB,
 	options ...BLSOption) (*BLSNode, error) {
 
 	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)

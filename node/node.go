@@ -574,8 +574,6 @@ func NewNode(config *cfg.Config,
 		return nil, err
 	}
 
-	logger.Debug("state creation", "validators", state.Validators)
-
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp, err := CreateAndStartProxyAppConns(clientCreator, logger)
 	if err != nil {
@@ -604,13 +602,10 @@ func NewNode(config *cfg.Config,
 		return nil, err
 	}
 
-	logger.Debug("state do handshake", "validators", state.Validators)
-
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
 	// what happened during block replay).
 	state = sm.LoadState(stateDB)
-	logger.Debug("state load state", "validators", state.Validators)
 
 	// If an address is provided, listen on the socket for a connection from an
 	// external signing process.
@@ -629,7 +624,6 @@ func NewNode(config *cfg.Config,
 	}
 
 	logNodeStartupInfo(state, pubKey, logger, consensusLogger)
-	logger.Debug("state log node startup info", "validators", state.Validators)
 
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
@@ -639,8 +633,6 @@ func NewNode(config *cfg.Config,
 
 	// Make MempoolReactor
 	mempoolReactor, mempool := CreateMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
-
-	logger.Debug("state create mempool", "validators", state.Validators)
 
 	// Make Evidence Reactor
 	evidenceReactor, evidencePool, err := CreateEvidenceReactor(config, dbProvider, stateDB, logger)
@@ -669,13 +661,11 @@ func NewNode(config *cfg.Config,
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger,
 	)
-	logger.Debug("state create consensus reactors", "validators", state.Validators)
 
 	nodeInfo, err := MakeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("state make node info", "validators", state.Validators)
 
 	// Setup Transport.
 	transport, peerFilters := CreateTransport(config, nodeInfo, nodeKey, proxyApp)
