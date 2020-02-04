@@ -39,6 +39,8 @@ github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8Nz
 github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
 github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
+github.com/corestario/cosmos-utils/client v0.0.0-20191209221021-bc64f205ca9b h1:p0LMx3I375i3mREdw/iM8MjxDF8590Ep+AdoIq5b+oM=
+github.com/corestario/cosmos-utils/client v0.0.0-20191209221021-bc64f205ca9b/go.mod h1:6QTJUIUyLbepeBbfOmR+t4sKoBtIStwjJT140I9AyCw=
 github.com/cosmos/cosmos-sdk v0.28.1/go.mod h1:JrX/JpJunJQXBI5PEX2zELHMFzQr/159jDjIhesOh2c=
 github.com/cosmos/cosmos-sdk v0.28.2-0.20190827131926-5aacf454e1b6 h1:nuaQIQZrsYF3QKf9bSAC1i5adZG7lPPuhsrpFCKBiQ8=
 github.com/cosmos/cosmos-sdk v0.28.2-0.20190827131926-5aacf454e1b6/go.mod h1:2Wh83L2ncI6JHjbOb4BWEuuNUUFLK/IOdDBVpIw3SCY=
@@ -241,6 +243,7 @@ github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=
 github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/viper v1.0.0/go.mod h1:A8kyI5cUJhb8N+3pkfONlcEcZbueH6nhAm0Fq7SrnBM=
 github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DMA2s=
+github.com/spf13/viper v1.4.0/go.mod h1:PTJ7Z/lr49W6bUbkmS1V3by4uWynFiR9p7+dSq/yZzE=
 github.com/spf13/viper v1.5.0/go.mod h1:AkYRkVJF8TkSG/xet6PzXX+l39KhhXa2pdqVSxnTcn4=
 github.com/spf13/viper v1.6.1 h1:VPZzIkznI1YhVMRi6vNFLHSwhnhReBfgTxIPccpfdZk=
 github.com/spf13/viper v1.6.1/go.mod h1:t3iDnF5Jlj76alVNuyFBk5oUMCvsrkbvZK0WQdfDi5k=
