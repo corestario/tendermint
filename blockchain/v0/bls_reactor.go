@@ -181,7 +181,6 @@ func (bcR *BLSBlockchainReactor) poolRoutine() {
 	blocksSynced := 0
 
 	chainID := bcR.initialState.ChainID
-	lg.Printf("Initial state in poolRoutine vals: %#+v", bcR.initialState.Validators)
 
 	state := bcR.initialState
 

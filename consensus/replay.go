@@ -323,7 +323,6 @@ func (h *Handshaker) ReplayBlocks(
 
 		if stateBlockHeight == 0 { //we only update state when we are in initial state
 			// If the app returned validators or consensus params, update the state.
-			lg.Printf("res validators: %#+v", res.Validators)
 
 			if len(res.Validators) > 0 {
 				vals, err := types.PB2TM.ValidatorUpdates(res.Validators)

@@ -64,26 +64,28 @@ type Config struct {
 	BaseConfig `mapstructure:",squash"`
 
 	// Options for services
-	RPC             *RPCConfig             `mapstructure:"rpc"`
-	P2P             *P2PConfig             `mapstructure:"p2p"`
-	Mempool         *MempoolConfig         `mapstructure:"mempool"`
-	FastSync        *FastSyncConfig        `mapstructure:"fastsync"`
-	Consensus       *ConsensusConfig       `mapstructure:"consensus"`
-	TxIndex         *TxIndexConfig         `mapstructure:"tx_index"`
-	Instrumentation *InstrumentationConfig `mapstructure:"instrumentation"`
+	RPC              *RPCConfig             `mapstructure:"rpc"`
+	P2P              *P2PConfig             `mapstructure:"p2p"`
+	Mempool          *MempoolConfig         `mapstructure:"mempool"`
+	FastSync         *FastSyncConfig        `mapstructure:"fastsync"`
+	Consensus        *ConsensusConfig       `mapstructure:"consensus"`
+	TxIndex          *TxIndexConfig         `mapstructure:"tx_index"`
+	Instrumentation  *InstrumentationConfig `mapstructure:"instrumentation"`
+	DKGOnChainConfig *DKGOnChainConfig      `mapstructure:"dkg_onchain"`
 }
 
 // DefaultConfig returns a default configuration for a Tendermint node
 func DefaultConfig() *Config {
 	return &Config{
-		BaseConfig:      DefaultBaseConfig(),
-		RPC:             DefaultRPCConfig(),
-		P2P:             DefaultP2PConfig(),
-		Mempool:         DefaultMempoolConfig(),
-		FastSync:        DefaultFastSyncConfig(),
-		Consensus:       DefaultConsensusConfig(),
-		TxIndex:         DefaultTxIndexConfig(),
-		Instrumentation: DefaultInstrumentationConfig(),
+		BaseConfig:       DefaultBaseConfig(),
+		RPC:              DefaultRPCConfig(),
+		P2P:              DefaultP2PConfig(),
+		Mempool:          DefaultMempoolConfig(),
+		FastSync:         DefaultFastSyncConfig(),
+		Consensus:        DefaultConsensusConfig(),
+		TxIndex:          DefaultTxIndexConfig(),
+		Instrumentation:  DefaultInstrumentationConfig(),
+		DKGOnChainConfig: DefaultDKGOnChainConfig(),
 	}
 }
 
@@ -961,6 +963,33 @@ func DefaultInstrumentationConfig() *InstrumentationConfig {
 		PrometheusListenAddr: ":26660",
 		MaxOpenConnections:   3,
 		Namespace:            "tendermint",
+	}
+}
+
+type DKGOnChainConfig struct {
+	// Endpoint to a Randapp app for context
+	NodeEndpointForContext string `mapstructure:"node_endpoint_for_context"`
+
+	// Directory of Randapp's CLI files
+	RandappCLIDirectory string `mapstructure:"randapp_cli_directory"`
+
+	// Passphrase for tx signing
+	Passphrase string `mapstructure:"passphrase"`
+
+	BLSThreshold int `mapstructure:"bls_threshold"`
+
+	BLSNumShares int `mapstructure:"bls_num_shares"`
+
+	DKGNumBlocks int64 `mapstructure:"dkg_num_blocks"`
+}
+
+func DefaultDKGOnChainConfig() *DKGOnChainConfig {
+	return &DKGOnChainConfig{
+		NodeEndpointForContext: "tcp://localhost:26657",
+		Passphrase:             "12345678",
+		BLSThreshold:           3,
+		BLSNumShares:           4,
+		DKGNumBlocks:           1000,
 	}
 }
 

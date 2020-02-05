@@ -225,7 +225,9 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			if !cs.dkg.IsOnChain() {
+				cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -308,7 +310,6 @@ func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 	defer func() {
 		if err := recover(); err != nil {
 			logger.Info("PANIC HANDLED", "PANIC HANDLED", err)
-			log.Println("PANIC HANDLED", "PANIC HANDLED", err)
 		}
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
@@ -344,8 +345,6 @@ func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
 		cs.ProposalBlock.Header.SetRandomData(randomData)
-	} else {
-		logger.Info("ProposalBlock is NIL!!!!!!!!!!!!!!!!!!")
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -486,9 +485,9 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
-	fmt.Println("Sending block notify!!!!!")
-	//cs.dkg.GetBlockNotifier() <- true
-	fmt.Println("Block notify sent!!!!!!!!!")
+	if cs.dkg.IsOnChain() {
+		go cs.dkg.NewBlockNotify()
+	}
 
 	fail.Fail() // XXX
 
@@ -1363,7 +1362,6 @@ func (cs *BLSConsensusState) enterPrecommitWait(height int64, round int) {
 // OnStart implements cmn.Service.
 // It loads the latest state via the WAL, and starts the timeout and receive routines.
 func (cs *BLSConsensusState) OnStart() error {
-	fmt.Println("BLS STARTING!!!!!!!!!!!!!!!!!!!")
 	if err := cs.evsw.Start(); err != nil {
 		return err
 	}
@@ -1482,8 +1480,6 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 			"oldHeight",
 			cs.state.LastBlockHeight+1)
 		cs.newStep()
-		log.Printf("new step done, cs Vals: %#+v", cs.Validators)
-		log.Printf("new step done, cs state Vals: %#+v", cs.state.Validators)
 		return
 	}
 
