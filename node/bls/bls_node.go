@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/privval"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/corestario/dkglib/lib/basic"
+
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	dkgtypes "github.com/corestario/dkglib/lib/types"
@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 	"github.com/tendermint/go-amino"
+	abci "github.com/tendermint/tendermint/abci/types"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
 	cfg "github.com/tendermint/tendermint/config"
@@ -32,6 +33,7 @@ import (
 	nd "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
+	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/proxy"
 	rpccore "github.com/tendermint/tendermint/rpc/core"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -80,96 +82,6 @@ type BLSNode struct {
 	prometheusSrv    *http.Server
 }
 
-func GetBLSReactors(
-	config *cfg.Config,
-	privValidator types.PrivValidator,
-	metricsProvider nd.MetricsProvider,
-	logger log.Logger,
-) (*store.BlockStore, dbm.DB, p2p.Reactor, *cs.BLSConsensusReactor, cs.StateInterface, error) {
-	consensusLogger := logger.With("module", "consensus")
-
-	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, nd.DefaultGenesisDocProviderFunc(config))
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, privValidator)
-
-	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
-	proxyApp, err := nd.CreateAndStartProxyAppConns(proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()), logger)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	csMetrics, _, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
-
-	// EventBus and IndexerService must be started before the handshake because
-	// we might need to index the txs of the replayed block as this might not have happened
-	// when the node stopped last time (i.e. the node stopped after it saved the block
-	// but before it indexed the txs, or, endblocker panicked)
-	eventBus, err := nd.CreateAndStartEventBus(logger)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	// Make MempoolReactor
-	_, mempool := nd.CreateMempoolAndMempoolReactor(config, proxyApp, state, memplMetrics, logger)
-
-	// Make Evidence Reactor
-	_, evidencePool, err := nd.CreateEvidenceReactor(config, nd.DefaultDBProvider, stateDB, logger)
-	if err != nil {
-		return nil, nil, nil, nil, nil, err
-	}
-
-	// make block executor for consensus and blockchain reactors to execute blocks
-	blockExec := sm.NewBlockExecutor(
-		stateDB,
-		logger.With("module", "state"),
-		proxyApp.Consensus(),
-		mempool,
-		evidencePool,
-		sm.BlockExecutorWithMetrics(smMetrics),
-	)
-
-	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to load bls share: %v", err)
-	}
-
-	keypair, err := blsShare.Deserialize()
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to deserialize keypair: %v", err)
-	}
-
-	masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
-
-	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
-
-	// Make BlockchainReactor
-	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, consensusLogger)
-	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "could not create blockchain reactor")
-	}
-
-	// Make ConsensusReactor
-	consensusReactor, consensusState := createBLSConsensus(
-		config, state, blockExec, blockStore, mempool, evidencePool,
-		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
-	)
-
-	config.DBPath = config.DBPath + ".unused"
-
-	return blockStore, stateDB, bcReactor, consensusReactor, consensusState, nil
-}
-
 type BLSNodeProvider func(*cfg.Config, log.Logger) (*BLSNode, error)
 
 func createBLSBlockchainReactor(config *cfg.Config,
@@ -205,19 +117,21 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	dkgNumBlocks int64) (*cs.BLSConsensusReactor, cs.StateInterface) {
+	genDoc *types.GenesisDoc) (*cs.BLSConsensusReactor, cs.StateInterface) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
+	logger := log.NewTMLogger(os.Stdout)
 	dkg, err := basic.NewDKGBasic(
 		evsw,
 		nd.Cdc,
-		"tendermintChain",
-		"tcp://localhost:26657",
-		config.RootDir,
+		state.ChainID,
+		config.DKGOnChainConfig.NodeEndpointForContext,
+		config.DKGOnChainConfig.Passphrase,
+		config.DKGOnChainConfig.RandappCLIDirectory,
 		dkgOffChain.WithVerifier(verifier),
-		dkgOffChain.WithDKGNumBlocks(dkgNumBlocks),
-		dkgOffChain.WithLogger(consensusLogger.With("dkg")),
+		dkgOffChain.WithDKGNumBlocks(genDoc.DKGNumBlocks),
+		dkgOffChain.WithLogger(logger),
 		dkgOffChain.WithPVKey(privValidator),
 	)
 	if err != nil {
@@ -248,28 +162,9 @@ func createBLSConsensus(config *cfg.Config,
 	return consensusReactor, consensusState
 }
 
-func CustomBLSReactors(reactors map[string]p2p.Reactor) BLSOption {
-	return func(n *BLSNode) {
-		for name, reactor := range reactors {
-			if existingReactor := n.sw.Reactor(name); existingReactor != nil {
-				n.sw.Logger.Info("Replacing existing reactor with a custom one",
-					"name", name, "existing", existingReactor, "custom", reactor)
-				n.sw.RemoveReactor(name, existingReactor)
-			}
-			n.sw.AddReactor(name, reactor)
-		}
-	}
-}
-
-func CustomBLSConsensusState(state cs.StateInterface) BLSOption {
-	return func(n *BLSNode) {
-		n.consensusState = state
-	}
-}
-
 type BLSOption func(*BLSNode)
 
-func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error) {
+func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger, app abci.Application) (*BLSNode, error) {
 	nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
 	if err != nil {
 
@@ -297,34 +192,17 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger) (*BLSNode, error
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := GetBLSReactors(
+	return NewBLSNode(
 		config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
-		nd.DefaultMetricsProvider(config.Instrumentation),
-		logger,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	return NewBLSNode(config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
-		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+		proxy.NewLocalClientCreator(app),
 		nd.DefaultGenesisDocProviderFunc(config),
 		nd.DefaultDBProvider,
 		nd.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		blockStore,
-		stateDB,
-		CustomBLSReactors(map[string]p2p.Reactor{
-			"BLOCKCHAIN": bcReactor,
-			"CONSENSUS":  consensusReactor,
-		}),
-		CustomBLSConsensusState(consensusState),
 	)
 }
-
 
 // NewNode returns a new, ready to go, Tendermint Node.
 func NewBLSNode(config *cfg.Config,
@@ -335,9 +213,12 @@ func NewBLSNode(config *cfg.Config,
 	dbProvider nd.DBProvider,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
-	blockStore *store.BlockStore,
-	stateDB dbm.DB,
 	options ...BLSOption) (*BLSNode, error) {
+
+	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)
+	if err != nil {
+		return nil, err
+	}
 
 	state, genDoc, err := nd.LoadStateFromDBOrGenesisDocProvider(stateDB, genesisDocProvider)
 	if err != nil {
@@ -432,6 +313,7 @@ func NewBLSNode(config *cfg.Config,
 
 	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	// Make BlockchainReactor
+
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create blockchain reactor")
@@ -440,7 +322,7 @@ func NewBLSNode(config *cfg.Config,
 	// Make ConsensusReactor
 	consensusReactor, consensusState := createBLSConsensus(
 		config, state, blockExec, blockStore, mempool, evidencePool,
-		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc.DKGNumBlocks,
+		privValidator, csMetrics, fastSync, eventBus, consensusLogger, verifier, genDoc,
 	)
 
 	nodeInfo, err := nd.MakeNodeInfo(config, nodeKey, txIndexer, genDoc, state)
@@ -450,19 +332,16 @@ func NewBLSNode(config *cfg.Config,
 
 	// Setup Transport.
 	transport, peerFilters := nd.CreateTransport(config, nodeInfo, nodeKey, proxyApp)
-
 	// Setup Switch.
 	p2pLogger := logger.With("module", "p2p")
 	sw := createBLSSwitch(
 		config, transport, p2pMetrics, peerFilters, mempoolReactor, bcReactor,
 		consensusReactor, evidenceReactor, nodeInfo, nodeKey, p2pLogger,
 	)
-
 	err = sw.AddPersistentPeers(nd.SplitAndTrimEmpty(config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return nil, errors.Wrap(err, "could not add peers from persistent_peers field")
 	}
-
 	addrBook, err := nd.CreateAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create addrbook")
@@ -484,7 +363,6 @@ func NewBLSNode(config *cfg.Config,
 	if config.P2P.PexReactor {
 		pexReactor = nd.CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
-
 	if config.ProfListenAddress != "" {
 		go func() {
 			logger.Error("Profile server", "err", http.ListenAndServe(config.ProfListenAddress, nil))
@@ -516,6 +394,7 @@ func NewBLSNode(config *cfg.Config,
 		indexerService:   indexerService,
 		eventBus:         eventBus,
 	}
+
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 
 	for _, option := range options {

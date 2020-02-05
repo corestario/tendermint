@@ -170,8 +170,6 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 		close(cs.done)
 	}
 
-	fmt.Println("START ROUTINE!!!!!!!!!!!!!")
-
 	defer func() {
 		if r := recover(); r != nil {
 			cs.Logger.Error("CONSENSUS FAILURE!!!", "err", r, "stack", string(debug.Stack()))
@@ -200,8 +198,9 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case msg := <-cs.dkg.MsgQueue():
-			fmt.Println("RECEIVED DKG MESSAGE")
-			cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			if !cs.dkg.IsOnChain() {
+				cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -319,8 +318,6 @@ func (cs *BLSConsensusState) enterCommit(height int64, commitRound int) {
 	// TODO @oopcode: check if this is a possible situation.
 	if cs.ProposalBlock != nil {
 		cs.ProposalBlock.Header.SetRandomData(randomData)
-	} else {
-		logger.Info("ProposalBlock is NIL!!!!!!!!!!!!!!!!!!")
 	}
 
 	// If we don't have the block being committed, set up to get it.
@@ -461,8 +458,9 @@ func (cs *BLSConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
-	// notify dkg about new block
-	cs.dkg.NewBlockNotify()
+	if cs.dkg.IsOnChain() {
+		go cs.dkg.NewBlockNotify()
+	}
 
 	fail.Fail() // XXX
 
@@ -662,7 +660,6 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	if cs.dkg.Verifier() == nil {
 		return nil
 	}
-
 	var randomData []byte
 	var err error
 	if type_ == types.PrecommitType {
@@ -683,6 +680,7 @@ func (cs *BLSConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte,
 	//if !cs.replayMode {
 	cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
 	//}
+
 	return nil
 }
 
@@ -951,6 +949,7 @@ func (cs *BLSConsensusState) enterNewRound(height int64, round int) {
 	// Wait for txs to be available in the mempool
 	// before we enterPropose in round 0. If the last block changed the app hash,
 	// we may need an empty "proof" block, and enterPropose immediately.
+
 	waitForTxs := cs.config.WaitForTxs() && round == 0 && !cs.needProofBlock(height)
 	if waitForTxs {
 		if cs.config.CreateEmptyBlocksInterval > 0 {
@@ -1336,7 +1335,6 @@ func (cs *BLSConsensusState) enterPrecommitWait(height int64, round int) {
 // OnStart implements cmn.Service.
 // It loads the latest state via the WAL, and starts the timeout and receive routines.
 func (cs *BLSConsensusState) OnStart() error {
-	fmt.Println("BLS STARTING!!!!!!!!!!!!!!!!!!!")
 	if err := cs.evsw.Start(); err != nil {
 		return err
 	}
@@ -1474,6 +1472,7 @@ func (cs *BLSConsensusState) updateToState(state sm.State) {
 	// RoundState fields
 	cs.updateHeight(height)
 	cs.updateRoundStep(0, cstypes.RoundStepNewHeight)
+
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
 		// We add timeoutCommit to allow transactions

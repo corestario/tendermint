@@ -180,6 +180,7 @@ func (bcR *BLSBlockchainReactor) poolRoutine() {
 	blocksSynced := 0
 
 	chainID := bcR.initialState.ChainID
+
 	state := bcR.initialState
 
 	lastHundred := time.Now()

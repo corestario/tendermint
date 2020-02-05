@@ -136,7 +136,6 @@ func GetCertifiedCommit(h int64, client rpcclient.Client, cert lite.Verifier) (t
 		return types.SignedHeader{}, fmt.Errorf("height mismatch: want %v got %v",
 			h, sh.Height)
 	}
-
 	if err = cert.Verify(sh); err != nil {
 		return types.SignedHeader{}, err
 	}

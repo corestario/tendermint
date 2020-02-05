@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tendermint/tendermint/proxy"
+
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/cli"
@@ -13,7 +15,6 @@ import (
 	bls "github.com/tendermint/tendermint/node/bls"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
-	"github.com/tendermint/tendermint/proxy"
 )
 
 func main() {
@@ -83,16 +84,6 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
-	blockStore, stateDB, bcReactor, consensusReactor, consensusState, err := bls.GetBLSReactors(
-		config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
-		node.DefaultMetricsProvider(config.Instrumentation),
-		logger,
-	)
-	if err != nil {
-		panic(err)
-	}
-
 	return bls.NewBLSNode(config,
 		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
 		nodeKey,
@@ -101,12 +92,5 @@ func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
 		node.DefaultDBProvider,
 		node.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		blockStore,
-		stateDB,
-		bls.CustomBLSReactors(map[string]p2p.Reactor{
-			"BLOCKCHAIN": bcReactor,
-			"CONSENSUS":  consensusReactor,
-		}),
-		bls.CustomBLSConsensusState(consensusState),
 	)
 }

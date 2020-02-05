@@ -385,6 +385,15 @@ max_open_connections = {{ .Instrumentation.MaxOpenConnections }}
 
 # Instrumentation namespace
 namespace = "{{ .Instrumentation.Namespace }}"
+
+## DKG OnChain configuration options
+[dkg_onchain]
+
+node_endpoint_for_context = "{{ .DKGOnChainConfig.NodeEndpointForContext }}"
+
+randapp_cli_directory = "{{ .DKGOnChainConfig.RandappCLIDirectory }}"
+
+passphrase = "{{ .DKGOnChainConfig.Passphrase }}"
 `
 
 /****** these are for test settings ***********/
