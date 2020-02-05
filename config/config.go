@@ -975,12 +975,21 @@ type DKGOnChainConfig struct {
 
 	// Passphrase for tx signing
 	Passphrase string `mapstructure:"passphrase"`
+
+	BLSThreshold int `mapstructure:"bls_threshold"`
+
+	BLSNumShares int `mapstructure:"bls_num_shares"`
+
+	DKGNumBlocks int64 `mapstructure:"dkg_num_blocks"`
 }
 
 func DefaultDKGOnChainConfig() *DKGOnChainConfig {
 	return &DKGOnChainConfig{
 		NodeEndpointForContext: "tcp://localhost:26657",
 		Passphrase:             "12345678",
+		BLSThreshold:           3,
+		BLSNumShares:           4,
+		DKGNumBlocks:           1000,
 	}
 }
 
