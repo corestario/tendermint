@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"reflect"
 	"runtime/debug"
 	"time"

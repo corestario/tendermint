@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	lg "log"
 	"reflect"
 
 	//"strconv"

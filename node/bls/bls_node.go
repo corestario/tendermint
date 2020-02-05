@@ -7,7 +7,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"path"
 	"time"
 
 	"github.com/corestario/dkglib/lib/basic"
