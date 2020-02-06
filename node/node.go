@@ -153,19 +153,19 @@ type Option func(*Node)
 func CustomReactors(reactors map[string]p2p.Reactor) Option {
 	return func(n *Node) {
 		for name, reactor := range reactors {
-			if existingReactor := n.sw.Reactor(name); existingReactor != nil {
-				n.sw.Logger.Info("Replacing existing reactor with a custom one",
+			if existingReactor := n.Sw.Reactor(name); existingReactor != nil {
+				n.Sw.Logger.Info("Replacing existing reactor with a custom one",
 					"name", name, "existing", existingReactor, "custom", reactor)
-				n.sw.RemoveReactor(name, existingReactor)
+				n.Sw.RemoveReactor(name, existingReactor)
 			}
-			n.sw.AddReactor(name, reactor)
+			n.Sw.AddReactor(name, reactor)
 		}
 	}
 }
 
 func CustomConsensusState(state cs.StateInterface) Option {
 	return func(n *Node) {
-		n.consensusState = state
+		n.ConsensusState = state
 	}
 }
 
@@ -177,34 +177,34 @@ type Node struct {
 	cmn.BaseService
 
 	// config
-	config        *cfg.Config
-	genesisDoc    *types.GenesisDoc   // initial validator set
-	privValidator types.PrivValidator // local node's validator key
+	Config        *cfg.Config
+	GenesisDoc    *types.GenesisDoc   // initial validator set
+	PrivValidator types.PrivValidator // local node's validator key
 
 	// network
-	transport   *p2p.MultiplexTransport
-	sw          *p2p.Switch  // p2p connections
-	addrBook    pex.AddrBook // known peers
-	nodeInfo    p2p.NodeInfo
-	nodeKey     *p2p.NodeKey // our node privkey
-	isListening bool
+	Transport   *p2p.MultiplexTransport
+	Sw          *p2p.Switch  // p2p connections
+	AddrBook    pex.AddrBook // known peers
+	NodeInfo    p2p.NodeInfo
+	NodeKey     *p2p.NodeKey // our node privkey
+	IsListening bool
 
 	// services
-	eventBus         *types.EventBus // pub/sub for services
-	stateDB          dbm.DB
-	blockStore       *store.BlockStore // store the blockchain to disk
-	bcReactor        p2p.Reactor       // for fast-syncing
-	mempoolReactor   *mempl.Reactor    // for gossipping transactions
-	mempool          mempl.Mempool
-	consensusState   cs.StateInterface      // latest consensus state
-	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
-	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
-	evidencePool     *evidence.EvidencePool // tracking evidence
-	proxyApp         proxy.AppConns         // connection to the application
-	rpcListeners     []net.Listener         // rpc servers
-	txIndexer        txindex.TxIndexer
-	indexerService   *txindex.IndexerService
-	prometheusSrv    *http.Server
+	EventBus         *types.EventBus // pub/sub for services
+	StateDB          dbm.DB
+	BlockStore       *store.BlockStore // store the blockchain to disk
+	BcReactor        p2p.Reactor       // for fast-syncing
+	MempoolReactor   *mempl.Reactor    // for gossipping transactions
+	Mempool          mempl.Mempool
+	ConsensusState   cs.StateInterface                 // latest consensus state
+	ConsensusReactor rpccore.ConsensusReactorInterface // for participating in the consensus
+	PexReactor       *pex.PEXReactor                   // for exchanging peer addresses
+	EvidencePool     *evidence.EvidencePool            // tracking evidence
+	ProxyApp         proxy.AppConns                    // connection to the application
+	RpcListeners     []net.Listener                    // rpc servers
+	TxIndexer        txindex.TxIndexer
+	IndexerService   *txindex.IndexerService
+	PrometheusSrv    *http.Server
 }
 
 func InitDBs(config *cfg.Config, dbProvider DBProvider) (blockStore *store.BlockStore, stateDB dbm.DB, err error) {
@@ -721,29 +721,29 @@ func NewNode(config *cfg.Config,
 	}
 
 	node := &Node{
-		config:        config,
-		genesisDoc:    genDoc,
-		privValidator: privValidator,
+		Config:        config,
+		GenesisDoc:    genDoc,
+		PrivValidator: privValidator,
 
-		transport: transport,
-		sw:        sw,
-		addrBook:  addrBook,
-		nodeInfo:  nodeInfo,
-		nodeKey:   nodeKey,
+		Transport: transport,
+		Sw:        sw,
+		AddrBook:  addrBook,
+		NodeInfo:  nodeInfo,
+		NodeKey:   nodeKey,
 
-		stateDB:          stateDB,
-		blockStore:       blockStore,
-		bcReactor:        bcReactor,
-		mempoolReactor:   mempoolReactor,
-		mempool:          mempool,
-		consensusState:   consensusState,
-		consensusReactor: consensusReactor,
-		pexReactor:       pexReactor,
-		evidencePool:     evidencePool,
-		proxyApp:         proxyApp,
-		txIndexer:        txIndexer,
-		indexerService:   indexerService,
-		eventBus:         eventBus,
+		StateDB:          stateDB,
+		BlockStore:       blockStore,
+		BcReactor:        bcReactor,
+		MempoolReactor:   mempoolReactor,
+		Mempool:          mempool,
+		ConsensusState:   consensusState,
+		ConsensusReactor: consensusReactor,
+		PexReactor:       pexReactor,
+		EvidencePool:     evidencePool,
+		ProxyApp:         proxyApp,
+		TxIndexer:        txIndexer,
+		IndexerService:   indexerService,
+		EventBus:         eventBus,
 	}
 	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 
@@ -757,53 +757,53 @@ func NewNode(config *cfg.Config,
 // OnStart starts the Node. It implements cmn.Service.
 func (n *Node) OnStart() error {
 	now := tmtime.Now()
-	genTime := n.genesisDoc.GenesisTime
+	genTime := n.GenesisDoc.GenesisTime
 	if genTime.After(now) {
 		n.Logger.Info("Genesis time is in the future. Sleeping until then...", "genTime", genTime)
 		time.Sleep(genTime.Sub(now))
 	}
 
 	// Add private IDs to addrbook to block those peers being added
-	n.addrBook.AddPrivateIDs(SplitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
+	n.AddrBook.AddPrivateIDs(SplitAndTrimEmpty(n.Config.P2P.PrivatePeerIDs, ",", " "))
 
 	// Start the RPC server before the P2P server
 	// so we can eg. receive txs for the first block
-	if n.config.RPC.ListenAddress != "" {
+	if n.Config.RPC.ListenAddress != "" {
 		listeners, err := n.startRPC()
 		if err != nil {
 			return err
 		}
-		n.rpcListeners = listeners
+		n.RpcListeners = listeners
 	}
 
-	if n.config.Instrumentation.Prometheus &&
-		n.config.Instrumentation.PrometheusListenAddr != "" {
-		n.prometheusSrv = n.startPrometheusServer(n.config.Instrumentation.PrometheusListenAddr)
+	if n.Config.Instrumentation.Prometheus &&
+		n.Config.Instrumentation.PrometheusListenAddr != "" {
+		n.PrometheusSrv = n.startPrometheusServer(n.Config.Instrumentation.PrometheusListenAddr)
 	}
 
 	// Start the transport.
-	addr, err := p2p.NewNetAddressString(p2p.IDAddressString(n.nodeKey.ID(), n.config.P2P.ListenAddress))
+	addr, err := p2p.NewNetAddressString(p2p.IDAddressString(n.NodeKey.ID(), n.Config.P2P.ListenAddress))
 	if err != nil {
 		return err
 	}
-	if err := n.transport.Listen(*addr); err != nil {
+	if err := n.Transport.Listen(*addr); err != nil {
 		return err
 	}
 
-	n.isListening = true
+	n.IsListening = true
 
-	if n.config.Mempool.WalEnabled() {
-		n.mempool.InitWAL() // no need to have the mempool wal during tests
+	if n.Config.Mempool.WalEnabled() {
+		n.Mempool.InitWAL() // no need to have the mempool wal during tests
 	}
 
 	// Start the switch (the P2P server).
-	err = n.sw.Start()
+	err = n.Sw.Start()
 	if err != nil {
 		return err
 	}
 
 	// Always connect to persistent peers
-	err = n.sw.DialPeersAsync(SplitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "))
+	err = n.Sw.DialPeersAsync(SplitAndTrimEmpty(n.Config.P2P.PersistentPeers, ",", " "))
 	if err != nil {
 		return errors.Wrap(err, "could not dial peers from persistent_peers field")
 	}
@@ -818,37 +818,37 @@ func (n *Node) OnStop() {
 	n.Logger.Info("Stopping Node")
 
 	// first stop the non-reactor services
-	n.eventBus.Stop()
-	n.indexerService.Stop()
+	n.EventBus.Stop()
+	n.IndexerService.Stop()
 
 	// now stop the reactors
-	n.sw.Stop()
+	n.Sw.Stop()
 
 	// stop mempool WAL
-	if n.config.Mempool.WalEnabled() {
-		n.mempool.CloseWAL()
+	if n.Config.Mempool.WalEnabled() {
+		n.Mempool.CloseWAL()
 	}
 
-	if err := n.transport.Close(); err != nil {
+	if err := n.Transport.Close(); err != nil {
 		n.Logger.Error("Error closing transport", "err", err)
 	}
 
-	n.isListening = false
+	n.IsListening = false
 
 	// finally stop the listeners / external services
-	for _, l := range n.rpcListeners {
+	for _, l := range n.RpcListeners {
 		n.Logger.Info("Closing rpc listener", "listener", l)
 		if err := l.Close(); err != nil {
 			n.Logger.Error("Error closing listener", "listener", l, "err", err)
 		}
 	}
 
-	if pvsc, ok := n.privValidator.(cmn.Service); ok {
+	if pvsc, ok := n.PrivValidator.(cmn.Service); ok {
 		pvsc.Stop()
 	}
 
-	if n.prometheusSrv != nil {
-		if err := n.prometheusSrv.Shutdown(context.Background()); err != nil {
+	if n.PrometheusSrv != nil {
+		if err := n.PrometheusSrv.Shutdown(context.Background()); err != nil {
 			// Error from closing listeners, or context timeout:
 			n.Logger.Error("Prometheus HTTP server Shutdown", "err", err)
 		}
@@ -858,43 +858,43 @@ func (n *Node) OnStop() {
 // ConfigureRPC sets all variables in rpccore so they will serve
 // rpc calls from this node
 func (n *Node) ConfigureRPC() {
-	rpccore.SetStateDB(n.stateDB)
-	rpccore.SetBlockStore(n.blockStore)
-	rpccore.SetConsensusState(n.consensusState)
-	rpccore.SetMempool(n.mempool)
-	rpccore.SetEvidencePool(n.evidencePool)
-	rpccore.SetP2PPeers(n.sw)
+	rpccore.SetStateDB(n.StateDB)
+	rpccore.SetBlockStore(n.BlockStore)
+	rpccore.SetConsensusState(n.ConsensusState)
+	rpccore.SetMempool(n.Mempool)
+	rpccore.SetEvidencePool(n.EvidencePool)
+	rpccore.SetP2PPeers(n.Sw)
 	rpccore.SetP2PTransport(n)
-	pubKey := n.privValidator.GetPubKey()
+	pubKey := n.PrivValidator.GetPubKey()
 	rpccore.SetPubKey(pubKey)
-	rpccore.SetGenesisDoc(n.genesisDoc)
-	rpccore.SetProxyAppQuery(n.proxyApp.Query())
-	rpccore.SetTxIndexer(n.txIndexer)
-	rpccore.SetConsensusReactor(n.consensusReactor)
-	rpccore.SetEventBus(n.eventBus)
+	rpccore.SetGenesisDoc(n.GenesisDoc)
+	rpccore.SetProxyAppQuery(n.ProxyApp.Query())
+	rpccore.SetTxIndexer(n.TxIndexer)
+	rpccore.SetConsensusReactor(n.ConsensusReactor)
+	rpccore.SetEventBus(n.EventBus)
 	rpccore.SetLogger(n.Logger.With("module", "rpc"))
-	rpccore.SetConfig(*n.config.RPC)
+	rpccore.SetConfig(*n.Config.RPC)
 }
 
 func (n *Node) startRPC() ([]net.Listener, error) {
 	n.ConfigureRPC()
-	listenAddrs := SplitAndTrimEmpty(n.config.RPC.ListenAddress, ",", " ")
+	listenAddrs := SplitAndTrimEmpty(n.Config.RPC.ListenAddress, ",", " ")
 	coreCodec := amino.NewCodec()
 	ctypes.RegisterAmino(coreCodec)
 
-	if n.config.RPC.Unsafe {
+	if n.Config.RPC.Unsafe {
 		rpccore.AddUnsafeRoutes()
 	}
 
 	config := rpcserver.DefaultConfig()
-	config.MaxBodyBytes = n.config.RPC.MaxBodyBytes
-	config.MaxHeaderBytes = n.config.RPC.MaxHeaderBytes
-	config.MaxOpenConnections = n.config.RPC.MaxOpenConnections
+	config.MaxBodyBytes = n.Config.RPC.MaxBodyBytes
+	config.MaxHeaderBytes = n.Config.RPC.MaxHeaderBytes
+	config.MaxOpenConnections = n.Config.RPC.MaxOpenConnections
 	// If necessary adjust global WriteTimeout to ensure it's greater than
 	// TimeoutBroadcastTxCommit.
 	// See https://github.com/tendermint/tendermint/issues/3435
-	if config.WriteTimeout <= n.config.RPC.TimeoutBroadcastTxCommit {
-		config.WriteTimeout = n.config.RPC.TimeoutBroadcastTxCommit + 1*time.Second
+	if config.WriteTimeout <= n.Config.RPC.TimeoutBroadcastTxCommit {
+		config.WriteTimeout = n.Config.RPC.TimeoutBroadcastTxCommit + 1*time.Second
 	}
 
 	// we may expose the rpc over both a unix and tcp socket
@@ -905,7 +905,7 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 		wmLogger := rpcLogger.With("protocol", "websocket")
 		wm := rpcserver.NewWebsocketManager(rpccore.Routes, coreCodec,
 			rpcserver.OnDisconnect(func(remoteAddr string) {
-				err := n.eventBus.UnsubscribeAll(context.Background(), remoteAddr)
+				err := n.EventBus.UnsubscribeAll(context.Background(), remoteAddr)
 				if err != nil && err != tmpubsub.ErrSubscriptionNotFound {
 					wmLogger.Error("Failed to unsubscribe addr from events", "addr", remoteAddr, "err", err)
 				}
@@ -924,20 +924,20 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 		}
 
 		var rootHandler http.Handler = mux
-		if n.config.RPC.IsCorsEnabled() {
+		if n.Config.RPC.IsCorsEnabled() {
 			corsMiddleware := cors.New(cors.Options{
-				AllowedOrigins: n.config.RPC.CORSAllowedOrigins,
-				AllowedMethods: n.config.RPC.CORSAllowedMethods,
-				AllowedHeaders: n.config.RPC.CORSAllowedHeaders,
+				AllowedOrigins: n.Config.RPC.CORSAllowedOrigins,
+				AllowedMethods: n.Config.RPC.CORSAllowedMethods,
+				AllowedHeaders: n.Config.RPC.CORSAllowedHeaders,
 			})
 			rootHandler = corsMiddleware.Handler(mux)
 		}
-		if n.config.RPC.IsTLSEnabled() {
+		if n.Config.RPC.IsTLSEnabled() {
 			go rpcserver.StartHTTPAndTLSServer(
 				listener,
 				rootHandler,
-				n.config.RPC.CertFile(),
-				n.config.RPC.KeyFile(),
+				n.Config.RPC.CertFile(),
+				n.Config.RPC.KeyFile(),
 				rpcLogger,
 				config,
 			)
@@ -954,10 +954,10 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 	}
 
 	// we expose a simplified api over grpc for convenience to app devs
-	grpcListenAddr := n.config.RPC.GRPCListenAddress
+	grpcListenAddr := n.Config.RPC.GRPCListenAddress
 	if grpcListenAddr != "" {
 		config := rpcserver.DefaultConfig()
-		config.MaxOpenConnections = n.config.RPC.MaxOpenConnections
+		config.MaxOpenConnections = n.Config.RPC.MaxOpenConnections
 		listener, err := rpcserver.Listen(grpcListenAddr, config)
 		if err != nil {
 			return nil, err
@@ -977,7 +977,7 @@ func (n *Node) startPrometheusServer(addr string) *http.Server {
 		Handler: promhttp.InstrumentMetricHandler(
 			prometheus.DefaultRegisterer, promhttp.HandlerFor(
 				prometheus.DefaultGatherer,
-				promhttp.HandlerOpts{MaxRequestsInFlight: n.config.Instrumentation.MaxOpenConnections},
+				promhttp.HandlerOpts{MaxRequestsInFlight: n.Config.Instrumentation.MaxOpenConnections},
 			),
 		),
 	}
@@ -992,85 +992,85 @@ func (n *Node) startPrometheusServer(addr string) *http.Server {
 
 // Switch returns the Node's Switch.
 func (n *Node) Switch() *p2p.Switch {
-	return n.sw
+	return n.Sw
 }
 
 // BlockStore returns the Node's BlockStore.
-func (n *Node) BlockStore() *store.BlockStore {
-	return n.blockStore
+func (n *Node) GetBlockStore() *store.BlockStore {
+	return n.BlockStore
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() cs.StateInterface {
-	return n.consensusState
+func (n *Node) GetConsensusState() cs.StateInterface {
+	return n.ConsensusState
 }
 
 // ConsensusReactor returns the Node's ConsensusReactor.
-func (n *Node) ConsensusReactor() *cs.ConsensusReactor {
-	return n.consensusReactor
+func (n *Node) GetConsensusReactor() rpccore.ConsensusReactorInterface {
+	return n.ConsensusReactor
 }
 
 // MempoolReactor returns the Node's mempool reactor.
-func (n *Node) MempoolReactor() *mempl.Reactor {
-	return n.mempoolReactor
+func (n *Node) GetMempoolReactor() *mempl.Reactor {
+	return n.MempoolReactor
 }
 
 // Mempool returns the Node's mempool.
-func (n *Node) Mempool() mempl.Mempool {
-	return n.mempool
+func (n *Node) GetMempool() mempl.Mempool {
+	return n.Mempool
 }
 
 // PEXReactor returns the Node's PEXReactor. It returns nil if PEX is disabled.
-func (n *Node) PEXReactor() *pex.PEXReactor {
-	return n.pexReactor
+func (n *Node) GetPEXReactor() *pex.PEXReactor {
+	return n.PexReactor
 }
 
 // EvidencePool returns the Node's EvidencePool.
-func (n *Node) EvidencePool() *evidence.EvidencePool {
-	return n.evidencePool
+func (n *Node) GetEvidencePool() *evidence.EvidencePool {
+	return n.EvidencePool
 }
 
 // EventBus returns the Node's EventBus.
-func (n *Node) EventBus() *types.EventBus {
-	return n.eventBus
+func (n *Node) GetEventBus() *types.EventBus {
+	return n.EventBus
 }
 
 // PrivValidator returns the Node's PrivValidator.
 // XXX: for convenience only!
-func (n *Node) PrivValidator() types.PrivValidator {
-	return n.privValidator
+func (n *Node) GetPrivValidator() types.PrivValidator {
+	return n.PrivValidator
 }
 
 // GenesisDoc returns the Node's GenesisDoc.
-func (n *Node) GenesisDoc() *types.GenesisDoc {
-	return n.genesisDoc
+func (n *Node) GetGenesisDoc() *types.GenesisDoc {
+	return n.GenesisDoc
 }
 
 // ProxyApp returns the Node's AppConns, representing its connections to the ABCI application.
-func (n *Node) ProxyApp() proxy.AppConns {
-	return n.proxyApp
+func (n *Node) GetProxyApp() proxy.AppConns {
+	return n.ProxyApp
 }
 
 // Config returns the Node's config.
-func (n *Node) Config() *cfg.Config {
-	return n.config
+func (n *Node) GetConfig() *cfg.Config {
+	return n.Config
 }
 
 //------------------------------------------------------------------------------
 
 func (n *Node) Listeners() []string {
 	return []string{
-		fmt.Sprintf("Listener(@%v)", n.config.P2P.ExternalAddress),
+		fmt.Sprintf("Listener(@%v)", n.Config.P2P.ExternalAddress),
 	}
 }
 
-func (n *Node) IsListening() bool {
-	return n.isListening
+func (n *Node) GetIsListening() bool {
+	return n.IsListening
 }
 
 // NodeInfo returns the Node's Info from the Switch.
-func (n *Node) NodeInfo() p2p.NodeInfo {
-	return n.nodeInfo
+func (n *Node) GetNodeInfo() p2p.NodeInfo {
+	return n.NodeInfo
 }
 
 func MakeNodeInfo(
