@@ -2,6 +2,11 @@ package node
 
 import (
 	"fmt"
+	l "log"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+
 	"github.com/corestario/dkglib/lib/basic"
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
@@ -26,9 +31,6 @@ import (
 	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/version"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
 )
 
 type BLSNodeProvider func(*cfg.Config, log.Logger) (*nd.Node, error)
@@ -66,7 +68,7 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	genDoc *types.GenesisDoc) (*cs.BLSConsensusReactor, cs.StateInterface) {
+	genDoc *types.GenesisDoc) (*cs.BLSConsensusReactor, *cs.ConsensusState) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
@@ -86,17 +88,18 @@ func createBLSConsensus(config *cfg.Config,
 	if err != nil {
 		panic(err)
 	}
+	l.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 
-	consensusState := cs.NewBLSConsensusState(
+	consensusState := cs.NewConsensusState(
 		config.Consensus,
 		state.Copy(),
 		blockExec,
 		blockStore,
 		mempool,
 		evidencePool,
-		cs.BLSStateMetrics(csMetrics),
-		cs.BLSWithEVSW(evsw),
-		cs.BLSWithDKG(dkg),
+		cs.StateMetrics(csMetrics),
+		cs.WithEVSW(evsw),
+		cs.WithDKG(dkg),
 	)
 
 	consensusState.SetLogger(consensusLogger)
@@ -126,9 +129,7 @@ func NewBLSNodeForCosmos(config *cfg.Config, logger log.Logger, app abci.Applica
 	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
 		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
 		if err != nil {
-
 			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
-
 		}
 		logger.Info("Upgrading PrivValidator file",
 			"old", oldPrivVal,

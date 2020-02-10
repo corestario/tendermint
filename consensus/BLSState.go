@@ -26,7 +26,7 @@ type BLSConsensusState struct {
 
 type BLSStateOption func(*BLSConsensusState)
 
-var _ StateInterface = &BLSConsensusState{}
+//var _ StateInterface = &BLSConsensusState{}
 
 func NewBLSConsensusState(
 	config *cfg.ConsensusConfig,
@@ -185,6 +185,13 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 		}
 	}()
 
+	dkgMsgQ := make(chan *dkgtypes.DKGDataMessage)
+	if cs.dkg != nil {
+		dkgMsgQ = cs.dkg.MsgQueue()
+	} else {
+		close(dkgMsgQ)
+	}
+
 	for {
 		if maxSteps > 0 {
 			if cs.nSteps >= maxSteps {
@@ -197,8 +204,8 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 		var mi msgInfo
 
 		select {
-		case msg := <-cs.dkg.MsgQueue():
-			if !cs.dkg.IsOnChain() {
+		case msg, ok := <-dkgMsgQ:
+			if ok && !cs.dkg.IsOnChain() {
 				cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 			}
 		case <-cs.txNotifier.TxsAvailable():
@@ -209,8 +216,10 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			cs.handleMsg(mi)
 		case mi = <-cs.internalMsgQueue:
-			cs.wal.WriteSync(mi) // NOTE: fsync
-
+			err := cs.wal.WriteSync(mi) // NOTE: fsync
+			if err != nil {
+				panic(fmt.Sprintf("Failed to write %v msg to consensus wal due to %v. Check your FS and restart the node", mi, err))
+			}
 			if _, ok := mi.Msg.(*VoteMessage); ok {
 				// we actually want to simulate failing during
 				// the previous WriteSync, but this isn't easy to do.

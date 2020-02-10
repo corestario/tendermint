@@ -23,7 +23,7 @@ import (
 type BLSConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
-	conS *BLSConsensusState
+	conS *ConsensusState
 
 	mtx      sync.RWMutex
 	fastSync bool
@@ -36,7 +36,7 @@ type BLSReactorOption func(*BLSConsensusReactor)
 
 // NewBLSConsensusReactor returns a new BLSConsensusReactor with the given
 // consensusState.
-func NewBLSConsensusReactor(consensusState *BLSConsensusState, fastSync bool, options ...BLSReactorOption) *BLSConsensusReactor {
+func NewBLSConsensusReactor(consensusState *ConsensusState, fastSync bool, options ...BLSReactorOption) *BLSConsensusReactor {
 	conR := &BLSConsensusReactor{
 		conS:     consensusState,
 		fastSync: fastSync,

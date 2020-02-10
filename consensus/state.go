@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	l "log"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -69,7 +70,7 @@ type evidencePool interface {
 	AddEvidence(types.Evidence) error
 }
 
-var _ StateInterface = &ConsensusState{}
+//var _ StateInterface = &ConsensusState{}
 
 // ConsensusState handles execution of the consensus algorithm.
 // It processes votes and proposals, and upon reaching agreement,
@@ -137,10 +138,8 @@ type ConsensusState struct {
 
 	// for reporting metrics
 	metrics *Metrics
-}
 
-func (cs *ConsensusState) SetVerifier(verifier dkgtypes.Verifier) {
-	return
+	dkg dkgtypes.DKG
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -172,25 +171,35 @@ func NewConsensusState(
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
 	}
+	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
+
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
+	for k, option := range options {
+		l.Println("OPTION!", k)
+		option(cs)
+	}
 
 	cs.updateToState(state)
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
-	cs.BaseService = *cmn.NewBaseService(nil, "ConsensusState", cs)
-	for _, option := range options {
-		option(cs)
-	}
+
 	return cs
 }
 
 //----------------------------------------
 // Public interface
+
+func (cs *ConsensusState) SetVerifier(verifier dkgtypes.Verifier) {
+	if cs.dkg != nil {
+		cs.dkg.SetVerifier(verifier)
+	}
+	return
+}
 
 // SetLogger implements Service.
 func (cs *ConsensusState) SetLogger(l log.Logger) {
@@ -637,6 +646,13 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 	}()
 
+	dkgMsgQ := make(chan *dkgtypes.DKGDataMessage)
+	if cs.dkg != nil {
+		dkgMsgQ = cs.dkg.MsgQueue()
+	} else {
+		close(dkgMsgQ)
+	}
+
 	for {
 		if maxSteps > 0 {
 			if cs.nSteps >= maxSteps {
@@ -649,6 +665,10 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		var mi msgInfo
 
 		select {
+		case msg, ok := <-dkgMsgQ:
+			if ok && !cs.dkg.IsOnChain() {
+				cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
+			}
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 		case mi = <-cs.peerMsgQueue:
@@ -1288,6 +1308,9 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	logger.Info(fmt.Sprintf("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
 
 	defer func() {
+		if err := recover(); err != nil {
+			logger.Info("PANIC HANDLED", "error", err)
+		}
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
 		cs.updateRoundStep(cs.Round, cstypes.RoundStepCommit)
@@ -1299,9 +1322,22 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		cs.tryFinalizeCommit(height)
 	}()
 
-	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
+	precommits := cs.Votes.Precommits(commitRound)
+	blockID, ok := precommits.TwoThirdsMajority()
 	if !ok {
 		panic("RunActionCommit() expects +2/3 precommits")
+	}
+
+	if cs.dkg != nil {
+		randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+		if err != nil {
+			panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
+		}
+		cs.Logger.Info("Generated random data", "rand_data", randomData)
+		// TODO @oopcode: check if this is a possible situation.
+		if cs.ProposalBlock != nil {
+			cs.ProposalBlock.Header.SetRandomData(randomData)
+		}
 	}
 
 	// The Locked* fields no longer matter.
@@ -1392,6 +1428,12 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		panic(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
 
+	prevBlock := cs.getPreviousBlock()
+	if cs.dkg != nil {
+		if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
+			panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
+		}
+	}
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
 	cs.Logger.Info(fmt.Sprintf("%v", block))
@@ -1436,6 +1478,20 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	// Create a copy of the state for staging and an event cache for txs.
 	stateCopy := cs.state.Copy()
 
+	if cs.dkg != nil {
+		//dkgLosers := cs.dkg.GetLosers()
+		//for _, dkgLoser := range dkgLosers {
+		//	// TODO: Currently we lack a lot of relevant information about the failed node,
+		//	// TODO: including the height at which we had a misbehavior. We should address
+		//	// TODO: this as soon as possible.
+		//	if err := cs.evpool.AddEvidence(&DKGEvidenceMissingData{
+		//		pubkey: dkgLoser.PubKey,
+		//	}); err != nil {
+		//		panic(fmt.Sprintf("failed to add dkg evidence for validator %s: %v", dkgLoser.Address.String(), err))
+		//	}
+		//}
+	}
+
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// NOTE The block.AppHash wont reflect these txs until the next block.
 	var err error
@@ -1450,6 +1506,12 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 			cs.Logger.Error("Failed to kill this process - please do so manually", "err", err)
 		}
 		return
+	}
+
+	if cs.dkg != nil {
+		if cs.dkg.IsOnChain() {
+			go cs.dkg.NewBlockNotify()
+		}
 	}
 
 	fail.Fail() // XXX
@@ -1701,6 +1763,19 @@ func (cs *ConsensusState) addVote(
 		return
 	}
 
+	if cs.dkg != nil {
+		if vote.Type == types.PrecommitType {
+			var (
+				prevBlockData = cs.getPreviousBlock().RandomData
+				validatorAddr = vote.ValidatorAddress.String()
+			)
+			if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+				return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
+					err, validatorAddr, prevBlockData, vote.BLSSignature)
+			}
+		}
+	}
+
 	height := cs.Height
 	added, err = cs.Votes.AddVote(vote, peerID)
 	if !added {
@@ -1813,7 +1888,7 @@ func (cs *ConsensusState) addVote(
 func (cs *ConsensusState) signVote(
 	type_ types.SignedMsgType,
 	hash []byte,
-	header types.PartSetHeader) (*types.Vote, error) {
+	header types.PartSetHeader, dataSet ...[]byte) (*types.Vote, error) {
 	// Flush the WAL. Otherwise, we may not recompute the same vote to sign,
 	// and the privValidator will refuse to sign anything.
 	cs.wal.FlushAndSync()
@@ -1830,6 +1905,10 @@ func (cs *ConsensusState) signVote(
 		Type:             type_,
 		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 	}
+	if cs.dkg != nil && len(dataSet) != 0 {
+		vote.BLSSignature = dataSet[0]
+	}
+
 	err := cs.privValidator.SignData(cs.state.ChainID, vote)
 	return vote, err
 }
@@ -1859,7 +1938,28 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetPubKey().Address()) {
 		return nil
 	}
-	vote, err := cs.signVote(type_, hash, header)
+
+	var vote *types.Vote
+	var err error
+	if cs.dkg != nil {
+		if cs.dkg.Verifier() == nil {
+			return nil
+		}
+		var randomData []byte
+		if type_ == types.PrecommitType {
+			randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
+			if err != nil || len(randomData) == 0 {
+				cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
+					"type", type_, "hash", hash, "header", header, "random", randomData)
+				return nil
+			}
+		}
+		vote, err = cs.signVote(type_, hash, header, randomData)
+
+	} else {
+		vote, err = cs.signVote(type_, hash, header)
+	}
+
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.Logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "err", err)
@@ -1925,7 +2025,11 @@ func (cs *ConsensusState) GetStatsMsgQueue() chan msgInfo {
 }
 
 func (cs *ConsensusState) GetDKGMsgQueue() chan *dkgtypes.DKGDataMessage {
+	if cs.dkg != nil {
+		return cs.dkg.MsgQueue()
+	}
 	return nil
+
 }
 
 func (cs *ConsensusState) GetBlockStore() state.BlockStore {
@@ -1934,4 +2038,25 @@ func (cs *ConsensusState) GetBlockStore() state.BlockStore {
 
 func (cs *ConsensusState) GetConfig() *cfg.ConsensusConfig {
 	return cs.config
+}
+
+// ------------------------------------------------------------
+
+func (cs *ConsensusState) getPreviousBlock() *types.Block {
+	var prevBlock *types.Block
+	if cs.Height == 1 {
+		prevBlock = &types.Block{Header: types.Header{RandomData: []byte(types.InitialRandomData)}}
+	} else {
+		prevBlock = cs.blockStore.LoadBlock(cs.Height - 1)
+	}
+
+	return prevBlock
+}
+
+func WithDKG(dkg dkgtypes.DKG) StateOption {
+	return func(cs *ConsensusState) { cs.dkg = dkg }
+}
+
+func WithEVSW(evsw tmevents.EventSwitch) StateOption {
+	return func(cs *ConsensusState) { cs.evsw = evsw }
 }

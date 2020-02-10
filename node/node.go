@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/corestario/dkglib/lib/basic"
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
+	"github.com/tendermint/tendermint/libs/events"
+
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -163,7 +167,7 @@ func CustomReactors(reactors map[string]p2p.Reactor) Option {
 	}
 }
 
-func CustomConsensusState(state cs.StateInterface) Option {
+func CustomConsensusState(state *cs.ConsensusState) Option {
 	return func(n *Node) {
 		n.ConsensusState = state
 	}
@@ -196,7 +200,7 @@ type Node struct {
 	BcReactor        p2p.Reactor       // for fast-syncing
 	MempoolReactor   *mempl.Reactor    // for gossipping transactions
 	Mempool          mempl.Mempool
-	ConsensusState   cs.StateInterface                 // latest consensus state
+	ConsensusState   *cs.ConsensusState                // latest consensus state
 	ConsensusReactor rpccore.ConsensusReactorInterface // for participating in the consensus
 	PexReactor       *pex.PEXReactor                   // for exchanging peer addresses
 	EvidencePool     *evidence.EvidencePool            // tracking evidence
@@ -390,6 +394,24 @@ func createConsensusReactor(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger) (*cs.ConsensusReactor, *cs.ConsensusState) {
 
+	evsw := events.NewEventSwitch()
+
+	logger := log.NewTMLogger(os.Stdout)
+	dkg, err := basic.NewDKGBasic(
+		evsw,
+		Cdc,
+		state.ChainID,
+		config.DKGOnChainConfig.NodeEndpointForContext,
+		config.DKGOnChainConfig.Passphrase,
+		config.DKGOnChainConfig.RandappCLIDirectory,
+		//dkgOffChain.WithVerifier(verifier),
+		//dkgOffChain.WithDKGNumBlocks(genDoc.DKGNumBlocks),
+		dkgOffChain.WithLogger(logger),
+		dkgOffChain.WithPVKey(privValidator),
+	)
+	if err != nil {
+		panic(err)
+	}
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
 		state.Copy(),
@@ -398,6 +420,8 @@ func createConsensusReactor(config *cfg.Config,
 		mempool,
 		evidencePool,
 		cs.StateMetrics(csMetrics),
+		cs.WithEVSW(evsw),
+		cs.WithDKG(dkg),
 	)
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
@@ -1001,7 +1025,7 @@ func (n *Node) GetBlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) GetConsensusState() cs.StateInterface {
+func (n *Node) GetConsensusState() *cs.ConsensusState {
 	return n.ConsensusState
 }
 
