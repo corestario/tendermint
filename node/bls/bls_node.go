@@ -67,7 +67,7 @@ func createBLSConsensus(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger,
 	verifier dkgtypes.Verifier,
-	genDoc *types.GenesisDoc) (*cs.BLSConsensusReactor, *cs.ConsensusState) {
+	genDoc *types.GenesisDoc) (*cs.ConsensusReactor, *cs.ConsensusState) {
 	// Make ConsensusReactor
 	evsw := events.NewEventSwitch()
 
@@ -104,7 +104,7 @@ func createBLSConsensus(config *cfg.Config,
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewBLSConsensusReactor(consensusState, fastSync, cs.BLSReactorMetrics(csMetrics))
+	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
@@ -356,7 +356,7 @@ func createBLSSwitch(config *cfg.Config,
 	peerFilters []p2p.PeerFilterFunc,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
-	consensusReactor *cs.BLSConsensusReactor,
+	consensusReactor *cs.ConsensusReactor,
 	evidenceReactor *evidence.EvidenceReactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
