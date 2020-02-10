@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	l "log"
 	"reflect"
 	"runtime/debug"
 	"sync"
@@ -177,8 +176,7 @@ func NewConsensusState(
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
-	for k, option := range options {
-		l.Println("OPTION!", k)
+	for _, option := range options {
 		option(cs)
 	}
 
@@ -465,6 +463,9 @@ func (cs *ConsensusState) SetProposalAndBlock(
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.metrics.Height.Set(float64(height))
 	cs.Height = height
+	if cs.dkg != nil {
+		cs.dkg.CheckDKGTime(cs.Height, cs.Validators)
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {

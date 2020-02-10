@@ -11,10 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/corestario/dkglib/lib/basic"
-	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
-	"github.com/tendermint/tendermint/libs/events"
-
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -394,24 +390,6 @@ func createConsensusReactor(config *cfg.Config,
 	eventBus *types.EventBus,
 	consensusLogger log.Logger) (*cs.ConsensusReactor, *cs.ConsensusState) {
 
-	evsw := events.NewEventSwitch()
-
-	logger := log.NewTMLogger(os.Stdout)
-	dkg, err := basic.NewDKGBasic(
-		evsw,
-		Cdc,
-		state.ChainID,
-		config.DKGOnChainConfig.NodeEndpointForContext,
-		config.DKGOnChainConfig.Passphrase,
-		config.DKGOnChainConfig.RandappCLIDirectory,
-		//dkgOffChain.WithVerifier(verifier),
-		//dkgOffChain.WithDKGNumBlocks(genDoc.DKGNumBlocks),
-		dkgOffChain.WithLogger(logger),
-		dkgOffChain.WithPVKey(privValidator),
-	)
-	if err != nil {
-		panic(err)
-	}
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
 		state.Copy(),
@@ -420,8 +398,6 @@ func createConsensusReactor(config *cfg.Config,
 		mempool,
 		evidencePool,
 		cs.StateMetrics(csMetrics),
-		cs.WithEVSW(evsw),
-		cs.WithDKG(dkg),
 	)
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {

@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-	l "log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -88,7 +87,6 @@ func createBLSConsensus(config *cfg.Config,
 	if err != nil {
 		panic(err)
 	}
-	l.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
