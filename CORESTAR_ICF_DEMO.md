@@ -82,14 +82,15 @@ make localnet-start --dkg_num_blocks=50
 
 ##### Scenario No. 4: Off-Chain fails, Successful On-Chain
 
-If Off-Chain DKG fails for some reason, Arcade switches to  On-Chain DKG. To get an Off-Chain round to fail, we can restart a node during a round:
+If Off-Chain DKG fails for some reason, Arcade switches to  On-Chain DKG. To get an Off-Chain round to fail, we can restart a node during a round (inside the randapp repo):
 
 ```
 rm -rf ./build
-make build-docker-localnode
+make build-docker-rdnode
 make build-linux
 make localnet-stop
-make localnet-start --dkg_num_blocks=50
+make localnet-start
+
 
 # Wait for DKG to start...
 
