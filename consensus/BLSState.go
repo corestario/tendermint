@@ -185,7 +185,7 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 		}
 	}()
 
-	if cs.dkg.Verifier().IsNil() {
+	if cs.dkg.Verifier() == nil {
 		if cs.Height < 1 {
 			cs.Logger.Error("nil verifier was found, but there's blocks in the chain")
 			panic("nil verifier was found, but there's blocks in the chain")
@@ -201,7 +201,7 @@ func (cs *BLSConsensusState) receiveRoutine(maxSteps int) {
 				case msg := <-cs.dkg.MsgQueue():
 					cs.dkg.HandleOffChainShare(msg, cs.Height, cs.Validators, cs.privValidator.GetPubKey())
 					// This means that we got a verifier to work with, we can run the blockchain now.
-					if !cs.dkg.Verifier().IsNil() {
+					if cs.dkg.Verifier() != nil {
 						cs.Logger.Info("successfully run initial DKG round, verifier ready")
 						return
 					}
