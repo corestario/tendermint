@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/corestario/dkglib/lib/basic"
+
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	dkgtypes "github.com/corestario/dkglib/lib/types"
@@ -294,23 +295,29 @@ func NewBLSNode(config *cfg.Config,
 		sm.BlockExecutorWithMetrics(smMetrics),
 	)
 
+	var verifier dkgtypes.Verifier
+
 	fmt.Println("load bls from", config.BLSKeyFile())
 	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
-	if err != nil {
+	var shareNotFound = err == os.ErrNotExist
+	if err != nil && !shareNotFound {
 		return nil, fmt.Errorf("failed to load BLS keypair: %v", err)
 	}
 
-	keypair, err := blsShare.Deserialize()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load keypair: %v", err)
+	if !shareNotFound {
+		keypair, err := blsShare.Deserialize()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load keypair: %v", err)
+		}
+
+		masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
+		}
+
+		verifier = bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	}
 
-	masterPubKey, err := bShare.LoadPubKey(genDoc.BLSMasterPubKey, genDoc.BLSNumShares)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master public key from genesis: %v", err)
-	}
-
-	verifier := bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	// Make BlockchainReactor
 
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)

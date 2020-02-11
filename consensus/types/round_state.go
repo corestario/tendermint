@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/types"
 )
@@ -121,6 +123,7 @@ func (rs *RoundState) RoundStateSimple() RoundStateSimple {
 
 // NewRoundEvent returns the RoundState with proposer information as an event.
 func (rs *RoundState) NewRoundEvent() types.EventDataNewRound {
+	log.Printf("New Round validators: %#+v", rs.Validators)
 	addr := rs.Validators.GetProposer().Address
 	idx, _ := rs.Validators.GetByAddress(addr)
 
