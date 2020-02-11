@@ -33,7 +33,7 @@ var waitForEventTimeout = 5 * time.Second
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node = rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("lite_proxy_tests", 0))
+	node.GetConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("lite_proxy_tests", 0))
 
 	code := m.Run()
 
