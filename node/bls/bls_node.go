@@ -317,7 +317,7 @@ func NewBLSNode(config *cfg.Config,
 
 		verifier = bShare.NewBLSVerifier(masterPubKey, keypair, genDoc.BLSThreshold, genDoc.BLSNumShares)
 	}
-	verifier = nil
+
 	// Make BlockchainReactor
 
 	bcReactor, err := createBLSBlockchainReactor(config, state, blockExec, blockStore, verifier, fastSync, logger)
