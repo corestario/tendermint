@@ -280,7 +280,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 				Votes:   ourVotes,
 			}))
 		case *dkgtypes.DKGDataMessage:
-			conR.conS.GetDKGMsgQueue() <- msg
+			q := conR.conS.GetDKGMsgQueue()
+			if q != nil {
+				q <- msg
+			}
 		default:
 			conR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -398,7 +401,9 @@ func (conR *ConsensusReactor) subscribeToBroadcastEvents() {
 		})
 	conR.conS.GetEventSwitch().AddListenerForEvent(subscriber, types.EventDKGData,
 		func(data tmevents.EventData) {
-			conR.broadcastDKGDataMessage(data.(*dkgAlias.DKGData))
+			if conR.conS.dkg != nil {
+				conR.broadcastDKGDataMessage(data.(*dkgAlias.DKGData))
+			}
 		})
 
 }
@@ -415,7 +420,9 @@ func (conR *ConsensusReactor) broadcastNewRoundStepMessage(rs *cstypes.RoundStat
 
 // Broadcasts HasVoteMessage to peers that care.
 func (conR *ConsensusReactor) broadcastDKGDataMessage(data *dkgAlias.DKGData) {
-	conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkgtypes.DKGDataMessage{Data: data}))
+	if conR.conS.dkg != nil {
+		conR.Switch.Broadcast(StateChannel, cdc.MustMarshalBinaryBare(&dkgtypes.DKGDataMessage{Data: data}))
+	}
 }
 
 func (conR *ConsensusReactor) broadcastNewValidBlockMessage(rs *cstypes.RoundState) {

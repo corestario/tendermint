@@ -647,11 +647,9 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 	}()
 
-	dkgMsgQ := make(chan *dkgtypes.DKGDataMessage)
+	var dkgMsgQ chan *dkgtypes.DKGDataMessage
 	if cs.dkg != nil {
 		dkgMsgQ = cs.dkg.MsgQueue()
-	} else {
-		close(dkgMsgQ)
 	}
 
 	for {
