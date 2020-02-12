@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	bShare "github.com/corestario/dkglib/lib/blsShare"
+	"github.com/corestario/dkglib/lib/dealer"
+	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
+	dkgTypes "github.com/corestario/dkglib/lib/types"
+	"github.com/tendermint/tendermint/libs/events"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -318,7 +323,7 @@ func newConsensusStateWithConfig(
 	pv types.PrivValidator,
 	app abci.Application) *ConsensusState {
 	blockDB := dbm.NewMemDB()
-	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB)
+	return newConsensusStateWithConfigAndBlockStore(thisConfig, state, pv, app, blockDB, nil, nil, 0)
 }
 
 func newConsensusStateWithConfigAndBlockStore(
@@ -326,7 +331,7 @@ func newConsensusStateWithConfigAndBlockStore(
 	state sm.State,
 	pv types.PrivValidator,
 	app abci.Application,
-	blockDB dbm.DB) *ConsensusState {
+	blockDB dbm.DB, verifier dkgTypes.Verifier, newDealer dealer.DKGDealerConstructor, dkgNumBlocks int64) *ConsensusState {
 	// Get BlockStore
 	blockStore := store.NewBlockStore(blockDB)
 
@@ -349,7 +354,12 @@ func newConsensusStateWithConfigAndBlockStore(
 	stateDB := blockDB
 	sm.SaveState(stateDB, state) //for save height 1's validators info
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
-	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool)
+
+	evsw := events.NewEventSwitch()
+	dkg := dkgOffChain.NewOffChainDKG(evsw, state.ChainID, dkgOffChain.WithVerifier(verifier),
+		dkgOffChain.WithDKGDealerConstructor(newDealer), dkgOffChain.WithDKGNumBlocks(dkgNumBlocks))
+
+	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool, WithDKG(dkg))
 	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 	cs.SetPrivValidator(pv)
 
@@ -615,11 +625,17 @@ func consensusLogger() log.Logger {
 }
 
 func randConsensusNet(nValidators int, testName string, tickerFunc func() TimeoutTicker,
-	appFunc func() abci.Application, configOpts ...func(*cfg.Config)) ([]*ConsensusState, cleanupFunc) {
+	appFunc func() abci.Application, dkgFunc func(int) dealer.DKGDealerConstructor, verifierFunc func(string, int) dkgTypes.Verifier, dkgNumBlocks int64, configOpts ...func(*cfg.Config)) ([]*ConsensusState, cleanupFunc) {
 	genDoc, privVals := randGenesisDoc(nValidators, false, 30)
 	css := make([]*ConsensusState, nValidators)
 	logger := consensusLogger()
 	configRootDirs := make([]string, 0, nValidators)
+	if dkgFunc == nil {
+		dkgFunc = func(i int) dealer.DKGDealerConstructor {
+			return dealer.NewDKGDealer
+		}
+	}
+
 	for i := 0; i < nValidators; i++ {
 		stateDB := dbm.NewMemDB() // each state needs its own db
 		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
@@ -633,7 +649,8 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 		vals := types.TM2PB.ValidatorUpdates(state.Validators)
 		app.InitChain(abci.RequestInitChain{Validators: vals})
 
-		css[i] = newConsensusStateWithConfigAndBlockStore(thisConfig, state, privVals[i], app, stateDB)
+		verifier := verifierFunc(testName, i)
+		css[i] = newConsensusStateWithConfigAndBlockStore(thisConfig, state, privVals[i], app, stateDB, verifier, dkgFunc(i), dkgNumBlocks)
 		css[i].SetTimeoutTicker(tickerFunc())
 		css[i].SetLogger(logger.With("validator", i, "module", "consensus"))
 	}
@@ -727,9 +744,13 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	sort.Sort(types.PrivValidatorsByAddress(privValidators))
 
 	return &types.GenesisDoc{
-		GenesisTime: tmtime.Now(),
-		ChainID:     config.ChainID(),
-		Validators:  validators,
+		GenesisTime:     tmtime.Now(),
+		ChainID:         config.ChainID(),
+		Validators:      validators,
+		BLSMasterPubKey: bShare.TestnetMasterPubKey,
+		BLSThreshold:    3,
+		BLSNumShares:    4,
+		DKGNumBlocks:    10,
 	}, privValidators
 }
 
