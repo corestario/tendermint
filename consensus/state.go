@@ -1327,7 +1327,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		panic("RunActionCommit() expects +2/3 precommits")
 	}
 
-	if cs.dkg != nil {
+	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
 		randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
 		if err != nil {
 			panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
@@ -1428,7 +1428,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	prevBlock := cs.getPreviousBlock()
-	if cs.dkg != nil {
+	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
 		if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
 			panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
 		}
@@ -1762,7 +1762,7 @@ func (cs *ConsensusState) addVote(
 		return
 	}
 
-	if cs.dkg != nil {
+	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
 		if vote.Type == types.PrecommitType {
 			var (
 				prevBlockData = cs.getPreviousBlock().RandomData
@@ -1940,10 +1940,7 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 
 	var vote *types.Vote
 	var err error
-	if cs.dkg != nil {
-		if cs.dkg.Verifier() == nil {
-			return nil
-		}
+	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
 		var randomData []byte
 		if type_ == types.PrecommitType {
 			randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
