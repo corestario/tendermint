@@ -57,7 +57,6 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
-	// todo what should we do if bls key not exsists
 	blsKeyFile := config.BLSKeyFile()
 	if cmn.FileExists(blsKeyFile) {
 		logger.Info("Found node key", "path", blsKeyFile)
