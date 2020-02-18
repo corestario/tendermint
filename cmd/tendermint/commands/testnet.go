@@ -33,6 +33,9 @@ var (
 	hostnames               []string
 	p2pPort                 int
 	randomMonikers          bool
+
+	dkgNumBlocks            int64
+	withoutGeneratedBLSKeys bool
 )
 
 const (
@@ -73,6 +76,8 @@ func init() {
 		"P2P Port")
 	TestnetFilesCmd.Flags().BoolVar(&randomMonikers, "random-monikers", false,
 		"Randomize the moniker for each generated node")
+	TestnetFilesCmd.Flags().Int64Var(&dkgNumBlocks, "dkg-num-blocks", 10, "Number of blocks after which DKG begins")
+	TestnetFilesCmd.Flags().BoolVar(&withoutGeneratedBLSKeys, "without-bls-keys", false, "Testnet without pregenerated BSL keys")
 }
 
 // TestnetFilesCmd allows initialisation of files for a Tendermint testnet.
@@ -182,7 +187,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		BLSMasterPubKey: blsShare.TestnetMasterPubKey,
 		BLSThreshold:    3,
 		BLSNumShares:    4,
-		DKGNumBlocks:    10,
+		DKGNumBlocks:    dkgNumBlocks,
 	}
 
 	// Write genesis file.

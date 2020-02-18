@@ -53,7 +53,7 @@ func main() {
 	}
 }
 
-func NewBLSNode(config *cfg.Config, logger log.Logger) (*bls.BLSNode, error) {
+func NewBLSNode(config *cfg.Config, logger log.Logger) (*node.Node, error) {
 
 	// Generate node PrivKey
 

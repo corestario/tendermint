@@ -141,7 +141,7 @@ func StartTendermint(app abci.Application, opts ...func(*Options)) *nm.Node {
 func StopTendermint(node *nm.Node) {
 	node.Stop()
 	node.Wait()
-	os.RemoveAll(node.Config().RootDir)
+	os.RemoveAll(node.GetConfig().RootDir)
 }
 
 // NewTendermint creates a new tendermint server and sleeps forever

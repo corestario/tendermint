@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 	// start a tendermint node in the background to test against
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(&dkgTypes.MockVerifier{})
+	node.GetConsensusState().SetVerifier(&dkgTypes.MockVerifier{})
 
 	code := m.Run()
 

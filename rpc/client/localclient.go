@@ -43,7 +43,7 @@ type Local struct {
 
 type LocalNode interface {
 	ConfigureRPC()
-	EventBus() *types.EventBus
+	GetEventBus() *types.EventBus
 }
 
 // NewLocal configures a client that calls the Node directly.
@@ -55,7 +55,7 @@ type LocalNode interface {
 func NewLocal(node LocalNode) *Local {
 	node.ConfigureRPC()
 	return &Local{
-		EventBus: node.EventBus(),
+		EventBus: node.GetEventBus(),
 		Logger:   log.NewNopLogger(),
 		ctx:      &rpctypes.Context{},
 	}

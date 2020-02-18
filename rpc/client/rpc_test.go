@@ -277,7 +277,7 @@ func TestBroadcastTxSync(t *testing.T) {
 	require := require.New(t)
 
 	// TODO (melekes): use mempool which is set on RPC rather than getting it from node
-	mempool := node.Mempool()
+	mempool := node.GetMempool()
 	initMempoolSize := mempool.Size()
 
 	for i, c := range GetClients() {
@@ -297,7 +297,7 @@ func TestBroadcastTxSync(t *testing.T) {
 func TestBroadcastTxCommit(t *testing.T) {
 	require := require.New(t)
 
-	mempool := node.Mempool()
+	mempool := node.GetMempool()
 	for i, c := range GetClients() {
 		_, _, tx := MakeTxKV()
 		bres, err := c.BroadcastTxCommit(tx)
@@ -312,7 +312,7 @@ func TestBroadcastTxCommit(t *testing.T) {
 func TestUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
-	mempool := node.Mempool()
+	mempool := node.GetMempool()
 	_ = mempool.CheckTx(tx, nil, mempl.TxInfo{})
 
 	for i, c := range GetClients() {
@@ -333,7 +333,7 @@ func TestUnconfirmedTxs(t *testing.T) {
 func TestNumUnconfirmedTxs(t *testing.T) {
 	_, _, tx := MakeTxKV()
 
-	mempool := node.Mempool()
+	mempool := node.GetMempool()
 	_ = mempool.CheckTx(tx, nil, mempl.TxInfo{})
 	mempoolSize := mempool.Size()
 

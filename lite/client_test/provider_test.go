@@ -18,7 +18,7 @@ import (
 func TestMain(m *testing.M) {
 	app := kvstore.NewKVStoreApplication()
 	node := rpctest.StartTendermint(app)
-	node.ConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("TestMain", 0))
+	node.GetConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("TestMain", 0))
 	code := m.Run()
 
 	rpctest.StopTendermint(node)

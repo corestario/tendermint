@@ -31,7 +31,7 @@ func NetInfo(ctx *rpctypes.Context) (*ctypes.ResultNetInfo, error) {
 	// PRO: useful info
 	// CON: privacy
 	return &ctypes.ResultNetInfo{
-		Listening: p2pTransport.IsListening(),
+		Listening: p2pTransport.GetIsListening(),
 		Listeners: p2pTransport.Listeners(),
 		NPeers:    len(peers),
 		Peers:     peers,
