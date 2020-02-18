@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/corestario/dkglib/lib/basic"
+
 	bShare "github.com/corestario/dkglib/lib/blsShare"
 	dkgOffChain "github.com/corestario/dkglib/lib/offChain"
 	dkgtypes "github.com/corestario/dkglib/lib/types"
