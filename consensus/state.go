@@ -652,9 +652,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		dkgMsgQ = cs.dkg.MsgQueue()
 	}
 
-	if cs.dkg.Verifier().IsNil() {
-		// TODO: try to avoid sleeps.
-		time.Sleep(time.Second * 5)
+	for cs.dkg.Verifier().IsNil() {
 
 		if cs.Height < 1 {
 			cs.Logger.Error("nil verifier was found, but there's blocks in the chain")
@@ -666,6 +664,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 
 		func() {
+			t := time.NewTimer(5 * time.Second)
 			for {
 				select {
 				case msg, ok := <-dkgMsgQ:
@@ -679,9 +678,16 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 						}
 						cs.Logger.Info("handled off-chain dkg message, verifier is not ready yet")
 					}
+				case <-t.C:
+					cs.Logger.Info("initial DKG round timeout")
+					return
 				}
 			}
 		}()
+
+		secondsToNextRound := time.Duration(cmn.RandInt31n(10)) * time.Second
+		cs.Logger.Info(fmt.Sprintf("Waiting %f seconds to the next DKG round", secondsToNextRound.Seconds()))
+		time.Sleep(secondsToNextRound)
 	}
 
 	for {
