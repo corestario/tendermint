@@ -34,9 +34,9 @@ require (
 )
 
 replace (
-	github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client
-	github.com/corestario/dkglib => ./../dkglib
-	github.com/cosmos/cosmos-sdk => ./../cosmos-sdk
-	github.com/tendermint/tendermint => ./
-	go.dedis.ch/kyber/v3 => ./../kyber
+	github.com/corestario/cosmos-utils/client => github.com/corestario/cosmos-utils/client v0.1.0
+	github.com/corestario/dkglib => github.com/corestario/dkglib v0.1.0
+	github.com/cosmos/cosmos-sdk => github.com/corestario/cosmos-sdk v0.1.0
+	github.com/tendermint/tendermint => github.com/corestario/tendermint v0.1.0
+	go.dedis.ch/kyber/v3 => github.com/corestario/kyber/v3 v3.0.0-20200218082721-8ed10c357c05
 )
