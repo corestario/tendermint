@@ -680,14 +680,13 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 					}
 				case <-t.C:
 					cs.Logger.Info("initial DKG round timeout")
+					secondsToNextRound := time.Duration(cmn.RandInt31n(10)) * time.Second
+					cs.Logger.Info(fmt.Sprintf("waiting %f seconds to the next DKG round", secondsToNextRound.Seconds()))
+					time.Sleep(secondsToNextRound)
 					return
 				}
 			}
 		}()
-
-		secondsToNextRound := time.Duration(cmn.RandInt31n(10)) * time.Second
-		cs.Logger.Info(fmt.Sprintf("Waiting %f seconds to the next DKG round", secondsToNextRound.Seconds()))
-		time.Sleep(secondsToNextRound)
 	}
 
 	for {
