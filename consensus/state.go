@@ -664,7 +664,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		}
 
 		func() {
-			t := time.NewTimer(5 * time.Second)
+			var retryTimeout time.Timer
+			timeout := time.NewTimer(cs.config.InitialDKGRoundTimeout)
 			for {
 				select {
 				case msg, ok := <-dkgMsgQ:
@@ -678,11 +679,12 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 						}
 						cs.Logger.Info("handled off-chain dkg message, verifier is not ready yet")
 					}
-				case <-t.C:
+				case <-timeout.C:
 					cs.Logger.Info("initial DKG round timeout")
-					secondsToNextRound := time.Duration(cmn.RandInt31n(10)) * time.Second
+					secondsToNextRound := time.Duration(cmn.RandInt63n(cs.config.InitialDKGRoundRetryTimeout.Milliseconds())) * time.Millisecond
 					cs.Logger.Info(fmt.Sprintf("waiting %f seconds to the next DKG round", secondsToNextRound.Seconds()))
-					time.Sleep(secondsToNextRound)
+				case <-retryTimeout.C:
+					// cs.dkg.Verifier is nil, so we start a new DKG round
 					return
 				}
 			}
