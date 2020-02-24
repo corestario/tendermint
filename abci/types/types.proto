@@ -330,6 +330,11 @@ message Evidence {
   int64 total_voting_power = 5;
 }
 
+message ModuleEndBlock {
+  repeated ValidatorUpdate validators = 1  [(gogoproto.nullable)=false];
+  bytes seed = 2;
+}
+
 //----------------------------------------
 // Service Definition
 
