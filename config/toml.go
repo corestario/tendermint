@@ -339,8 +339,8 @@ create_empty_blocks_interval = "{{ .Consensus.CreateEmptyBlocksInterval }}"
 peer_gossip_sleep_duration = "{{ .Consensus.PeerGossipSleepDuration }}"
 peer_query_maj23_sleep_duration = "{{ .Consensus.PeerQueryMaj23SleepDuration }}"
 
-initial_dkg_round_timeout = "{{ .InitialDKGRoundTimeout }}"
-initial_dkg_round_retry_timeout = "{{ .InitialDKGRoundRetryTimeout }}"
+initial_dkg_round_timeout = "{{ .Consensus.InitialDKGRoundTimeout }}"
+initial_dkg_round_retry_timeout = "{{ .Consensus.InitialDKGRoundRetryTimeout }}"
 
 ##### transactions indexer configuration options #####
 [tx_index]
