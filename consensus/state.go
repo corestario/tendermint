@@ -666,7 +666,9 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 		func() {
 			// We should init timer to avoid nil panic and stop it to avoid ticking ahead of time
 			retryTimeout := time.NewTimer(time.Second)
-			retryTimeout.Stop()
+			if !retryTimeout.Stop() {
+				<-retryTimeout.C
+			}
 
 			timeout := time.NewTimer(cs.config.InitialDKGRoundTimeout)
 			for {
