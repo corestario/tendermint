@@ -139,6 +139,10 @@ type ConsensusState struct {
 	metrics *Metrics
 
 	dkg dkgtypes.DKG
+
+	// blsSeed can be set if it is present in an EndBlock response. It should be set to
+	// nil after use.
+	blsSeed []byte
 }
 
 // StateOption sets an optional parameter on the ConsensusState.
@@ -1360,7 +1364,10 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 	}
 
 	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
-		randomData, err := cs.dkg.Verifier().Recover(cs.getPreviousBlock().RandomData, precommits.GetVotes())
+		randomData, err := cs.dkg.Verifier().Recover(
+			append(cs.getPreviousBlock().RandomData, cs.blsSeed...),
+			precommits.GetVotes(),
+		)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to recover random data from votes: %v", err))
 		}
@@ -1368,7 +1375,9 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		// TODO @oopcode: check if this is a possible situation.
 		if cs.ProposalBlock != nil {
 			cs.ProposalBlock.Header.SetRandomData(randomData)
+			cs.blsSeed = nil
 		}
+
 	}
 
 	// The Locked* fields no longer matter.
@@ -1461,7 +1470,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	prevBlock := cs.getPreviousBlock()
 	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
-		if err := cs.dkg.Verifier().VerifyRandomData(prevBlock.Header.RandomData, block.Header.RandomData); err != nil {
+		if err := cs.dkg.Verifier().VerifyRandomData(
+			append(prevBlock.Header.RandomData, cs.blsSeed...),
+			block.Header.RandomData,
+		); err != nil {
 			panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock has invalid random value: %v", err))
 		}
 	}
@@ -1538,6 +1550,8 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		}
 		return
 	}
+
+	cs.Seed = stateCopy.Seed
 
 	if cs.dkg != nil {
 		if cs.dkg.IsOnChain() {
@@ -1800,7 +1814,12 @@ func (cs *ConsensusState) addVote(
 				prevBlockData = cs.getPreviousBlock().RandomData
 				validatorAddr = vote.ValidatorAddress.String()
 			)
-			if err := cs.dkg.Verifier().VerifyRandomShare(validatorAddr, prevBlockData, vote.BLSSignature); err != nil {
+			if err := cs.dkg.Verifier().VerifyRandomShare(
+				validatorAddr,
+				append(prevBlockData, cs.blsSeed...),
+				vote.BLSSignature,
+			); err != nil {
+				чт
 				return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
 					err, validatorAddr, prevBlockData, vote.BLSSignature)
 			}
@@ -1814,7 +1833,9 @@ func (cs *ConsensusState) addVote(
 		return
 	}
 
-	cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote})
+	if err := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); err != nil {
+		cs.Logger.Error("failed to PublishEventVote", "error", errq)
+	}
 	cs.evsw.FireEvent(types.EventVote, vote)
 
 	switch vote.Type {
@@ -1975,7 +1996,9 @@ func (cs *ConsensusState) signAddVote(type_ types.SignedMsgType, hash []byte, he
 	if cs.dkg != nil && !cs.dkg.Verifier().IsNil() {
 		var randomData []byte
 		if type_ == types.PrecommitType {
-			randomData, err = cs.dkg.Verifier().Sign(cs.getPreviousBlock().Header.RandomData)
+			randomData, err = cs.dkg.Verifier().Sign(
+				append(cs.getPreviousBlock().Header.RandomData, cs.blsSeed...),
+			)
 			if err != nil || len(randomData) == 0 {
 				cs.Logger.Error("Error signing vote", "height", cs.Height, "round", cs.Round, "err", err,
 					"type", type_, "hash", hash, "header", header, "random", randomData)
