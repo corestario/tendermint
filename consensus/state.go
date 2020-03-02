@@ -1551,7 +1551,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
-	cs.Seed = stateCopy.Seed
+	cs.blsSeed = stateCopy.Seed
 
 	if cs.dkg != nil {
 		if cs.dkg.IsOnChain() {
@@ -1819,7 +1819,6 @@ func (cs *ConsensusState) addVote(
 				append(prevBlockData, cs.blsSeed...),
 				vote.BLSSignature,
 			); err != nil {
-				чт
 				return false, fmt.Errorf("random share authenticy check failed: %v, validator %v, prevBlockData %v, vote.BLSSignature %v",
 					err, validatorAddr, prevBlockData, vote.BLSSignature)
 			}
@@ -1834,7 +1833,7 @@ func (cs *ConsensusState) addVote(
 	}
 
 	if err := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); err != nil {
-		cs.Logger.Error("failed to PublishEventVote", "error", errq)
+		cs.Logger.Error("failed to PublishEventVote", "error", err)
 	}
 	cs.evsw.FireEvent(types.EventVote, vote)
 
