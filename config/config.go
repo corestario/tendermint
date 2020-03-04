@@ -768,6 +768,11 @@ type ConsensusConfig struct {
 	// Reactor sleep duration parameters
 	PeerGossipSleepDuration     time.Duration `mapstructure:"peer_gossip_sleep_duration"`
 	PeerQueryMaj23SleepDuration time.Duration `mapstructure:"peer_query_maj23_sleep_duration"`
+
+	// How much maximum time we should wait for the end of the initial DKG round
+	InitialDKGRoundTimeout time.Duration `mapstructure:"initial_dkg_round_timeout"`
+	// How much time we should wait until new initial DKG round
+	InitialDKGRoundRetryTimeout time.Duration `mapstructure:"initial_dkg_round_retry_timeout"`
 }
 
 // DefaultConsensusConfig returns a default configuration for the consensus service
@@ -786,6 +791,8 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		CreateEmptyBlocksInterval:   0 * time.Second,
 		PeerGossipSleepDuration:     100 * time.Millisecond,
 		PeerQueryMaj23SleepDuration: 2000 * time.Millisecond,
+		InitialDKGRoundTimeout:      5 * time.Second,
+		InitialDKGRoundRetryTimeout: 10 * time.Second,
 	}
 }
 
@@ -802,6 +809,8 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
+	cfg.InitialDKGRoundTimeout = 5 * time.Second
+	cfg.InitialDKGRoundRetryTimeout = 10 * time.Second
 	return cfg
 }
 
