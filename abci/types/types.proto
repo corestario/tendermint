@@ -200,6 +200,7 @@ message ResponseEndBlock {
   repeated ValidatorUpdate validator_updates = 1 [(gogoproto.nullable)=false];
   ConsensusParams consensus_param_updates = 2;
   repeated Event events = 3 [(gogoproto.nullable)=false, (gogoproto.jsontag)="events,omitempty"];
+  bytes seed = 4;
 }
 
 message ResponseCommit {
@@ -328,6 +329,11 @@ message Evidence {
   int64 height = 3;
   google.protobuf.Timestamp time = 4 [(gogoproto.nullable)=false, (gogoproto.stdtime)=true];
   int64 total_voting_power = 5;
+}
+
+message ModuleEndBlock {
+  repeated ValidatorUpdate validators = 1  [(gogoproto.nullable)=false];
+  bytes seed = 2;
 }
 
 //----------------------------------------

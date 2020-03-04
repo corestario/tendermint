@@ -81,6 +81,9 @@ type State struct {
 
 	// the latest AppHash we've received from calling abci.Commit()
 	AppHash []byte
+
+	// Seed
+	Seed []byte
 }
 
 // Copy makes a copy of the State for mutating.
