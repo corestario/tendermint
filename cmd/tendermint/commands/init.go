@@ -57,6 +57,11 @@ func initFilesWithConfig(config *cfg.Config) error {
 		logger.Info("Generated node key", "path", nodeKeyFile)
 	}
 
+	blsKeyring, err := blsShare.NewBLSKeyring(config.DKGOnChainConfig.BLSThreshold, config.DKGOnChainConfig.BLSNumShares)
+	if err != nil {
+		return fmt.Errorf("failed to run NewBLSKeyring: %w", err)
+	}
+
 	blsKeyFile := config.BLSKeyFile()
 	if cmn.FileExists(blsKeyFile) {
 		logger.Info("Found node key", "path", blsKeyFile)
@@ -66,11 +71,18 @@ func initFilesWithConfig(config *cfg.Config) error {
 			return err
 		}
 		defer f.Close()
-		share, ok := blsShare.TestnetShares[config.NodeID]
+
+		share, ok := blsKeyring.Shares[config.NodeID]
 		if !ok {
 			return fmt.Errorf("node id #%d is unexpected", config.NodeID)
 		}
-		err = json.NewEncoder(f).Encode(share)
+
+		shareJSON, err := blsShare.NewBLSShareJSON(share)
+		if err != nil {
+			return fmt.Errorf("failed to load LoadBLSShareJSON: %w", err)
+		}
+
+		err = json.NewEncoder(f).Encode(shareJSON)
 		if err != nil {
 			return err
 		}

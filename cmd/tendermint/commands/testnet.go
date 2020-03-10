@@ -122,6 +122,9 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	config.DKGOnChainConfig.BLSThreshold = nValidators
+	config.DKGOnChainConfig.BLSNumShares = nValidators
+
 	genVals := make([]types.GenesisValidator, nValidators+nDeadValidators)
 
 	for i := 0; i < nValidators+nDeadValidators; i++ {

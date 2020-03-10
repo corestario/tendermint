@@ -161,7 +161,6 @@ func NewBLSNode(config *cfg.Config,
 	metricsProvider nd.MetricsProvider,
 	logger log.Logger,
 	options ...nd.Option) (*nd.Node, error) {
-
 	blockStore, stateDB, err := nd.InitDBs(config, nd.DefaultDBProvider)
 	if err != nil {
 		return nil, err
@@ -243,7 +242,7 @@ func NewBLSNode(config *cfg.Config,
 	)
 
 	var verifier *bShare.BLSVerifier
-	fmt.Println("load bls from", config.BLSKeyFile())
+	fmt.Println("load bls from", "path", config.BLSKeyFile())
 	blsShare, err := bShare.LoadBLSShareJSON(config.BLSKeyFile())
 	if err == nil {
 		keypair, err := blsShare.Deserialize()
