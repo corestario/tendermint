@@ -6,7 +6,7 @@ require (
 	github.com/Workiva/go-datastructures v1.0.50
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
-	github.com/corestario/dkglib v0.0.0-00010101000000-000000000000
+	github.com/corestario/dkglib v1.0.3
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.9.0
 	github.com/go-logfmt/logfmt v0.4.0
@@ -34,7 +34,6 @@ require (
 )
 
 replace (
-	github.com/corestario/dkglib => ./../dkglib
 	github.com/cosmos/cosmos-sdk => ./../cosmos-sdk
 	github.com/tendermint/tendermint => ./
 	go.dedis.ch/kyber/v3 => ./../kyber
