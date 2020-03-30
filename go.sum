@@ -45,6 +45,8 @@ github.com/corestario/cosmos-utils/client v0.1.0 h1:H1TJRJZ1OXryg/hmFcWqWApo7qUe
 github.com/corestario/cosmos-utils/client v0.1.0/go.mod h1:CW43uwIrli9T2U7p40FLUDxvRKJbOkmjqBVCx4D5Njk=
 github.com/corestario/dkglib v1.0.3 h1:Pi5ysPVuQc25wviutWVbMix3qFBMgEkFtxos5GcTtVc=
 github.com/corestario/dkglib v1.0.3/go.mod h1:PrS3H6tn0g+HW1D8/puNDQP/c+DmpKoqRyc212zgH04=
+github.com/corestario/dkglib v1.0.4 h1:MCT0Abx2NEi3FLaotog0hbibaIzmhMJlI5lSBIG7Wiw=
+github.com/corestario/dkglib v1.0.4/go.mod h1:KYYI9WN4850zC3UMBJ2OX7z3fLvHIM4rwCBd+yQJqkc=
 github.com/corestario/kyber/v3 v3.0.0-20200218082721-8ed10c357c05 h1:ICuDs+sbQzDem2pIAFyI+u6s0RiETzMc2IhnobgHkvE=
 github.com/corestario/kyber/v3 v3.0.0-20200218082721-8ed10c357c05/go.mod h1:kXy7p3STAurkADD+/aZcsznZGKVHEqbtmdIzvPfrs1U=
 github.com/cosmos/go-bip39 v0.0.0-20180618194314-52158e4697b8 h1:Iwin12wRQtyZhH6FV3ykFcdGNlYEzoeR0jN8Vn+JWsI=
