@@ -36,5 +36,5 @@ require (
 replace (
 	github.com/cosmos/cosmos-sdk => ./../cosmos-sdk
 	github.com/tendermint/tendermint => ./
-	go.dedis.ch/kyber/v3 => ./../kyber
+	go.dedis.ch/kyber/v3 => github.com/corestario/kyber/v3 v3.0.0-20200218082721-8ed10c357c05
 )
