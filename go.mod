@@ -32,10 +32,10 @@ require (
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	google.golang.org/grpc v1.25.1
+	github.com/corestario/cosmos-utils/client master
 )
 
 replace (
-	github.com/corestario/cosmos-utils/client => ./../cosmos-utils/client
 	github.com/corestario/dkglib => ./../dkglib
 	github.com/cosmos/cosmos-sdk => ./../cosmos-sdk
 	github.com/tendermint/tendermint => ./
