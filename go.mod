@@ -16,7 +16,6 @@ require (
 	github.com/json-iterator/go v1.1.9
 	github.com/libp2p/go-buffer-pool v0.0.2
 	github.com/magiconair/properties v1.8.1
-	github.com/mitchellh/gox v1.0.1 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.3
 	github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165
@@ -32,7 +31,6 @@ require (
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7
 	google.golang.org/grpc v1.25.1
-	github.com/corestario/cosmos-utils/client latest
 )
 
 replace (
