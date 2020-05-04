@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/mock"
 
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/mock"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -30,14 +30,14 @@ func TestValidateBlockHeader(t *testing.T) {
 		mock.Mempool{},
 		sm.MockEvidencePool{},
 	)
-	lastCommit := types.NewCommit(types.BlockID{}, nil)
+	lastCommit := types.NewCommit(0, 0, types.BlockID{}, nil)
 
 	// some bad values
 	wrongHash := tmhash.Sum([]byte("this hash is wrong"))
 	wrongVersion1 := state.Version.Consensus
-	wrongVersion1.Block += 1
+	wrongVersion1.Block++
 	wrongVersion2 := state.Version.Consensus
-	wrongVersion2.App += 1
+	wrongVersion2.App++
 
 	// Manipulation of any header field causes failure.
 	testCases := []struct {
@@ -49,8 +49,6 @@ func TestValidateBlockHeader(t *testing.T) {
 		{"ChainID wrong", func(block *types.Block) { block.ChainID = "not-the-real-one" }},
 		{"Height wrong", func(block *types.Block) { block.Height += 10 }},
 		{"Time wrong", func(block *types.Block) { block.Time = block.Time.Add(-time.Second * 1) }},
-		{"NumTxs wrong", func(block *types.Block) { block.NumTxs += 10 }},
-		{"TotalTxs wrong", func(block *types.Block) { block.TotalTxs += 10 }},
 
 		{"LastBlockID wrong", func(block *types.Block) { block.LastBlockID.PartsHeader.Total += 10 }},
 		{"LastCommitHash wrong", func(block *types.Block) { block.LastCommitHash = wrongHash }},
@@ -102,8 +100,8 @@ func TestValidateBlockCommit(t *testing.T) {
 		mock.Mempool{},
 		sm.MockEvidencePool{},
 	)
-	lastCommit := types.NewCommit(types.BlockID{}, nil)
-	wrongPrecommitsCommit := types.NewCommit(types.BlockID{}, nil)
+	lastCommit := types.NewCommit(0, 0, types.BlockID{}, nil)
+	wrongSigsCommit := types.NewCommit(1, 0, types.BlockID{}, nil)
 	badPrivVal := types.NewMockPV()
 
 	for height := int64(1); height < validationTestsStopHeight; height++ {
@@ -119,24 +117,28 @@ func TestValidateBlockCommit(t *testing.T) {
 				state.Validators,
 				privVals[proposerAddr.String()],
 				chainID,
+				time.Now(),
 			)
 			require.NoError(t, err, "height %d", height)
-			wrongHeightCommit := types.NewCommit(state.LastBlockID, []*types.CommitSig{wrongHeightVote.CommitSig()})
+			wrongHeightCommit := types.NewCommit(
+				wrongHeightVote.Height,
+				wrongHeightVote.Round,
+				state.LastBlockID,
+				[]types.CommitSig{wrongHeightVote.CommitSig()},
+			)
 			block, _ := state.MakeBlock(height, makeTxs(height), wrongHeightCommit, nil, proposerAddr)
 			err = blockExec.ValidateBlock(state, block)
 			_, isErrInvalidCommitHeight := err.(types.ErrInvalidCommitHeight)
 			require.True(t, isErrInvalidCommitHeight, "expected ErrInvalidCommitHeight at height %d but got: %v", height, err)
 
 			/*
-				#2589: test len(block.LastCommit.Precommits) == state.LastValidators.Size()
+				#2589: test len(block.LastCommit.Signatures) == state.LastValidators.Size()
 			*/
-			block, _ = state.MakeBlock(height, makeTxs(height), wrongPrecommitsCommit, nil, proposerAddr)
+			block, _ = state.MakeBlock(height, makeTxs(height), wrongSigsCommit, nil, proposerAddr)
 			err = blockExec.ValidateBlock(state, block)
-			_, isErrInvalidCommitPrecommits := err.(types.ErrInvalidCommitPrecommits)
-			require.True(
-				t,
-				isErrInvalidCommitPrecommits,
-				"expected ErrInvalidCommitPrecommits at height %d but got: %v",
+			_, isErrInvalidCommitSignatures := err.(types.ErrInvalidCommitSignatures)
+			require.True(t, isErrInvalidCommitSignatures,
+				"expected ErrInvalidCommitSignatures at height %d, but got: %v",
 				height,
 				err,
 			)
@@ -159,12 +161,22 @@ func TestValidateBlockCommit(t *testing.T) {
 		require.NoError(t, err, "height %d", height)
 
 		/*
-			wrongPrecommitsCommit is fine except for the extra bad precommit
+			wrongSigsCommit is fine except for the extra bad precommit
 		*/
-		goodVote, err := types.MakeVote(height, blockID, state.Validators, privVals[proposerAddr.String()], chainID)
+		goodVote, err := types.MakeVote(height,
+			blockID,
+			state.Validators,
+			privVals[proposerAddr.String()],
+			chainID,
+			time.Now(),
+		)
 		require.NoError(t, err, "height %d", height)
+
+		bpvPubKey, err := badPrivVal.GetPubKey()
+		require.NoError(t, err)
+
 		badVote := &types.Vote{
-			ValidatorAddress: badPrivVal.GetPubKey().Address(),
+			ValidatorAddress: bpvPubKey.Address(),
 			ValidatorIndex:   0,
 			Height:           height,
 			Round:            0,
@@ -174,7 +186,11 @@ func TestValidateBlockCommit(t *testing.T) {
 		}
 		err = badPrivVal.SignVote(chainID, goodVote)
 		require.NoError(t, err, "height %d", height)
-		wrongPrecommitsCommit = types.NewCommit(blockID, []*types.CommitSig{goodVote.CommitSig(), badVote.CommitSig()})
+		err = badPrivVal.SignVote(chainID, badVote)
+		require.NoError(t, err, "height %d", height)
+
+		wrongSigsCommit = types.NewCommit(goodVote.Height, goodVote.Round,
+			blockID, []types.CommitSig{goodVote.CommitSig(), badVote.CommitSig()})
 	}
 }
 
@@ -191,12 +207,12 @@ func TestValidateBlockEvidence(t *testing.T) {
 		mock.Mempool{},
 		sm.MockEvidencePool{},
 	)
-	lastCommit := types.NewCommit(types.BlockID{}, nil)
+	lastCommit := types.NewCommit(0, 0, types.BlockID{}, nil)
 
 	for height := int64(1); height < validationTestsStopHeight; height++ {
 		proposerAddr := state.Validators.GetProposer().Address
 		proposerIdx, _ := state.Validators.GetByAddress(proposerAddr)
-		goodEvidence := types.NewMockGoodEvidence(height, proposerIdx, proposerAddr)
+		goodEvidence := types.NewMockEvidence(height, time.Now(), proposerIdx, proposerAddr)
 		if height > 1 {
 			/*
 				A block with too much evidence fails
@@ -249,7 +265,7 @@ func TestValidateFailBlockOnCommittedEvidence(t *testing.T) {
 	// A block with a couple pieces of evidence passes.
 	block := makeBlock(state, height)
 	addr, _ := state.Validators.GetByIndex(0)
-	alreadyCommittedEvidence := types.NewMockGoodEvidence(height, 0, addr)
+	alreadyCommittedEvidence := types.NewMockEvidence(height, time.Now(), 0, addr)
 	block.Evidence.Evidence = []types.Evidence{alreadyCommittedEvidence}
 	block.EvidenceHash = block.Evidence.Hash()
 	err := blockExec.ValidateBlock(state, block)

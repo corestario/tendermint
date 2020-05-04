@@ -1,4 +1,4 @@
-# Corestar Arcade
+# Tendermint
 
 ![banner](docs/tendermint-core-image.jpg)
 
@@ -8,8 +8,8 @@ Or [Blockchain](<https://en.wikipedia.org/wiki/Blockchain_(database)>), for shor
 
 [![version](https://img.shields.io/github/tag/tendermint/tendermint.svg)](https://github.com/tendermint/tendermint/releases/latest)
 [![API Reference](https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667)](https://godoc.org/github.com/tendermint/tendermint)
-[![Go version](https://img.shields.io/badge/go-1.12.0-blue.svg)](https://github.com/moovweb/gvm)
-[![riot.im](https://img.shields.io/badge/riot.im-JOIN%20CHAT-green.svg)](https://riot.im/app/#/room/#tendermint:matrix.org)
+[![Go version](https://img.shields.io/badge/go-1.13-blue.svg)](https://github.com/moovweb/gvm)
+[![Discord](https://img.shields.io/discord/669268347736686612.svg)](https://discord.gg/AzefAFd)
 [![license](https://img.shields.io/github/license/tendermint/tendermint.svg)](https://github.com/tendermint/tendermint/blob/master/LICENSE)
 [![](https://tokei.rs/b1/github/tendermint/tendermint?category=lines)](https://github.com/tendermint/tendermint)
 
@@ -17,94 +17,43 @@ Or [Blockchain](<https://en.wikipedia.org/wiki/Blockchain_(database)>), for shor
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | master | [![CircleCI](https://circleci.com/gh/tendermint/tendermint/tree/master.svg?style=shield)](https://circleci.com/gh/tendermint/tendermint/tree/master) | [![codecov](https://codecov.io/gh/tendermint/tendermint/branch/master/graph/badge.svg)](https://codecov.io/gh/tendermint/tendermint) |
 
-Corestar Arcade is a Tendermint-based Byzantine Fault Tolerant (BFT) middleware that takes a state transition machine - written in any programming language -
-and securely replicates it on many machines. It's got an embedded BLS-based random beacon and built-in off-chain and on-chain DKGs.
+Tendermint Core is Byzantine Fault Tolerant (BFT) middleware that takes a state transition machine - written in any programming language -
+and securely replicates it on many machines.
 
-For Tendermint protocol details, see [the specification](/docs/spec).
+For protocol details, see [the specification](https://github.com/tendermint/spec).
 
-For detailed analysis of the Tendermint consensus protocol, including safety and liveness proofs,
+For detailed analysis of the consensus protocol, including safety and liveness proofs,
 see our recent paper, "[The latest gossip on BFT consensus](https://arxiv.org/abs/1807.04938)".
 
-For Arcade details, see [Arcade specification](/docs/arcade/arcade.md)
+## Releases
 
-## A Note on Production Readiness
+NOTE: The master branch is now an active development branch (starting with `v0.32`). Please, do not depend on it and
+use [releases](https://github.com/tendermint/tendermint/releases) instead.
 
-Corestar Arcade is not production ready, and Tendermint it's based on is already deployed in public networks but not yet battle-tested enough.
+Tendermint is being used in production in both private and public environments,
+most notably the blockchains of the [Cosmos Network](https://cosmos.network/).
+However, we are still making breaking changes to the protocol and the APIs and have not yet released v1.0.
+See below for more details about [versioning](#versioning).
+
+In any case, if you intend to run Tendermint in production,
+please [contact us](mailto:partners@tendermint.com) and [join the chat](https://riot.im/app/#/room/#tendermint:matrix.org).
+
+## Security
+
+To report a security vulnerability, see our [bug bounty
+program](https://hackerone.com/tendermint)
+
+For examples of the kinds of bugs we're looking for, see [SECURITY.md](SECURITY.md)
 
 ## Minimum requirements
 
-Requirement|Notes
----|---
-Go version | Go1.11.4 or higher
+| Requirement | Notes            |
+| ----------- | ---------------- |
+| Go version  | Go1.13 or higher |
 
 ## Documentation
 
-Complete documentation for Tendermint can be found on the [website](https://tendermint.com/docs/).
-
-## How Arcade is different from vanilla Tendermint
-
-This part of document describes an implementation of BLS-based random beacon that was added to Tendermint consensus by Corestar team.
-
-### Overview
-
-The goal of our project is to provide a framework for supplying cosmos applications with non-centralized source of entropy.  We want our in-built PRNG to be suitable for applications like games and gambling: that means fast, unbiasable, and easy to use. More specifically, our design constraints were:
-
-* Unbiasable
-* 2 seconds round (preferably 1 sec)
-* Publicly verifiable
-* Small receipt (under 10kb) and fast verification
-* Not relying on a central party or an oracle to function
-* Synchronous model of requesting for random number
-
-Additionally, we wanted to keep vanilla Tendermint's safety, liveness, sybil and censorship resitance under the same security model. 
-
-There are a lot of solutions for random numbers in blockchain that do not conform to this constraints. Some random beacons (most notable is RanDAO) are slightly biasable, which is fine for many applications. Others are not fast enough, not live enough, have receipts too big or require asynchrounos requests (i.e., in block 1000 applications requests a random number and in block 1010 it receives it).   
-
-The result of our work is a Tendermint-based blockchain that provides each block with a random number that can be safely used during block processing. In quorum setting it is as live and as safe as vanilla Tendermint (the difference is basically slightly increased size of consensus-related messages and block headers). Random data (an array of bytes) is added to each block's header and is accessible from application code.
-
-The way this data is obtained is as follows. We generate a t-of-n BLS keyring (using [dedis/kyber](https://github.com/dedis/kyber)) with a public key that is known to all validators and private shares known only to their holders. We add a (non-random) seed value (just any string) to genesis block; then for each new block a validator signs the random value from the previous block with their private key and shares that signature with other validators. When there's enough shares for the t-of-n threshold signature to be recovered, the resulting signature becomes the next random value and is added to block header.
-
-Sharing signatures is implemented by extending Tendermint's `Vote` type with a `.Data []byte` field. Signatures are shared during the Precommit phase, and BLS threshold equals `2/3+1` (so that we can recover the signature as soon as we have a polka):
-
-![Tendermint+BLS](https://raw.githubusercontent.com/corestario/tendermint/develop/docs/imgs/arcade_consensus.png)
-
-That scheme, among other things, means that block proposer for the round selects txs in the block before the random number for the block is known.
-
-*important source code files to check out about BLS random beacon*
-
-### DKG
-
-BLS random beacon requires a distributed key generation process. It is initiated before the first block is minted, and every  N blocks to generate a new BLS keyring (that's to reduce a potential impact of a stolen key). We implemented a distributed key generation based on "Secure distributed key generation for discrete-log based cryptosystems", 2007 by Gennaro et al.; the [dedis/kyber](https://github.com/dedis/kyber) implementation of DKG is used. Messaging is done in two different ways: *off-chain* and *on-chain*.
-
-
-##### Off-chain DKG
-
-Off-chain DKG uses Tendermint's messaging engine to deliver DKG-related data to validator peers *without* writing anything to blocks. When it's time to generate a new BLS keyring, we first try to run an off-chain DKG round because it's cheap and fast; if everything goes O.K., the new keyring is used for producing new blocks. Off-chain DKG runs in parallel with consensus. The problem with off-chain DKG is that you can cannot (due to lack of evidence) slash validators that do not participate in DKG; if off-chain DKG fails, we switch to on-chain DKG.
-
-Notable source code files to check out about DKG:
-
-1. https://github.com/corestario/tendermint/blob/develop/types/random.go
-2. https://github.com/corestario/tendermint/blob/develop/consensus/dkg.go
-3. https://github.com/corestario/tendermint/blob/develop/consensus/dkg_dealer.go
-
-Note that most DKG-related code will be moved to [dkglib](https://github.com/corestario/dkglib)) (see *Randapp* section below) when On-Chain DKG is finally implemented.
-
-
-We implemented DKG for a quorum (permissioned network of equipowerful validators), and are working on a PoS implementation. We’re currently working on a protocol described below:
-Every node with a stake of X+ coins is eligible to be a validator. 1 node = 1 voice, there is no difference for staking X or 2X coins apart from how much slashing you can take before losing voting rights. There is an upper cap for validator limit (about a hundred). 
-1. Chain starts with off-chain DKG from genesis stake distribution.   
-2. DKG is triggered either by a big enough shift in stakes (i.e., >5%) or by small shift + long enough period of time (i.e., 2 days).
-3. Optimistic off-chain DKG starts and doesn’t clog the blockchain space unless there are any malicious validators.
-4. If off-chain DKG fails, we fall back on fully on-chain Gennaro et al. DKG with small slashing of byzantine actors. If DKG fails, slash offending parties and retry.
-5. Delay validator set change until DKG is over.
-
-##### On-chain DKG (WIP)
-
-On-chain DKG works the same way as the off-chain version but writes its messages to blocks, which allows us to slash a validator that refuses to participate in a DKG round.
-
-##### Randapp
-
-[Randapp](https://github.com/corestario/randapp) (currently work in progress) is a Cosmos application that can handle DKG-related messages (that are supposed to be sent by the [dkglib](https://github.com/corestario/dkglib)). This application is currently implemented as a standalone one, but in the future its functionality will be available as a pluggable module (same way as `/x/auth` or `/x/bank` provides its methods and routes).
+Complete documentation can be found on the [website](https://docs.tendermint.com/master/).
 
 ### Install
 
@@ -119,17 +68,16 @@ See the [install instructions](/docs/introduction/install.md)
 
 ## Contributing
 
-Please abide by the [Code of Conduct](CODE_OF_CONDUCT.md) in all interactions,
-and the [contributing guidelines](CONTRIBUTING.md) when submitting code.
+Please abide by the [Code of Conduct](CODE_OF_CONDUCT.md) in all interactions.
 
-Join the larger community on the [forum](https://forum.cosmos.network/) and the [chat](https://riot.im/app/#/room/#tendermint:matrix.org).
+Before contributing to the project, please take a look at the [contributing guidelines](CONTRIBUTING.md)
+and the [style guide](STYLE_GUIDE.md).
 
-To learn more about the structure of the software, watch the [Developer
-Sessions](/docs/DEV_SESSIONS.md) and read some [Architectural Decision
-Records](https://github.com/tendermint/tendermint/tree/master/docs/architecture).
+To get more active, Join the wider community at [Discord](https://discord.gg/AzefAFd) or jump onto the [Forum](https://forum.cosmos.network/).
 
-Learn more by reading the code and comparing it to the
-[specification](https://github.com/tendermint/tendermint/tree/master/docs/spec).
+Learn more by reading the code and the
+[specifications](https://github.com/tendermint/spec) or watch the [Developer Sessions](/docs/DEV_SESSIONS.md) and read up on the
+[Architectural Decision Records](https://github.com/tendermint/tendermint/tree/master/docs/architecture).
 
 ## Versioning
 
@@ -173,22 +121,29 @@ data into the new chain.
 However, any bump in the PATCH version should be compatible with existing histories
 (if not please open an [issue](https://github.com/tendermint/tendermint/issues)).
 
-For more information on upgrading, see [UPGRADING.md](./UPGRADING.md)
+For more information on upgrading, see [UPGRADING.md](./UPGRADING.md).
+
+### Supported Versions
+
+Because we are a small core team, we only ship patch updates, including security updates, 
+to the most recent minor release and the second-most recent minor release. Consequently, 
+we strongly recommend keeping Tendermint up-to-date. Upgrading instructions can be found 
+in [UPGRADING.md](./UPGRADING.md).
 
 ## Resources
 
 ### Tendermint Core
 
 For details about the blockchain data structures and the p2p protocols, see the
-[Tendermint specification](/docs/spec).
+[Tendermint specification](https://docs.tendermint.com/master/spec/).
 
 For details on using the software, see the [documentation](/docs/) which is also
-hosted at: https://tendermint.com/docs/
+hosted at: https://docs.tendermint.com/master/
 
 ### Tools
 
-Benchmarking and monitoring is provided by `tm-bench` and `tm-monitor`, respectively.
-Their code is found [here](/tools) and these binaries need to be built seperately.
+Benchmarking is provided by `tm-load-test`.
+The code for `tm-load-test` can be found [here](https://github.com/informalsystems/tm-load-test) this binary needs to be built separately.
 Additional documentation is found [here](/docs/tools).
 
 ### Sub-projects
@@ -196,7 +151,7 @@ Additional documentation is found [here](/docs/tools).
 - [Amino](http://github.com/tendermint/go-amino), reflection-based proto3, with
   interfaces
 - [IAVL](http://github.com/tendermint/iavl), Merkleized IAVL+ Tree implementation
-- [Tm-cmn](http://github.com/tendermint/tm-cmn), Commonly used libs across Tendermint & Cosmos repos
+- [Tm-db](http://github.com/tendermint/tm-db), Data Base abstractions to be used in applications.
 
 ### Applications
 
@@ -208,5 +163,5 @@ Additional documentation is found [here](/docs/tools).
 
 - [The latest gossip on BFT consensus](https://arxiv.org/abs/1807.04938)
 - [Master's Thesis on Tendermint](https://atrium.lib.uoguelph.ca/xmlui/handle/10214/9769)
-- [Original Whitepaper](https://tendermint.com/static/docs/tendermint.pdf)
+- [Original Whitepaper: "Tendermint: Consensus Without Mining"](https://tendermint.com/static/docs/tendermint.pdf)
 - [Blog](https://blog.cosmos.network/tendermint/home)

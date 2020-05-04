@@ -5,6 +5,8 @@ import (
 	dkgtypes "github.com/corestario/dkglib/lib/types"
 	"time"
 
+	dbm "github.com/tendermint/tm-db"
+
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
@@ -14,7 +16,6 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
 )
 
 const (
@@ -48,7 +49,6 @@ type transport interface {
 type peers interface {
 	AddPersistentPeers([]string) error
 	DialPeersAsync([]string) error
-	NumPeers() (outbound, inbound, dialig int)
 	Peers() p2p.IPeerSet
 }
 

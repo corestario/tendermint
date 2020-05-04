@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
 	flow "github.com/tendermint/tendermint/libs/flowrate"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/libs/service"
 
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
@@ -61,7 +61,7 @@ var peerTimeout = 15 * time.Second // not const so we can override with tests
 
 // BlockPool keeps track of the fast sync peers, block requests and block responses.
 type BlockPool struct {
-	cmn.BaseService
+	service.BaseService
 	startTime time.Time
 
 	mtx sync.Mutex
@@ -92,11 +92,11 @@ func NewBlockPool(start int64, requestsCh chan<- BlockRequest, errorsCh chan<- p
 		requestsCh: requestsCh,
 		errorsCh:   errorsCh,
 	}
-	bp.BaseService = *cmn.NewBaseService(nil, "BlockPool", bp)
+	bp.BaseService = *service.NewBaseService(nil, "BlockPool", bp)
 	return bp
 }
 
-// OnStart implements cmn.Service by spawning requesters routine and recording
+// OnStart implements service.Service by spawning requesters routine and recording
 // pool's start time.
 func (pool *BlockPool) OnStart() error {
 	go pool.makeRequestersRoutine()
@@ -284,16 +284,17 @@ func (pool *BlockPool) MaxPeerHeight() int64 {
 	return pool.maxPeerHeight
 }
 
-// SetPeerHeight sets the peer's alleged blockchain height.
-func (pool *BlockPool) SetPeerHeight(peerID p2p.ID, height int64) {
+// SetPeerRange sets the peer's alleged blockchain base and height.
+func (pool *BlockPool) SetPeerRange(peerID p2p.ID, base int64, height int64) {
 	pool.mtx.Lock()
 	defer pool.mtx.Unlock()
 
 	peer := pool.peers[peerID]
 	if peer != nil {
+		peer.base = base
 		peer.height = height
 	} else {
-		peer = newBPPeer(pool, peerID, height)
+		peer = newBPPeer(pool, peerID, base, height)
 		peer.setLogger(pool.Logger.With("peer", peerID))
 		pool.peers[peerID] = peer
 	}
@@ -346,9 +347,9 @@ func (pool *BlockPool) updateMaxPeerHeight() {
 	pool.maxPeerHeight = max
 }
 
-// Pick an available peer with at least the given minHeight.
+// Pick an available peer with the given height available.
 // If no peers are available, returns nil.
-func (pool *BlockPool) pickIncrAvailablePeer(minHeight int64) *bpPeer {
+func (pool *BlockPool) pickIncrAvailablePeer(height int64) *bpPeer {
 	pool.mtx.Lock()
 	defer pool.mtx.Unlock()
 
@@ -360,7 +361,7 @@ func (pool *BlockPool) pickIncrAvailablePeer(minHeight int64) *bpPeer {
 		if peer.numPending >= maxPendingRequestsPerPeer {
 			continue
 		}
-		if peer.height < minHeight {
+		if height < peer.base || height > peer.height {
 			continue
 		}
 		peer.incrPending()
@@ -432,6 +433,7 @@ type bpPeer struct {
 	didTimeout  bool
 	numPending  int32
 	height      int64
+	base        int64
 	pool        *BlockPool
 	id          p2p.ID
 	recvMonitor *flow.Monitor
@@ -441,10 +443,11 @@ type bpPeer struct {
 	logger log.Logger
 }
 
-func newBPPeer(pool *BlockPool, peerID p2p.ID, height int64) *bpPeer {
+func newBPPeer(pool *BlockPool, peerID p2p.ID, base int64, height int64) *bpPeer {
 	peer := &bpPeer{
 		pool:       pool,
 		id:         peerID,
+		base:       base,
 		height:     height,
 		numPending: 0,
 		logger:     log.NewNopLogger(),
@@ -501,7 +504,7 @@ func (peer *bpPeer) onTimeout() {
 //-------------------------------------
 
 type bpRequester struct {
-	cmn.BaseService
+	service.BaseService
 	pool       *BlockPool
 	height     int64
 	gotBlockCh chan struct{}
@@ -522,7 +525,7 @@ func newBPRequester(pool *BlockPool, height int64) *bpRequester {
 		peerID: "",
 		block:  nil,
 	}
-	bpr.BaseService = *cmn.NewBaseService(nil, "bpRequester", bpr)
+	bpr.BaseService = *service.NewBaseService(nil, "bpRequester", bpr)
 	return bpr
 }
 

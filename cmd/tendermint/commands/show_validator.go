@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
+	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/privval"
 )
 
@@ -19,12 +19,18 @@ var ShowValidatorCmd = &cobra.Command{
 
 func showValidator(cmd *cobra.Command, args []string) error {
 	keyFilePath := config.PrivValidatorKeyFile()
-	if !cmn.FileExists(keyFilePath) {
+	if !tmos.FileExists(keyFilePath) {
 		return fmt.Errorf("private validator file %s does not exist", keyFilePath)
 	}
 
 	pv := privval.LoadFilePV(keyFilePath, config.PrivValidatorStateFile())
-	bz, err := cdc.MarshalJSON(pv.GetPubKey())
+
+	pubKey, err := pv.GetPubKey()
+	if err != nil {
+		return errors.Wrap(err, "can't get pubkey")
+	}
+
+	bz, err := cdc.MarshalJSON(pubKey)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal private validator pubkey")
 	}

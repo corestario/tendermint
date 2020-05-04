@@ -2,18 +2,18 @@ package core
 
 import (
 	abci "github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/bytes"
 	"github.com/tendermint/tendermint/proxy"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	rpctypes "github.com/tendermint/tendermint/rpc/lib/types"
 )
 
 // ABCIQuery queries the application for some information.
-// More: https://tendermint.com/rpc/#/ABCI/abci_query
+// More: https://docs.tendermint.com/master/rpc/#/ABCI/abci_query
 func ABCIQuery(
 	ctx *rpctypes.Context,
 	path string,
-	data cmn.HexBytes,
+	data bytes.HexBytes,
 	height int64,
 	prove bool,
 ) (*ctypes.ResultABCIQuery, error) {
@@ -31,7 +31,7 @@ func ABCIQuery(
 }
 
 // ABCIInfo gets some info about the application.
-// More: https://tendermint.com/rpc/#/ABCI/abci_info
+// More: https://docs.tendermint.com/master/rpc/#/ABCI/abci_info
 func ABCIInfo(ctx *rpctypes.Context) (*ctypes.ResultABCIInfo, error) {
 	resInfo, err := proxyAppQuery.InfoSync(proxy.RequestInfo)
 	if err != nil {

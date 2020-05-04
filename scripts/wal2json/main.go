@@ -13,6 +13,7 @@ import (
 	"os"
 
 	amino "github.com/tendermint/go-amino"
+
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/types"
 )
@@ -20,7 +21,7 @@ import (
 var cdc = amino.NewCodec()
 
 func init() {
-	cs.RegisterConsensusMessages(cdc)
+	cs.RegisterMessages(cdc)
 	cs.RegisterWALMessages(cdc)
 	types.RegisterBlockAmino(cdc)
 }

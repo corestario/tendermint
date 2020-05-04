@@ -1,18 +1,16 @@
 package v0
 
 import (
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"os"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/store"
-
 	"github.com/stretchr/testify/assert"
-
 	bls "github.com/corestario/dkglib/lib/blsShare"
+	dbm "github.com/tendermint/tm-db"
+
 	abci "github.com/tendermint/tendermint/abci/types"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/log"
@@ -20,9 +18,10 @@ import (
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
+	"github.com/tendermint/tendermint/store"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
-	dbm "github.com/tendermint/tm-db"
+	tmbytes "github.com/tendermint/tendermint/libs/bytes"
 )
 
 var config *cfg.Config
@@ -92,17 +91,24 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 	// Here we augment blocks with random data produced by the verifier.
 	var prevBlock *types.Block
 	for blockHeight := int64(1); blockHeight <= maxBlockHeight; blockHeight++ {
-		lastCommit := types.NewCommit(types.BlockID{}, nil)
+		lastCommit := types.NewCommit(blockHeight-1, 0, types.BlockID{}, nil)
 		if blockHeight > 1 {
 			lastBlockMeta := blockStore.LoadBlockMeta(blockHeight - 1)
 			lastBlock := blockStore.LoadBlock(blockHeight - 1)
 
-			vote, err := types.MakeVote(lastBlock.Header.Height, lastBlockMeta.BlockID, state.Validators, privVals[0], lastBlock.Header.ChainID)
+			vote, err := types.MakeVote(
+				lastBlock.Header.Height,
+				lastBlockMeta.BlockID,
+				state.Validators,
+				privVals[0],
+				lastBlock.Header.ChainID,
+				time.Now(),
+			)
 			if err != nil {
 				panic(err)
 			}
-			voteCommitSig := vote.CommitSig()
-			lastCommit = types.NewCommit(lastBlockMeta.BlockID, []*types.CommitSig{voteCommitSig})
+			lastCommit = types.NewCommit(vote.Height, vote.Round,
+				lastBlockMeta.BlockID, []types.CommitSig{vote.CommitSig()})
 		}
 
 		thisBlock := makeBlock(blockHeight, state, lastCommit)
@@ -111,19 +117,19 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		} else {
 			sign, err := testVerifier.Sign(prevBlock.RandomData)
 			if err != nil {
-				panic(cmn.ErrorWrap(err, "error sign random data"))
+				panic(errors.Wrap(err, "error sign random data"))
 			}
 			aggrSign, err := testVerifier.Recover(prevBlock.RandomData, []bls.BLSSigner{
 				&types.Vote{
 					BlockID: types.BlockID{
-						Hash: cmn.HexBytes("text"),
+						Hash: tmbytes.HexBytes("text"),
 					},
 					ValidatorAddress: state.Validators.Validators[0].Address,
 					BLSSignature:     sign,
 				},
 			})
 			if err != nil {
-				panic(cmn.ErrorWrap(err, "failed to recover aggregate signature"))
+				panic(errors.Wrap(err, "failed to recover aggregate signature"))
 			}
 			thisBlock.RandomData = aggrSign
 		}
@@ -132,7 +138,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		thisParts := thisBlock.MakePartSet(types.BlockPartSizeBytes)
 		blockID := types.BlockID{Hash: thisBlock.Hash(), PartsHeader: thisParts.Header()}
 
-		state, err = blockExec.ApplyBlock(state, blockID, thisBlock)
+		state, _, err = blockExec.ApplyBlock(state, blockID, thisBlock)
 		if err != nil {
 			panic(errors.Wrap(err, "error apply block"))
 		}

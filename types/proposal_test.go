@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/tendermint/tendermint/crypto/tmhash"
 )
 
@@ -39,13 +40,14 @@ func TestProposalString(t *testing.T) {
 	str := testProposal.String()
 	expected := `Proposal{12345/23456 (010203:111:626C6F636B70, -1) 000000000000 @ 2018-02-11T07:09:22.765Z}`
 	if str != expected {
-		t.Errorf("Got unexpected string for Proposal. Expected:\n%v\nGot:\n%v", expected, str)
+		t.Errorf("got unexpected string for Proposal. Expected:\n%v\nGot:\n%v", expected, str)
 	}
 }
 
 func TestProposalVerifySignature(t *testing.T) {
 	privVal := NewMockPV()
-	pubKey := privVal.GetPubKey()
+	pubKey, err := privVal.GetPubKey()
+	require.NoError(t, err)
 
 	prop := NewProposal(
 		4, 2, 2,
@@ -53,7 +55,7 @@ func TestProposalVerifySignature(t *testing.T) {
 	signBytes := prop.SignBytes("test_chain_id")
 
 	// sign it
-	err := privVal.SignProposal("test_chain_id", prop)
+	err = privVal.SignProposal("test_chain_id", prop)
 	require.NoError(t, err)
 
 	// verify the same proposal
@@ -93,8 +95,9 @@ func BenchmarkProposalSign(b *testing.B) {
 func BenchmarkProposalVerifySignature(b *testing.B) {
 	privVal := NewMockPV()
 	err := privVal.SignProposal("test_chain_id", testProposal)
-	require.Nil(b, err)
-	pubKey := privVal.GetPubKey()
+	require.NoError(b, err)
+	pubKey, err := privVal.GetPubKey()
+	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
 		pubKey.VerifyBytes(testProposal.SignBytes("test_chain_id"), testProposal.Signature)

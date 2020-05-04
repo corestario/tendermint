@@ -11,8 +11,8 @@ import (
 
 	"github.com/pkg/errors"
 	cfg "github.com/tendermint/tendermint/config"
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/mock"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
@@ -34,7 +34,7 @@ func RunReplayFile(config cfg.BaseConfig, csConfig *cfg.ConsensusConfig, console
 	consensusState := newConsensusStateForReplay(config, csConfig)
 
 	if err := consensusState.ReplayFile(csConfig.WalFile(), console); err != nil {
-		cmn.Exit(fmt.Sprintf("Error during consensus replay: %v", err))
+		tmos.Exit(fmt.Sprintf("Error during consensus replay: %v", err))
 	}
 }
 
@@ -182,9 +182,9 @@ func (pb *playback) replayConsoleLoop() int {
 		bufReader := bufio.NewReader(os.Stdin)
 		line, more, err := bufReader.ReadLine()
 		if more {
-			cmn.Exit("input is too long")
+			tmos.Exit("input is too long")
 		} else if err != nil {
-			cmn.Exit(err.Error())
+			tmos.Exit(err.Error())
 		}
 
 		tokens := strings.Split(string(line), " ")
@@ -219,7 +219,7 @@ func (pb *playback) replayConsoleLoop() int {
 
 			newStepSub, err := pb.cs.eventBus.Subscribe(ctx, subscriber, types.EventQueryNewRoundStep)
 			if err != nil {
-				cmn.Exit(fmt.Sprintf("failed to subscribe %s to %v", subscriber, types.EventQueryNewRoundStep))
+				tmos.Exit(fmt.Sprintf("failed to subscribe %s to %v", subscriber, types.EventQueryNewRoundStep))
 			}
 			defer pb.cs.eventBus.Unsubscribe(ctx, subscriber, types.EventQueryNewRoundStep)
 
@@ -286,11 +286,11 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	stateDB := dbm.NewDB("state", dbType, config.DBDir())
 	gdoc, err := sm.MakeGenesisDocFromFile(config.GenesisFile())
 	if err != nil {
-		cmn.Exit(err.Error())
+		tmos.Exit(err.Error())
 	}
 	state, err := sm.MakeGenesisState(gdoc)
 	if err != nil {
-		cmn.Exit(err.Error())
+		tmos.Exit(err.Error())
 	}
 
 	// Create proxyAppConn connection (consensus, mempool, query)
@@ -298,19 +298,19 @@ func newConsensusStateForReplay(config cfg.BaseConfig, csConfig *cfg.ConsensusCo
 	proxyApp := proxy.NewAppConns(clientCreator)
 	err = proxyApp.Start()
 	if err != nil {
-		cmn.Exit(fmt.Sprintf("Error starting proxy app conns: %v", err))
+		tmos.Exit(fmt.Sprintf("Error starting proxy app conns: %v", err))
 	}
 
 	eventBus := types.NewEventBus()
 	if err := eventBus.Start(); err != nil {
-		cmn.Exit(fmt.Sprintf("Failed to start event bus: %v", err))
+		tmos.Exit(fmt.Sprintf("Failed to start event bus: %v", err))
 	}
 
 	handshaker := NewHandshaker(stateDB, state, blockStore, gdoc)
 	handshaker.SetEventBus(eventBus)
 	err = handshaker.Handshake(proxyApp)
 	if err != nil {
-		cmn.Exit(fmt.Sprintf("Error on handshake: %v", err))
+		tmos.Exit(fmt.Sprintf("Error on handshake: %v", err))
 	}
 
 	mempool, evpool := mock.Mempool{}, sm.MockEvidencePool{}

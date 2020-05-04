@@ -6,6 +6,7 @@ import (
 
 // TODO: better system than "unsafe" prefix
 // NOTE: Amino is registered in rpc/core/types/codec.go.
+
 var Routes = map[string]*rpc.RPCFunc{
 	// subscribe/unsubscribe are reserved for websocket events.
 	"subscribe":       rpc.NewWSRPCFunc(Subscribe, "query"),
@@ -19,11 +20,12 @@ var Routes = map[string]*rpc.RPCFunc{
 	"blockchain":           rpc.NewRPCFunc(BlockchainInfo, "minHeight,maxHeight"),
 	"genesis":              rpc.NewRPCFunc(Genesis, ""),
 	"block":                rpc.NewRPCFunc(Block, "height"),
+	"block_by_hash":        rpc.NewRPCFunc(BlockByHash, "hash"),
 	"block_results":        rpc.NewRPCFunc(BlockResults, "height"),
 	"commit":               rpc.NewRPCFunc(Commit, "height"),
 	"tx":                   rpc.NewRPCFunc(Tx, "hash,prove"),
-	"tx_search":            rpc.NewRPCFunc(TxSearch, "query,prove,page,per_page"),
-	"validators":           rpc.NewRPCFunc(Validators, "height"),
+	"tx_search":            rpc.NewRPCFunc(TxSearch, "query,prove,page,per_page,order_by"),
+	"validators":           rpc.NewRPCFunc(Validators, "height,page,per_page"),
 	"dump_consensus_state": rpc.NewRPCFunc(DumpConsensusState, ""),
 	"consensus_state":      rpc.NewRPCFunc(ConsensusState, ""),
 	"consensus_params":     rpc.NewRPCFunc(ConsensusParams, "height"),

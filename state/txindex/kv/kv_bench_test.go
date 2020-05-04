@@ -1,16 +1,18 @@
 package kv
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"testing"
 
+	dbm "github.com/tendermint/tm-db"
+
 	abci "github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/kv"
 	"github.com/tendermint/tendermint/libs/pubsub/query"
 	"github.com/tendermint/tendermint/types"
-	dbm "github.com/tendermint/tm-db"
 )
 
 func BenchmarkTxSearch(b *testing.B) {
@@ -24,14 +26,14 @@ func BenchmarkTxSearch(b *testing.B) {
 		b.Errorf("failed to create database: %s", err)
 	}
 
-	allowedTags := []string{"transfer.address", "transfer.amount"}
-	indexer := NewTxIndex(db, IndexTags(allowedTags))
+	allowedKeys := []string{"transfer.address", "transfer.amount"}
+	indexer := NewTxIndex(db, IndexEvents(allowedKeys))
 
 	for i := 0; i < 35000; i++ {
 		events := []abci.Event{
 			{
 				Type: "transfer",
-				Attributes: []cmn.KVPair{
+				Attributes: []kv.Pair{
 					{Key: []byte("address"), Value: []byte(fmt.Sprintf("address_%d", i%100))},
 					{Key: []byte("amount"), Value: []byte("50")},
 				},
@@ -64,8 +66,10 @@ func BenchmarkTxSearch(b *testing.B) {
 
 	b.ResetTimer()
 
+	ctx := context.Background()
+
 	for i := 0; i < b.N; i++ {
-		if _, err := indexer.Search(txQuery); err != nil {
+		if _, err := indexer.Search(ctx, txQuery); err != nil {
 			b.Errorf("failed to query for txs: %s", err)
 		}
 	}

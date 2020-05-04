@@ -8,6 +8,7 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
+	"github.com/tendermint/tendermint/cmd/tendermint/commands/debug"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/libs/cli"
 	"github.com/tendermint/tendermint/libs/log"
@@ -32,7 +33,10 @@ func main() {
 		cmd.TestnetFilesCmd,
 		cmd.ShowNodeIDCmd,
 		cmd.GenNodeKeyCmd,
-		cmd.VersionCmd)
+		cmd.VersionCmd,
+		debug.DebugCmd,
+		cli.NewCompletionCmd(rootCmd, true),
+	)
 
 	// NOTE:
 	// Users wishing to:

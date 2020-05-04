@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/tendermint/tendermint/libs/service"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -18,7 +19,6 @@ import (
 	cfg "github.com/tendermint/tendermint/config"
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/evidence"
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/events"
 	"github.com/tendermint/tendermint/libs/log"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -61,7 +61,7 @@ func createBLSConsensus(config *cfg.Config,
 	blockExec *sm.BlockExecutor,
 	blockStore sm.BlockStore,
 	mempool *mempl.CListMempool,
-	evidencePool *evidence.EvidencePool,
+	evidencePool *evidence.Pool,
 	privValidator types.PrivValidator,
 	csMetrics *cs.Metrics,
 	fastSync bool,
@@ -105,7 +105,7 @@ func createBLSConsensus(config *cfg.Config,
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
+	consensusReactor := cs.NewReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
@@ -218,7 +218,11 @@ func NewBLSNode(config *cfg.Config,
 
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
-	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, privValidator)
+	pubKey, err := privValidator.GetPubKey()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get pub key")
+	}
+	fastSync := config.FastSyncMode && !nd.OnlyValidatorIsUs(state, pubKey)
 
 	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
 
@@ -306,7 +310,7 @@ func NewBLSNode(config *cfg.Config,
 	//
 	// If PEX is on, it should handle dialing the seeds. Otherwise the switch does it.
 	// Note we currently use the addrBook regardless at least for AddOurAddress
-	var pexReactor *pex.PEXReactor
+	var pexReactor *pex.Reactor
 	if config.P2P.PexReactor {
 		pexReactor = nd.CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
@@ -342,7 +346,7 @@ func NewBLSNode(config *cfg.Config,
 		ConsensusReactor: consensusReactor,
 	}
 
-	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
+	node.BaseService = *service.NewBaseService(logger, "Node", node)
 
 	for _, option := range options {
 		option(node)
@@ -358,7 +362,7 @@ func createBLSSwitch(config *cfg.Config,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
 	consensusReactor *cs.ConsensusReactor,
-	evidenceReactor *evidence.EvidenceReactor,
+	evidenceReactor *evidence.Reactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
 	p2pLogger log.Logger) *p2p.Switch {
@@ -400,7 +404,10 @@ func logBLSNodeStartupInfo(state sm.State, privValidator types.PrivValidator, lo
 		)
 	}
 
-	pubKey := privValidator.GetPubKey()
+	pubKey, err := privValidator.GetPubKey()
+	if err != nil {
+		consensusLogger.Error("failed to get pub key", err)
+	}
 	addr := pubKey.Address()
 	// Log whether this node is a validator or an observer
 	if state.Validators.HasAddress(addr) {

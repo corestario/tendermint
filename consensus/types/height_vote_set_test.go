@@ -38,8 +38,8 @@ func TestPeerCatchupRounds(t *testing.T) {
 
 	vote1001_0 := makeVoteHR(t, 1, 1001, privVals, 0)
 	added, err = hvs.AddVote(vote1001_0, "peer1")
-	if err != GotVoteFromUnwantedRoundError {
-		t.Errorf("Expected GotVoteFromUnwantedRoundError, but got %v", err)
+	if err != ErrGotVoteFromUnwantedRound {
+		t.Errorf("expected GotVoteFromUnwantedRoundError, but got %v", err)
 	}
 	if added {
 		t.Error("Expected to *not* add vote from peer, too many catchup rounds.")
@@ -54,9 +54,13 @@ func TestPeerCatchupRounds(t *testing.T) {
 
 func makeVoteHR(t *testing.T, height int64, round int, privVals []types.PrivValidator, valIndex int) *types.Vote {
 	privVal := privVals[valIndex]
-	addr := privVal.GetPubKey().Address()
+	pubKey, err := privVal.GetPubKey()
+	if err != nil {
+		panic(err)
+	}
+
 	vote := &types.Vote{
-		ValidatorAddress: addr,
+		ValidatorAddress: pubKey.Address(),
 		ValidatorIndex:   valIndex,
 		Height:           height,
 		Round:            round,
@@ -65,7 +69,7 @@ func makeVoteHR(t *testing.T, height int64, round int, privVals []types.PrivVali
 		BlockID:          types.BlockID{Hash: []byte("fakehash"), PartsHeader: types.PartSetHeader{}},
 	}
 	chainID := config.ChainID()
-	err := privVal.SignData(chainID, vote)
+	err = privVal.SignData(chainID, vote)
 	if err != nil {
 		panic(fmt.Sprintf("Error signing vote: %v", err))
 	}

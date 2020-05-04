@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/types"
 )
@@ -20,6 +20,7 @@ func init() {
 
 type testPeer struct {
 	id        p2p.ID
+	base      int64
 	height    int64
 	inputChan chan inputData //make sure each peer's data is sequential
 }
@@ -65,9 +66,13 @@ func (ps testPeers) stop() {
 func makePeers(numPeers int, minHeight, maxHeight int64) testPeers {
 	peers := make(testPeers, numPeers)
 	for i := 0; i < numPeers; i++ {
-		peerID := p2p.ID(cmn.RandStr(12))
-		height := minHeight + cmn.RandInt63n(maxHeight-minHeight)
-		peers[peerID] = testPeer{peerID, height, make(chan inputData, 10)}
+		peerID := p2p.ID(tmrand.Str(12))
+		height := minHeight + tmrand.Int63n(maxHeight-minHeight)
+		base := minHeight + int64(i)
+		if base > height {
+			base = height
+		}
+		peers[peerID] = testPeer{peerID, base, height, make(chan inputData, 10)}
 	}
 	return peers
 }
@@ -93,7 +98,7 @@ func TestBlockPoolBasic(t *testing.T) {
 	// Introduce each peer.
 	go func() {
 		for _, peer := range peers {
-			pool.SetPeerHeight(peer.id, peer.height)
+			pool.SetPeerRange(peer.id, peer.base, peer.height)
 		}
 	}()
 
@@ -148,7 +153,7 @@ func TestBlockPoolTimeout(t *testing.T) {
 	// Introduce each peer.
 	go func() {
 		for _, peer := range peers {
-			pool.SetPeerHeight(peer.id, peer.height)
+			pool.SetPeerRange(peer.id, peer.base, peer.height)
 		}
 	}()
 
@@ -192,7 +197,7 @@ func TestBlockPoolRemovePeer(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		peerID := p2p.ID(fmt.Sprintf("%d", i+1))
 		height := int64(i + 1)
-		peers[peerID] = testPeer{peerID, height, make(chan inputData)}
+		peers[peerID] = testPeer{peerID, 0, height, make(chan inputData)}
 	}
 	requestsCh := make(chan BlockRequest)
 	errorsCh := make(chan peerError)
@@ -205,7 +210,7 @@ func TestBlockPoolRemovePeer(t *testing.T) {
 
 	// add peers
 	for peerID, peer := range peers {
-		pool.SetPeerHeight(peerID, peer.height)
+		pool.SetPeerRange(peerID, peer.base, peer.height)
 	}
 	assert.EqualValues(t, 10, pool.MaxPeerHeight())
 

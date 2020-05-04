@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tendermint/tendermint/libs/common"
+	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -24,7 +24,7 @@ func getSignerTestCases(t *testing.T) []signerTestCase {
 
 	// Get test cases for each possible dialer (DialTCP / DialUnix / etc)
 	for _, dtc := range getDialerTestCases(t) {
-		chainID := common.RandStr(12)
+		chainID := tmrand.Str(12)
 		mockPV := types.NewMockPV()
 
 		// get a pair of signer listener, signer dialer endpoints
@@ -74,15 +74,20 @@ func TestSignerGetPubKey(t *testing.T) {
 		defer tc.signerServer.Stop()
 		defer tc.signerClient.Close()
 
-		pubKey := tc.signerClient.GetPubKey()
-		expectedPubKey := tc.mockPV.GetPubKey()
+		pubKey, err := tc.signerClient.GetPubKey()
+		require.NoError(t, err)
+		expectedPubKey, err := tc.mockPV.GetPubKey()
+		require.NoError(t, err)
 
 		assert.Equal(t, expectedPubKey, pubKey)
 
-		addr := tc.signerClient.GetPubKey().Address()
-		expectedAddr := tc.mockPV.GetPubKey().Address()
+		pubKey, err = tc.signerClient.GetPubKey()
+		require.NoError(t, err)
+		expectedpk, err := tc.mockPV.GetPubKey()
+		require.NoError(t, err)
+		expectedAddr := expectedpk.Address()
 
-		assert.Equal(t, expectedAddr, addr)
+		assert.Equal(t, expectedAddr, pubKey.Address())
 	}
 }
 

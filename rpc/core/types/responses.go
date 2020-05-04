@@ -1,4 +1,4 @@
-package core_types
+package coretypes
 
 import (
 	"encoding/json"
@@ -6,9 +6,8 @@ import (
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/bytes"
 	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -25,8 +24,8 @@ type ResultGenesis struct {
 
 // Single block (with meta)
 type ResultBlock struct {
-	BlockMeta *types.BlockMeta `json:"block_meta"`
-	Block     *types.Block     `json:"block"`
+	BlockID types.BlockID `json:"block_id"`
+	Block   *types.Block  `json:"block"`
 }
 
 // Commit and Header
@@ -37,8 +36,12 @@ type ResultCommit struct {
 
 // ABCI results from a block
 type ResultBlockResults struct {
-	Height  int64                `json:"height"`
-	Results *state.ABCIResponses `json:"results"`
+	Height                int64                     `json:"height"`
+	TxsResults            []*abci.ResponseDeliverTx `json:"txs_results"`
+	BeginBlockEvents      []abci.Event              `json:"begin_block_events"`
+	EndBlockEvents        []abci.Event              `json:"end_block_events"`
+	ValidatorUpdates      []abci.ValidatorUpdate    `json:"validator_updates"`
+	ConsensusParamUpdates *abci.ConsensusParams     `json:"consensus_param_updates"`
 }
 
 // NewResultCommit is a helper to initialize the ResultCommit with
@@ -57,18 +60,24 @@ func NewResultCommit(header *types.Header, commit *types.Commit,
 
 // Info about the node's syncing state
 type SyncInfo struct {
-	LatestBlockHash   cmn.HexBytes `json:"latest_block_hash"`
-	LatestAppHash     cmn.HexBytes `json:"latest_app_hash"`
-	LatestBlockHeight int64        `json:"latest_block_height"`
-	LatestBlockTime   time.Time    `json:"latest_block_time"`
-	CatchingUp        bool         `json:"catching_up"`
+	LatestBlockHash   bytes.HexBytes `json:"latest_block_hash"`
+	LatestAppHash     bytes.HexBytes `json:"latest_app_hash"`
+	LatestBlockHeight int64          `json:"latest_block_height"`
+	LatestBlockTime   time.Time      `json:"latest_block_time"`
+
+	EarliestBlockHash   bytes.HexBytes `json:"earliest_block_hash"`
+	EarliestAppHash     bytes.HexBytes `json:"earliest_app_hash"`
+	EarliestBlockHeight int64          `json:"earliest_block_height"`
+	EarliestBlockTime   time.Time      `json:"earliest_block_time"`
+
+	CatchingUp bool `json:"catching_up"`
 }
 
 // Info about the node's validator
 type ValidatorInfo struct {
-	Address     cmn.HexBytes  `json:"address"`
-	PubKey      crypto.PubKey `json:"pub_key"`
-	VotingPower int64         `json:"voting_power"`
+	Address     bytes.HexBytes `json:"address"`
+	PubKey      crypto.PubKey  `json:"pub_key"`
+	VotingPower int64          `json:"voting_power"`
 }
 
 // Node Status
@@ -112,10 +121,14 @@ type Peer struct {
 	RemoteIP         string               `json:"remote_ip"`
 }
 
-// Validators for a height
+// Validators for a height.
 type ResultValidators struct {
 	BlockHeight int64              `json:"block_height"`
 	Validators  []*types.Validator `json:"validators"`
+	// Count of actual validators in this result
+	Count int `json:"count"`
+	// Total number of validators
+	Total int `json:"total"`
 }
 
 // ConsensusParams for given height
@@ -144,24 +157,25 @@ type ResultConsensusState struct {
 
 // CheckTx result
 type ResultBroadcastTx struct {
-	Code uint32       `json:"code"`
-	Data cmn.HexBytes `json:"data"`
-	Log  string       `json:"log"`
+	Code      uint32         `json:"code"`
+	Data      bytes.HexBytes `json:"data"`
+	Log       string         `json:"log"`
+	Codespace string         `json:"codespace"`
 
-	Hash cmn.HexBytes `json:"hash"`
+	Hash bytes.HexBytes `json:"hash"`
 }
 
 // CheckTx and DeliverTx results
 type ResultBroadcastTxCommit struct {
 	CheckTx   abci.ResponseCheckTx   `json:"check_tx"`
 	DeliverTx abci.ResponseDeliverTx `json:"deliver_tx"`
-	Hash      cmn.HexBytes           `json:"hash"`
+	Hash      bytes.HexBytes         `json:"hash"`
 	Height    int64                  `json:"height"`
 }
 
 // Result of querying for a tx
 type ResultTx struct {
-	Hash     cmn.HexBytes           `json:"hash"`
+	Hash     bytes.HexBytes         `json:"hash"`
 	Height   int64                  `json:"height"`
 	Index    uint32                 `json:"index"`
 	TxResult abci.ResponseDeliverTx `json:"tx_result"`

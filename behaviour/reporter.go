@@ -19,7 +19,7 @@ type SwitchReporter struct {
 }
 
 // NewSwitchReporter return a new SwitchReporter instance which wraps the Switch.
-func NewSwitcReporter(sw *p2p.Switch) *SwitchReporter {
+func NewSwitchReporter(sw *p2p.Switch) *SwitchReporter {
 	return &SwitchReporter{
 		sw: sw,
 	}
@@ -80,7 +80,7 @@ func (mpbr *MockReporter) GetBehaviours(peerID p2p.ID) []PeerBehaviour {
 		copy(result, items)
 
 		return result
-	} else {
-		return []PeerBehaviour{}
 	}
+
+	return []PeerBehaviour{}
 }

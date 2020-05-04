@@ -2,10 +2,13 @@ package evidence
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tendermint/tendermint/types"
+	"github.com/stretchr/testify/require"
 	dbm "github.com/tendermint/tm-db"
+
+	"github.com/tendermint/tendermint/types"
 )
 
 //-------------------------------------------
@@ -14,16 +17,18 @@ func TestStoreAddDuplicate(t *testing.T) {
 	assert := assert.New(t)
 
 	db := dbm.NewMemDB()
-	store := NewEvidenceStore(db)
+	store := NewStore(db)
 
 	priority := int64(10)
-	ev := types.NewMockGoodEvidence(2, 1, []byte("val1"))
+	ev := types.NewMockEvidence(2, time.Now().UTC(), 1, []byte("val1"))
 
-	added := store.AddNewEvidence(ev, priority)
+	added, err := store.AddNewEvidence(ev, priority)
+	require.NoError(t, err)
 	assert.True(added)
 
 	// cant add twice
-	added = store.AddNewEvidence(ev, priority)
+	added, err = store.AddNewEvidence(ev, priority)
+	require.NoError(t, err)
 	assert.False(added)
 }
 
@@ -31,14 +36,15 @@ func TestStoreCommitDuplicate(t *testing.T) {
 	assert := assert.New(t)
 
 	db := dbm.NewMemDB()
-	store := NewEvidenceStore(db)
+	store := NewStore(db)
 
 	priority := int64(10)
-	ev := types.NewMockGoodEvidence(2, 1, []byte("val1"))
+	ev := types.NewMockEvidence(2, time.Now().UTC(), 1, []byte("val1"))
 
 	store.MarkEvidenceAsCommitted(ev)
 
-	added := store.AddNewEvidence(ev, priority)
+	added, err := store.AddNewEvidence(ev, priority)
+	require.NoError(t, err)
 	assert.False(added)
 }
 
@@ -46,7 +52,7 @@ func TestStoreMark(t *testing.T) {
 	assert := assert.New(t)
 
 	db := dbm.NewMemDB()
-	store := NewEvidenceStore(db)
+	store := NewStore(db)
 
 	// before we do anything, priority/pending are empty
 	priorityEv := store.PriorityEvidence()
@@ -55,13 +61,14 @@ func TestStoreMark(t *testing.T) {
 	assert.Equal(0, len(pendingEv))
 
 	priority := int64(10)
-	ev := types.NewMockGoodEvidence(2, 1, []byte("val1"))
+	ev := types.NewMockEvidence(2, time.Now().UTC(), 1, []byte("val1"))
 
-	added := store.AddNewEvidence(ev, priority)
+	added, err := store.AddNewEvidence(ev, priority)
+	require.NoError(t, err)
 	assert.True(added)
 
 	// get the evidence. verify. should be uncommitted
-	ei := store.GetEvidenceInfo(ev.Height(), ev.Hash())
+	ei := store.GetInfo(ev.Height(), ev.Hash())
 	assert.Equal(ev, ei.Evidence)
 	assert.Equal(priority, ei.Priority)
 	assert.False(ei.Committed)
@@ -88,7 +95,7 @@ func TestStoreMark(t *testing.T) {
 
 	// evidence should show committed
 	newPriority := int64(0)
-	ei = store.GetEvidenceInfo(ev.Height(), ev.Hash())
+	ei = store.GetInfo(ev.Height(), ev.Hash())
 	assert.Equal(ev, ei.Evidence)
 	assert.Equal(newPriority, ei.Priority)
 	assert.True(ei.Committed)
@@ -98,23 +105,24 @@ func TestStorePriority(t *testing.T) {
 	assert := assert.New(t)
 
 	db := dbm.NewMemDB()
-	store := NewEvidenceStore(db)
+	store := NewStore(db)
 
 	// sorted by priority and then height
 	cases := []struct {
-		ev       types.MockGoodEvidence
+		ev       types.MockEvidence
 		priority int64
 	}{
-		{types.NewMockGoodEvidence(2, 1, []byte("val1")), 17},
-		{types.NewMockGoodEvidence(5, 2, []byte("val2")), 15},
-		{types.NewMockGoodEvidence(10, 2, []byte("val2")), 13},
-		{types.NewMockGoodEvidence(100, 2, []byte("val2")), 11},
-		{types.NewMockGoodEvidence(90, 2, []byte("val2")), 11},
-		{types.NewMockGoodEvidence(80, 2, []byte("val2")), 11},
+		{types.NewMockEvidence(2, time.Now().UTC(), 1, []byte("val1")), 17},
+		{types.NewMockEvidence(5, time.Now().UTC(), 2, []byte("val2")), 15},
+		{types.NewMockEvidence(10, time.Now().UTC(), 2, []byte("val2")), 13},
+		{types.NewMockEvidence(100, time.Now().UTC(), 2, []byte("val2")), 11},
+		{types.NewMockEvidence(90, time.Now().UTC(), 2, []byte("val2")), 11},
+		{types.NewMockEvidence(80, time.Now().UTC(), 2, []byte("val2")), 11},
 	}
 
 	for _, c := range cases {
-		added := store.AddNewEvidence(c.ev, c.priority)
+		added, err := store.AddNewEvidence(c.ev, c.priority)
+		require.NoError(t, err)
 		assert.True(added)
 	}
 

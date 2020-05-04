@@ -1,6 +1,7 @@
 package null
 
 import (
+	"context"
 	"errors"
 
 	"github.com/tendermint/tendermint/libs/pubsub/query"
@@ -15,7 +16,7 @@ type TxIndex struct{}
 
 // Get on a TxIndex is disabled and panics when invoked.
 func (txi *TxIndex) Get(hash []byte) (*types.TxResult, error) {
-	return nil, errors.New(`Indexing is disabled (set 'tx_index = "kv"' in config)`)
+	return nil, errors.New(`indexing is disabled (set 'tx_index = "kv"' in config)`)
 }
 
 // AddBatch is a noop and always returns nil.
@@ -28,6 +29,6 @@ func (txi *TxIndex) Index(result *types.TxResult) error {
 	return nil
 }
 
-func (txi *TxIndex) Search(q *query.Query) ([]*types.TxResult, error) {
+func (txi *TxIndex) Search(ctx context.Context, q *query.Query) ([]*types.TxResult, error) {
 	return []*types.TxResult{}, nil
 }

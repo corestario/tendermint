@@ -41,7 +41,7 @@ const (
 type consensusReactor interface {
 	// for when we switch from blockchain reactor and fast sync to
 	// the consensus machine
-	SwitchToConsensus(sm.State, int)
+	SwitchToConsensus(sm.State, uint64)
 }
 
 type peerError struct {
@@ -113,13 +113,13 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 	return bcR
 }
 
-// SetLogger implements cmn.Service by setting the logger on reactor and pool.
+// SetLogger implements service.Service by setting the logger on reactor and pool.
 func (bcR *BlockchainReactor) SetLogger(l log.Logger) {
 	bcR.BaseService.Logger = l
 	bcR.pool.Logger = l
 }
 
-// OnStart implements cmn.Service.
+// OnStart implements service.Service.
 func (bcR *BlockchainReactor) OnStart() error {
 	if bcR.fastSync {
 		err := bcR.pool.Start()
@@ -131,7 +131,7 @@ func (bcR *BlockchainReactor) OnStart() error {
 	return nil
 }
 
-// OnStop implements cmn.Service.
+// OnStop implements service.Service.
 func (bcR *BlockchainReactor) OnStop() {
 	bcR.pool.Stop()
 }
@@ -151,12 +151,15 @@ func (bcR *BlockchainReactor) GetChannels() []*p2p.ChannelDescriptor {
 
 // AddPeer implements Reactor by sending our state to peer.
 func (bcR *BlockchainReactor) AddPeer(peer p2p.Peer) {
-	msgBytes := cdc.MustMarshalBinaryBare(&bcStatusResponseMessage{bcR.store.Height()})
+	msgBytes := cdc.MustMarshalBinaryBare(&bcStatusResponseMessage{
+		Height: bcR.store.Height(),
+		Base:   bcR.store.Base(),
+	})
 	peer.Send(BlockchainChannel, msgBytes)
 	// it's OK if send fails. will try later in poolRoutine
 
 	// peer is added to the pool once we receive the first
-	// bcStatusResponseMessage from the peer and call pool.SetPeerHeight
+	// bcStatusResponseMessage from the peer and call pool.SetPeerRange
 }
 
 // RemovePeer implements Reactor by removing peer from the pool.
@@ -166,8 +169,6 @@ func (bcR *BlockchainReactor) RemovePeer(peer p2p.Peer, reason interface{}) {
 
 // respondToPeer loads a block and sends it to the requesting peer,
 // if we have it. Otherwise, we'll respond saying we don't have it.
-// According to the Tendermint spec, if all nodes are honest,
-// no node should be requesting for a block that's non-existent.
 func (bcR *BlockchainReactor) respondToPeer(msg *bcBlockRequestMessage,
 	src p2p.Peer) (queued bool) {
 
@@ -207,11 +208,15 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		bcR.pool.AddBlock(src.ID(), msg.Block, len(msgBytes))
 	case *bcStatusRequestMessage:
 		// Send peer our state.
-		msgBytes := cdc.MustMarshalBinaryBare(&bcStatusResponseMessage{bcR.store.Height()})
-		src.TrySend(BlockchainChannel, msgBytes)
+		src.TrySend(BlockchainChannel, cdc.MustMarshalBinaryBare(&bcStatusResponseMessage{
+			Height: bcR.store.Height(),
+			Base:   bcR.store.Base(),
+		}))
 	case *bcStatusResponseMessage:
 		// Got a peer status. Unverified.
-		bcR.pool.SetPeerHeight(src.ID(), msg.Height)
+		bcR.pool.SetPeerRange(src.ID(), msg.Base, msg.Height)
+	case *bcNoBlockResponseMessage:
+		bcR.Logger.Debug("Peer does not have requested block", "peer", src, "height", msg.Height)
 	default:
 		bcR.Logger.Error(fmt.Sprintf("Unknown message type %v", reflect.TypeOf(msg)))
 	}
@@ -225,7 +230,7 @@ func (bcR *BlockchainReactor) poolRoutine() {
 	statusUpdateTicker := time.NewTicker(statusUpdateIntervalSeconds * time.Second)
 	switchToConsensusTicker := time.NewTicker(switchToConsensusIntervalSeconds * time.Second)
 
-	blocksSynced := 0
+	blocksSynced := uint64(0)
 
 	chainID := bcR.initialState.ChainID
 	state := bcR.initialState
@@ -335,14 +340,14 @@ FOR_LOOP:
 				if peer != nil {
 					// NOTE: we've already removed the peer's request, but we
 					// still need to clean up the rest.
-					bcR.Switch.StopPeerForError(peer, fmt.Errorf("BlockchainReactor validation error: %v", err))
+					bcR.Switch.StopPeerForError(peer, fmt.Errorf("blockchainReactor validation error: %v", err))
 				}
 				peerID2 := bcR.pool.RedoRequest(second.Height)
 				peer2 := bcR.Switch.Peers().Get(peerID2)
 				if peer2 != nil && peer2 != peer {
 					// NOTE: we've already removed the peer's request, but we
 					// still need to clean up the rest.
-					bcR.Switch.StopPeerForError(peer2, fmt.Errorf("BlockchainReactor validation error: %v", err))
+					bcR.Switch.StopPeerForError(peer2, fmt.Errorf("blockchainReactor validation error: %v", err))
 				}
 				continue FOR_LOOP
 			} else {
@@ -354,7 +359,7 @@ FOR_LOOP:
 				// TODO: same thing for app - but we would need a way to
 				// get the hash without persisting the state
 				var err error
-				state, err = bcR.blockExec.ApplyBlock(state, firstID, first)
+				state, _, err = bcR.blockExec.ApplyBlock(state, firstID, first)
 				if err != nil {
 					// TODO This is bad, are we zombie?
 					panic(fmt.Sprintf("Failed to process committed block (%d:%X): %v", first.Height, first.Hash(), err))
@@ -376,9 +381,12 @@ FOR_LOOP:
 	}
 }
 
-// BroadcastStatusRequest broadcasts `BlockStore` height.
+// BroadcastStatusRequest broadcasts `BlockStore` base and height.
 func (bcR *BlockchainReactor) BroadcastStatusRequest() error {
-	msgBytes := cdc.MustMarshalBinaryBare(&bcStatusRequestMessage{bcR.store.Height()})
+	msgBytes := cdc.MustMarshalBinaryBare(&bcStatusRequestMessage{
+		Base:   bcR.store.Base(),
+		Height: bcR.store.Height(),
+	})
 	bcR.Switch.Broadcast(BlockchainChannel, msgBytes)
 	return nil
 }
@@ -403,7 +411,7 @@ func RegisterBlockchainMessages(cdc *amino.Codec) {
 
 func decodeMsg(bz []byte) (msg BlockchainMessage, err error) {
 	if len(bz) > maxMsgSize {
-		return msg, fmt.Errorf("Msg exceeds max size (%d > %d)", len(bz), maxMsgSize)
+		return msg, fmt.Errorf("msg exceeds max size (%d > %d)", len(bz), maxMsgSize)
 	}
 	err = cdc.UnmarshalBinaryBare(bz, &msg)
 	return
@@ -418,7 +426,7 @@ type bcBlockRequestMessage struct {
 // ValidateBasic performs basic validation.
 func (m *bcBlockRequestMessage) ValidateBasic() error {
 	if m.Height < 0 {
-		return errors.New("Negative Height")
+		return errors.New("negative Height")
 	}
 	return nil
 }
@@ -434,7 +442,7 @@ type bcNoBlockResponseMessage struct {
 // ValidateBasic performs basic validation.
 func (m *bcNoBlockResponseMessage) ValidateBasic() error {
 	if m.Height < 0 {
-		return errors.New("Negative Height")
+		return errors.New("negative Height")
 	}
 	return nil
 }
@@ -462,36 +470,50 @@ func (m *bcBlockResponseMessage) String() string {
 
 type bcStatusRequestMessage struct {
 	Height int64
+	Base   int64
 }
 
 // ValidateBasic performs basic validation.
 func (m *bcStatusRequestMessage) ValidateBasic() error {
+	if m.Base < 0 {
+		return errors.New("negative Base")
+	}
 	if m.Height < 0 {
-		return errors.New("Negative Height")
+		return errors.New("negative Height")
+	}
+	if m.Base > m.Height {
+		return fmt.Errorf("base %v cannot be greater than height %v", m.Base, m.Height)
 	}
 	return nil
 }
 
 func (m *bcStatusRequestMessage) String() string {
-	return fmt.Sprintf("[bcStatusRequestMessage %v]", m.Height)
+	return fmt.Sprintf("[bcStatusRequestMessage %v:%v]", m.Base, m.Height)
 }
 
 //-------------------------------------
 
 type bcStatusResponseMessage struct {
 	Height int64
+	Base   int64
 }
 
 // ValidateBasic performs basic validation.
 func (m *bcStatusResponseMessage) ValidateBasic() error {
+	if m.Base < 0 {
+		return errors.New("negative Base")
+	}
 	if m.Height < 0 {
-		return errors.New("Negative Height")
+		return errors.New("negative Height")
+	}
+	if m.Base > m.Height {
+		return fmt.Errorf("base %v cannot be greater than height %v", m.Base, m.Height)
 	}
 	return nil
 }
 
 func (m *bcStatusResponseMessage) String() string {
-	return fmt.Sprintf("[bcStatusResponseMessage %v]", m.Height)
+	return fmt.Sprintf("[bcStatusResponseMessage %v:%v]", m.Base, m.Height)
 }
 
 //---------------------------------------

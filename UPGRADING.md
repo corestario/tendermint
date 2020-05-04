@@ -3,6 +3,61 @@
 This guide provides steps to be followed when you upgrade your applications to
 a newer version of Tendermint Core.
 
+## Unreleased
+
+<Overview>
+
+
+## v0.33.4
+
+### Go API
+
+- `rpc/client` HTTP and local clients have been moved into `http` and `local` subpackages, and their constructors have been renamed to `New()`.
+
+### Protobuf Changes
+
+When upgrading to version 0.33.4 you will have to fetch the `third_party` directory along with the updated proto files.
+
+## v0.33.1
+
+This release is compatible with the previous version. The only change that is required is if you are fetching the protobuf files for application use.
+
+### Protobuf Changes
+
+When upgrading to version 0.33.1 you will have to fetch the `third_party` directory along with the updated proto files.
+
+
+## v0.33.0
+
+This release is not compatible with previous blockchains due to commit becoming signatures only and fields in the header have been removed.
+
+### Config Changes
+
+You will need to generate a new config if you have used a prior version of tendermint.
+
+- Tags have been entirely renamed throughout the codebase to events and there keys are called [compositeKeys](https://github.com/tendermint/tendermint/blob/6d05c531f7efef6f0619155cf10ae8557dd7832f/docs/app-dev/indexing-transactions.md).
+- Evidence Params has been changed to include duration.
+  - `consensus_params.evidence.max_age_duration`.
+  - Renamed `consensus_params.evidence.max_age` to `max_age_num_blocks`.
+
+### Go API
+
+- `libs/common` has been removed in favor of specific pkgs.
+  - `async`
+  - `service`
+  - `rand`
+  - `net`
+  - `strings`
+  - `cmap`
+- removal of `errors` pkg
+
+### RPC Changes
+
+- `/validators` is now paginated (default: 30 vals per page)
+- `/block_results` response format updated [see RPC docs for details](https://docs.tendermint.com/master/rpc/#/Info/block_results)
+- Event suffix has been removed from the ID in event responses
+- IDs are now integers not `json-client-XYZ`
+
 ## v0.32.0
 
 This release is compatible with previous blockchains,
@@ -61,7 +116,7 @@ Prior to the update, suppose your `ResponseDeliverTx` look like:
 
 ```go
 abci.ResponseDeliverTx{
-  Tags: []cmn.KVPair{
+  Tags: []kv.Pair{
     {Key: []byte("sender"), Value: []byte("foo")},
     {Key: []byte("recipient"), Value: []byte("bar")},
     {Key: []byte("amount"), Value: []byte("35")},
@@ -85,7 +140,7 @@ abci.ResponseDeliverTx{
   Events: []abci.Event{
     {
       Type: "transfer",
-      Attributes: cmn.KVPairs{
+      Attributes: kv.Pairs{
         {Key: []byte("sender"), Value: []byte("foo")},
         {Key: []byte("recipient"), Value: []byte("bar")},
         {Key: []byte("amount"), Value: []byte("35")},
@@ -193,14 +248,14 @@ due to changes in how various data structures are hashed.
 Any implementations of Tendermint blockchain verification, including lite clients,
 will need to be updated. For specific details:
 
-- [Merkle tree](./docs/spec/blockchain/encoding.md#merkle-trees)
-- [ConsensusParams](./docs/spec/blockchain/state.md#consensusparams)
+- [Merkle tree](https://github.com/tendermint/spec/blob/master/spec/blockchain/encoding.md#merkle-trees)
+- [ConsensusParams](https://github.com/tendermint/spec/blob/master/spec/blockchain/state.md#consensusparams)
 
 There was also a small change to field ordering in the vote struct. Any
 implementations of an out-of-process validator (like a Key-Management Server)
 will need to be updated. For specific details:
 
-- [Vote](https://github.com/tendermint/tendermint/blob/master/docs/spec/consensus/signing.md#votes)
+- [Vote](https://github.com/tendermint/spec/blob/master/spec/consensus/signing.md#votes)
 
 Finally, the proposer selection algorithm continues to evolve. See the
 [work-in-progress

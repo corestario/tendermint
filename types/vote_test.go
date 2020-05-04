@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	amino "github.com/tendermint/go-amino"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/tmhash"
@@ -43,19 +42,6 @@ func exampleVote(t byte) *Vote {
 		ValidatorAddress: crypto.AddressHash([]byte("validator_address")),
 		ValidatorIndex:   56789,
 	}
-}
-
-// Ensure that Vote and CommitSig have the same encoding.
-// This ensures using CommitSig isn't a breaking change.
-// This test will fail and can be removed once CommitSig contains only sigs and
-// timestamps.
-func TestVoteEncoding(t *testing.T) {
-	vote := examplePrecommit()
-	commitSig := vote.CommitSig()
-	cdc := amino.NewCodec()
-	bz1 := cdc.MustMarshalBinaryBare(vote)
-	bz2 := cdc.MustMarshalBinaryBare(commitSig)
-	assert.Equal(t, bz1, bz2)
 }
 
 func TestVoteSignable(t *testing.T) {
@@ -157,13 +143,14 @@ func TestVoteProposalNotEq(t *testing.T) {
 
 func TestVoteVerifySignature(t *testing.T) {
 	privVal := NewMockPV()
-	pubkey := privVal.GetPubKey()
+	pubkey, err := privVal.GetPubKey()
+	require.NoError(t, err)
 
 	vote := examplePrecommit()
 	signBytes := vote.SignBytes("test_chain_id")
 
 	// sign it
-	err := privVal.SignVote("test_chain_id", vote)
+	err = privVal.SignVote("test_chain_id", vote)
 	require.NoError(t, err)
 
 	// verify the same vote
@@ -199,7 +186,7 @@ func TestIsVoteTypeValid(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(st *testing.T) {
 			if rs := IsVoteTypeValid(tt.in); rs != tt.out {
-				t.Errorf("Got unexpected Vote type. Expected:\n%v\nGot:\n%v", rs, tt.out)
+				t.Errorf("got unexpected Vote type. Expected:\n%v\nGot:\n%v", rs, tt.out)
 			}
 		})
 	}
@@ -207,12 +194,13 @@ func TestIsVoteTypeValid(t *testing.T) {
 
 func TestVoteVerify(t *testing.T) {
 	privVal := NewMockPV()
-	pubkey := privVal.GetPubKey()
+	pubkey, err := privVal.GetPubKey()
+	require.NoError(t, err)
 
 	vote := examplePrevote()
 	vote.ValidatorAddress = pubkey.Address()
 
-	err := vote.Verify("test_chain_id", ed25519.GenPrivKey().PubKey())
+	err = vote.Verify("test_chain_id", ed25519.GenPrivKey().PubKey())
 	if assert.Error(t, err) {
 		assert.Equal(t, ErrVoteInvalidValidatorAddress, err)
 	}
@@ -258,13 +246,13 @@ func TestVoteString(t *testing.T) {
 	str := examplePrecommit().String()
 	expected := `Vote{56789:6AF1F4111082 12345/02/2(Precommit) 8B01023386C3 000000000000 @ 2017-12-25T03:00:01.234Z BLSSignature: []}`
 	if str != expected {
-		t.Errorf("Got unexpected string for Vote. Expected:\n%v\nGot:\n%v", expected, str)
+		t.Errorf("got unexpected string for Vote. Expected:\n%v\nGot:\n%v", expected, str)
 	}
 
 	str2 := examplePrevote().String()
 	expected = `Vote{56789:6AF1F4111082 12345/02/1(Prevote) 8B01023386C3 000000000000 @ 2017-12-25T03:00:01.234Z BLSSignature: []}`
 	if str2 != expected {
-		t.Errorf("Got unexpected string for Vote. Expected:\n%v\nGot:\n%v", expected, str2)
+		t.Errorf("got unexpected string for Vote. Expected:\n%v\nGot:\n%v", expected, str2)
 	}
 }
 

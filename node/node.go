@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // nolint: gosec // securely exposed on separate, optional port
 	"os"
 	"strings"
 	"time"
@@ -17,16 +17,19 @@ import (
 	"github.com/rs/cors"
 
 	amino "github.com/tendermint/go-amino"
+	dbm "github.com/tendermint/tm-db"
+
 	abci "github.com/tendermint/tendermint/abci/types"
 	bcv0 "github.com/tendermint/tendermint/blockchain/v0"
 	bcv1 "github.com/tendermint/tendermint/blockchain/v1"
+	bcv2 "github.com/tendermint/tendermint/blockchain/v2"
 	cfg "github.com/tendermint/tendermint/config"
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/evidence"
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
 	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
+	"github.com/tendermint/tendermint/libs/service"
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/p2p/pex"
@@ -44,7 +47,6 @@ import (
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
 	"github.com/tendermint/tendermint/version"
-	dbm "github.com/tendermint/tm-db"
 )
 
 //------------------------------------------------------------------------------
@@ -78,8 +80,8 @@ func DefaultGenesisDocProviderFunc(config *cfg.Config) GenesisDocProvider {
 	}
 }
 
-// NodeProvider takes a config and a logger and returns a ready to go Node.
-type NodeProvider func(*cfg.Config, log.Logger) (*Node, error)
+// Provider takes a config and a logger and returns a ready to go Node.
+type Provider func(*cfg.Config, log.Logger) (*Node, error)
 
 // DefaultNewNode returns a Tendermint node with default settings for the
 // PrivValidator, ClientCreator, GenesisDoc, and DBProvider.
@@ -98,7 +100,7 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 	if _, err := os.Stat(oldPrivVal); !os.IsNotExist(err) {
 		oldPV, err := privval.LoadOldFilePV(oldPrivVal)
 		if err != nil {
-			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v\n", oldPrivVal, err)
+			return nil, fmt.Errorf("error reading OldPrivValidator from %v: %v", oldPrivVal, err)
 		}
 		logger.Info("Upgrading PrivValidator file",
 			"old", oldPrivVal,
@@ -174,7 +176,7 @@ func CustomConsensusState(state *cs.ConsensusState) Option {
 // Node is the highest level interface to a full Tendermint node.
 // It includes all configuration information and running services.
 type Node struct {
-	cmn.BaseService
+	service.BaseService
 
 	// config
 	Config        *cfg.Config
@@ -198,8 +200,8 @@ type Node struct {
 	Mempool          mempl.Mempool
 	ConsensusState   *cs.ConsensusState                // latest consensus state
 	ConsensusReactor rpccore.ConsensusReactorInterface // for participating in the consensus
-	PexReactor       *pex.PEXReactor                   // for exchanging peer addresses
-	EvidencePool     *evidence.EvidencePool            // tracking evidence
+	PexReactor       *pex.Reactor                   // for exchanging peer addresses
+	EvidencePool     *evidence.Pool            // tracking evidence
 	ProxyApp         proxy.AppConns                    // connection to the application
 	RpcListeners     []net.Listener                    // rpc servers
 	TxIndexer        txindex.TxIndexer
@@ -252,10 +254,10 @@ func CreateAndStartIndexerService(config *cfg.Config, dbProvider DBProvider,
 			return nil, nil, err
 		}
 		switch {
-		case config.TxIndex.IndexTags != "":
-			txIndexer = kv.NewTxIndex(store, kv.IndexTags(SplitAndTrimEmpty(config.TxIndex.IndexTags, ",", " ")))
-		case config.TxIndex.IndexAllTags:
-			txIndexer = kv.NewTxIndex(store, kv.IndexAllTags())
+		case config.TxIndex.IndexKeys != "":
+			txIndexer = kv.NewTxIndex(store, kv.IndexEvents(SplitAndTrimEmpty(config.TxIndex.IndexKeys, ",", " ")))
+		case config.TxIndex.IndexAllKeys:
+			txIndexer = kv.NewTxIndex(store, kv.IndexAllEvents())
 		default:
 			txIndexer = kv.NewTxIndex(store)
 		}
@@ -314,12 +316,13 @@ func logNodeStartupInfo(state sm.State, pubKey crypto.PubKey, logger, consensusL
 	}
 }
 
-func OnlyValidatorIsUs(state sm.State, privVal types.PrivValidator) bool {
+
+func OnlyValidatorIsUs(state sm.State, pubKey crypto.PubKey) bool {
 	if state.Validators.Size() > 1 {
 		return false
 	}
 	addr, _ := state.Validators.GetByIndex(0)
-	return bytes.Equal(privVal.GetPubKey().Address(), addr)
+	return bytes.Equal(pubKey.Address(), addr)
 }
 
 func CreateMempoolAndMempoolReactor(config *cfg.Config, proxyApp proxy.AppConns,
@@ -343,22 +346,23 @@ func CreateMempoolAndMempoolReactor(config *cfg.Config, proxyApp proxy.AppConns,
 	return mempoolReactor, mempool
 }
 
+
 func CreateEvidenceReactor(config *cfg.Config, dbProvider DBProvider,
-	stateDB dbm.DB, logger log.Logger) (*evidence.EvidenceReactor, *evidence.EvidencePool, error) {
+	stateDB dbm.DB, logger log.Logger) (*evidence.Reactor, *evidence.Pool, error) {
 
 	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
 	if err != nil {
 		return nil, nil, err
 	}
 	evidenceLogger := logger.With("module", "evidence")
-	evidencePool := evidence.NewEvidencePool(stateDB, evidenceDB)
+	evidencePool := evidence.NewPool(stateDB, evidenceDB)
 	evidencePool.SetLogger(evidenceLogger)
-	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
+	evidenceReactor := evidence.NewReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
 	return evidenceReactor, evidencePool, nil
 }
 
-func createBlockchainReactor(config *cfg.Config,
+func CreateBlockchainReactor(config *cfg.Config,
 	state sm.State,
 	blockExec *sm.BlockExecutor,
 	blockStore *store.BlockStore,
@@ -370,6 +374,8 @@ func createBlockchainReactor(config *cfg.Config,
 		bcReactor = bcv0.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	case "v1":
 		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+	case "v2":
+		bcReactor = bcv2.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	default:
 		return nil, fmt.Errorf("unknown fastsync version %s", config.FastSync.Version)
 	}
@@ -378,12 +384,12 @@ func createBlockchainReactor(config *cfg.Config,
 	return bcReactor, nil
 }
 
-func createConsensusReactor(config *cfg.Config,
+func CreateConsensusReactor(config *cfg.Config,
 	state sm.State,
 	blockExec *sm.BlockExecutor,
 	blockStore sm.BlockStore,
 	mempool *mempl.CListMempool,
-	evidencePool *evidence.EvidencePool,
+	evidencePool *evidence.Pool,
 	privValidator types.PrivValidator,
 	csMetrics *cs.Metrics,
 	fastSync bool,
@@ -403,7 +409,7 @@ func createConsensusReactor(config *cfg.Config,
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
+	consensusReactor := cs.NewReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
@@ -472,17 +478,22 @@ func CreateTransport(
 	}
 
 	p2p.MultiplexTransportConnFilters(connFilters...)(transport)
+
+	// Limit the number of incoming connections.
+	max := config.P2P.MaxNumInboundPeers + len(SplitAndTrimEmpty(config.P2P.UnconditionalPeerIDs, ",", " "))
+	p2p.MultiplexTransportMaxIncomingConnections(max)(transport)
+
 	return transport, peerFilters
 }
 
-func createSwitch(config *cfg.Config,
+func CreateSwitch(config *cfg.Config,
 	transport p2p.Transport,
 	p2pMetrics *p2p.Metrics,
 	peerFilters []p2p.PeerFilterFunc,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
 	consensusReactor *cs.ConsensusReactor,
-	evidenceReactor *evidence.EvidenceReactor,
+	evidenceReactor *evidence.Reactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
 	p2pLogger log.Logger) *p2p.Switch {
@@ -534,11 +545,11 @@ func CreateAddrBookAndSetOnSwitch(config *cfg.Config, sw *p2p.Switch,
 }
 
 func CreatePEXReactorAndAddToSwitch(addrBook pex.AddrBook, config *cfg.Config,
-	sw *p2p.Switch, logger log.Logger) *pex.PEXReactor {
+	sw *p2p.Switch, logger log.Logger) *pex.Reactor {
 
 	// TODO persistent peers ? so we can have their DNS addrs saved
-	pexReactor := pex.NewPEXReactor(addrBook,
-		&pex.PEXReactorConfig{
+	pexReactor := pex.NewReactor(addrBook,
+		&pex.ReactorConfig{
 			Seeds:    SplitAndTrimEmpty(config.P2P.Seeds, ",", " "),
 			SeedMode: config.P2P.SeedMode,
 			// See consensus/reactor.go: blocksToContributeToBecomeGoodPeer 10000
@@ -546,7 +557,8 @@ func CreatePEXReactorAndAddToSwitch(addrBook pex.AddrBook, config *cfg.Config,
 			// TODO (melekes): make it dynamic based on the actual block latencies
 			// from the live network.
 			// https://github.com/tendermint/tendermint/issues/3523
-			SeedDisconnectWaitPeriod: 28 * time.Hour,
+			SeedDisconnectWaitPeriod:     28 * time.Hour,
+			PersistentPeersMaxDialPeriod: config.P2P.PersistentPeersMaxDialPeriod,
 		})
 	pexReactor.SetLogger(logger.With("module", "pex"))
 	sw.AddReactor("PEX", pexReactor)
@@ -622,10 +634,9 @@ func NewNode(config *cfg.Config,
 		}
 	}
 
-	pubKey := privValidator.GetPubKey()
-	if pubKey == nil {
-		// TODO: GetPubKey should return errors - https://github.com/tendermint/tendermint/issues/3602
-		return nil, errors.New("could not retrieve public key from private validator")
+	pubKey, err := privValidator.GetPubKey()
+	if err != nil {
+		return nil, errors.Wrap(err, "can't get pubkey")
 	}
 
 	logNodeStartupInfo(state, pubKey, logger, consensusLogger)
@@ -633,7 +644,7 @@ func NewNode(config *cfg.Config,
 
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
-	fastSync := config.FastSyncMode && !OnlyValidatorIsUs(state, privValidator)
+	fastSync := config.FastSyncMode && !OnlyValidatorIsUs(state, pubKey)
 
 	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider(genDoc.ChainID)
 
@@ -659,13 +670,13 @@ func NewNode(config *cfg.Config,
 	)
 
 	// Make BlockchainReactor
-	bcReactor, err := createBlockchainReactor(config, state, blockExec, blockStore, fastSync, logger)
+	bcReactor, err := CreateBlockchainReactor(config, state, blockExec, blockStore, fastSync, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create blockchain reactor")
 	}
 
 	// Make ConsensusReactor
-	consensusReactor, consensusState := createConsensusReactor(
+	consensusReactor, consensusState := CreateConsensusReactor(
 		config, state, blockExec, blockStore, mempool, evidencePool,
 		privValidator, csMetrics, fastSync, eventBus, consensusLogger,
 	)
@@ -682,7 +693,7 @@ func NewNode(config *cfg.Config,
 
 	// Setup Switch.
 	p2pLogger := logger.With("module", "p2p")
-	sw := createSwitch(
+	sw := CreateSwitch(
 		config, transport, p2pMetrics, peerFilters, mempoolReactor, bcReactor,
 		consensusReactor, evidenceReactor, nodeInfo, nodeKey, p2pLogger,
 	)
@@ -692,9 +703,15 @@ func NewNode(config *cfg.Config,
 		return nil, errors.Wrap(err, "could not add peers from persistent_peers field")
 	}
 
+
 	addrBook, err := CreateAddrBookAndSetOnSwitch(config, sw, p2pLogger, nodeKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not create addrbook")
+	}
+
+	err = sw.AddUnconditionalPeerIDs(SplitAndTrimEmpty(config.P2P.UnconditionalPeerIDs, ",", " "))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not add peer ids from unconditional_peer_ids field")
 	}
 
 	// Optionally, start the pex reactor
@@ -709,7 +726,7 @@ func NewNode(config *cfg.Config,
 	//
 	// If PEX is on, it should handle dialing the seeds. Otherwise the switch does it.
 	// Note we currently use the addrBook regardless at least for AddOurAddress
-	var pexReactor *pex.PEXReactor
+	var pexReactor *pex.Reactor
 	if config.P2P.PexReactor {
 		pexReactor = CreatePEXReactorAndAddToSwitch(addrBook, config, sw, logger)
 	}
@@ -745,7 +762,7 @@ func NewNode(config *cfg.Config,
 		IndexerService:   indexerService,
 		EventBus:         eventBus,
 	}
-	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
+	node.BaseService = *service.NewBaseService(logger, "Node", node)
 
 	for _, option := range options {
 		option(node)
@@ -754,7 +771,7 @@ func NewNode(config *cfg.Config,
 	return node, nil
 }
 
-// OnStart starts the Node. It implements cmn.Service.
+// OnStart starts the Node. It implements service.Service.
 func (n *Node) OnStart() error {
 	now := tmtime.Now()
 	genTime := n.GenesisDoc.GenesisTime
@@ -811,7 +828,7 @@ func (n *Node) OnStart() error {
 	return nil
 }
 
-// OnStop stops the Node. It implements cmn.Service.
+// OnStop stops the Node. It implements service.Service.
 func (n *Node) OnStop() {
 	n.BaseService.OnStop()
 
@@ -843,7 +860,7 @@ func (n *Node) OnStop() {
 		}
 	}
 
-	if pvsc, ok := n.PrivValidator.(cmn.Service); ok {
+	if pvsc, ok := n.PrivValidator.(service.Service); ok {
 		pvsc.Stop()
 	}
 
@@ -865,7 +882,10 @@ func (n *Node) ConfigureRPC() {
 	rpccore.SetEvidencePool(n.EvidencePool)
 	rpccore.SetP2PPeers(n.Sw)
 	rpccore.SetP2PTransport(n)
-	pubKey := n.PrivValidator.GetPubKey()
+	pubKey, err := n.PrivValidator.GetPubKey()
+	if err != nil {
+		panic(err)
+	}
 	rpccore.SetPubKey(pubKey)
 	rpccore.SetGenesisDoc(n.GenesisDoc)
 	rpccore.SetProxyAppQuery(n.ProxyApp.Query())
@@ -958,6 +978,16 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 	if grpcListenAddr != "" {
 		config := rpcserver.DefaultConfig()
 		config.MaxOpenConnections = n.Config.RPC.MaxOpenConnections
+		config.MaxBodyBytes = n.Config.RPC.MaxBodyBytes
+		config.MaxHeaderBytes = n.Config.RPC.MaxHeaderBytes
+		// NOTE: GRPCMaxOpenConnections is used, not MaxOpenConnections
+		config.MaxOpenConnections = n.Config.RPC.GRPCMaxOpenConnections
+		// If necessary adjust global WriteTimeout to ensure it's greater than
+		// TimeoutBroadcastTxCommit.
+		// See https://github.com/tendermint/tendermint/issues/3435
+		if config.WriteTimeout <= n.Config.RPC.TimeoutBroadcastTxCommit {
+			config.WriteTimeout = n.Config.RPC.TimeoutBroadcastTxCommit + 1*time.Second
+		}
 		listener, err := rpcserver.Listen(grpcListenAddr, config)
 		if err != nil {
 			return nil, err
@@ -1021,12 +1051,12 @@ func (n *Node) GetMempool() mempl.Mempool {
 }
 
 // PEXReactor returns the Node's PEXReactor. It returns nil if PEX is disabled.
-func (n *Node) GetPEXReactor() *pex.PEXReactor {
+func (n *Node) GetPEXReactor() *pex.Reactor {
 	return n.PexReactor
 }
 
 // EvidencePool returns the Node's EvidencePool.
-func (n *Node) GetEvidencePool() *evidence.EvidencePool {
+func (n *Node) GetEvidencePool() *evidence.Pool {
 	return n.EvidencePool
 }
 
@@ -1091,6 +1121,8 @@ func MakeNodeInfo(
 		bcChannel = bcv0.BlockchainChannel
 	case "v1":
 		bcChannel = bcv1.BlockchainChannel
+	case "v2":
+		bcChannel = bcv2.BlockchainChannel
 	default:
 		return nil, fmt.Errorf("unknown fastsync version %s", config.FastSync.Version)
 	}
@@ -1101,9 +1133,9 @@ func MakeNodeInfo(
 			state.Version.Consensus.Block,
 			state.Version.Consensus.App,
 		),
-		ID_:     nodeKey.ID(),
-		Network: genDoc.ChainID,
-		Version: version.TMCoreSemVer,
+		DefaultNodeID: nodeKey.ID(),
+		Network:       genDoc.ChainID,
+		Version:       version.TMCoreSemVer,
 		Channels: []byte{
 			bcChannel,
 			cs.StateChannel, cs.DataChannel, cs.VoteChannel, cs.VoteSetBitsChannel,
@@ -1167,12 +1199,15 @@ func LoadStateFromDBOrGenesisDocProvider(
 
 // panics if failed to unmarshal bytes
 func loadGenesisDoc(db dbm.DB) (*types.GenesisDoc, error) {
-	b := db.Get(genesisDocKey)
+	b, err := db.Get(genesisDocKey)
+	if err != nil {
+		panic(err)
+	}
 	if len(b) == 0 {
-		return nil, errors.New("Genesis doc not found")
+		return nil, errors.New("genesis doc not found")
 	}
 	var genDoc *types.GenesisDoc
-	err := Cdc.UnmarshalJSON(b, &genDoc)
+	err = Cdc.UnmarshalJSON(b, &genDoc)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to load genesis doc due to unmarshaling error: %v (bytes: %X)", err, b))
 	}

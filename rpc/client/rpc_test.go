@@ -3,11 +3,13 @@ package client_test
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,23 +18,41 @@ import (
 
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/tmhash"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/log"
+	tmmath "github.com/tendermint/tendermint/libs/math"
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/rpc/client"
+	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
+	rpclocal "github.com/tendermint/tendermint/rpc/client/local"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	rpcclient "github.com/tendermint/tendermint/rpc/lib/client"
 	rpctest "github.com/tendermint/tendermint/rpc/test"
 	"github.com/tendermint/tendermint/types"
 )
 
-func getHTTPClient() *client.HTTP {
+func getHTTPClient() *rpchttp.HTTP {
 	rpcAddr := rpctest.GetConfig().RPC.ListenAddress
-	return client.NewHTTP(rpcAddr, "/websocket")
+	c, err := rpchttp.New(rpcAddr, "/websocket")
+	if err != nil {
+		panic(err)
+	}
+	c.SetLogger(log.TestingLogger())
+	return c
 }
 
-func getLocalClient() *client.Local {
-	return client.NewLocal(node)
+func getHTTPClientWithTimeout(timeout uint) *rpchttp.HTTP {
+	rpcAddr := rpctest.GetConfig().RPC.ListenAddress
+	c, err := rpchttp.NewWithTimeout(rpcAddr, "/websocket", timeout)
+	if err != nil {
+		panic(err)
+	}
+	c.SetLogger(log.TestingLogger())
+	return c
+}
+
+func getLocalClient() *rpclocal.Local {
+	return rpclocal.New(node)
 }
 
 // GetClients returns a slice of clients for table-driven tests
@@ -45,16 +65,17 @@ func GetClients() []client.Client {
 
 func TestNilCustomHTTPClient(t *testing.T) {
 	require.Panics(t, func() {
-		client.NewHTTPWithClient("http://example.com", "/websocket", nil)
+		_, _ = rpchttp.NewWithClient("http://example.com", "/websocket", nil)
 	})
 	require.Panics(t, func() {
-		rpcclient.NewJSONRPCClientWithHTTPClient("http://example.com", nil)
+		_, _ = rpcclient.NewJSONRPCClientWithHTTPClient("http://example.com", nil)
 	})
 }
 
 func TestCustomHTTPClient(t *testing.T) {
 	remote := rpctest.GetConfig().RPC.ListenAddress
-	c := client.NewHTTPWithClient(remote, "/websocket", http.DefaultClient)
+	c, err := rpchttp.NewWithClient(remote, "/websocket", http.DefaultClient)
+	require.Nil(t, err)
 	status, err := c.Status()
 	require.NoError(t, err)
 	require.NotNil(t, status)
@@ -152,9 +173,11 @@ func TestGenesisAndValidators(t *testing.T) {
 		gval := gen.Genesis.Validators[0]
 
 		// get the current validators
-		vals, err := c.Validators(nil)
+		vals, err := c.Validators(nil, 0, 0)
 		require.Nil(t, err, "%d: %+v", i, err)
 		require.Equal(t, 1, len(vals.Validators))
+		require.Equal(t, 1, vals.Count)
+		require.Equal(t, 1, vals.Total)
 		val := vals.Validators[0]
 
 		// make sure the current set is also the genesis set
@@ -225,17 +248,17 @@ func TestAppCalls(t *testing.T) {
 		// and we can even check the block is added
 		block, err := c.Block(&apph)
 		require.Nil(err, "%d: %+v", i, err)
-		appHash := block.BlockMeta.Header.AppHash
+		appHash := block.Block.Header.AppHash
 		assert.True(len(appHash) > 0)
-		assert.EqualValues(apph, block.BlockMeta.Header.Height)
+		assert.EqualValues(apph, block.Block.Header.Height)
 
 		// now check the results
 		blockResults, err := c.BlockResults(&txh)
 		require.Nil(err, "%d: %+v", i, err)
 		assert.Equal(txh, blockResults.Height)
-		if assert.Equal(1, len(blockResults.Results.DeliverTx)) {
+		if assert.Equal(1, len(blockResults.TxsResults)) {
 			// check success code
-			assert.EqualValues(0, blockResults.Results.DeliverTx[0].Code)
+			assert.EqualValues(0, blockResults.TxsResults[0].Code)
 		}
 
 		// check blockchain info, now that we know there is info
@@ -245,9 +268,9 @@ func TestAppCalls(t *testing.T) {
 		if assert.Equal(1, len(info.BlockMetas)) {
 			lastMeta := info.BlockMetas[0]
 			assert.EqualValues(apph, lastMeta.Header.Height)
-			bMeta := block.BlockMeta
-			assert.Equal(bMeta.Header.AppHash, lastMeta.Header.AppHash)
-			assert.Equal(bMeta.BlockID, lastMeta.BlockID)
+			blockData := block.Block
+			assert.Equal(blockData.Header.AppHash, lastMeta.Header.AppHash)
+			assert.Equal(block.BlockID, lastMeta.BlockID)
 		}
 
 		// and get the corresponding commit with the same apphash
@@ -405,68 +428,129 @@ func TestTx(t *testing.T) {
 	}
 }
 
+func TestTxSearchWithTimeout(t *testing.T) {
+	// Get a client with a time-out of 10 secs.
+	timeoutClient := getHTTPClientWithTimeout(10)
+
+	// query using a compositeKey (see kvstore application)
+	result, err := timeoutClient.TxSearch("app.creator='Cosmoshi Netowoko'", false, 1, 30, "asc")
+	require.Nil(t, err)
+	if len(result.Txs) == 0 {
+		t.Fatal("expected a lot of transactions")
+	}
+}
+
 func TestTxSearch(t *testing.T) {
-	// first we broadcast a tx
 	c := getHTTPClient()
-	_, _, tx := MakeTxKV()
-	bres, err := c.BroadcastTxCommit(tx)
-	require.Nil(t, err, "%+v", err)
 
-	txHeight := bres.Height
-	txHash := bres.Hash
+	// first we broadcast a few txs
+	for i := 0; i < 10; i++ {
+		_, _, tx := MakeTxKV()
+		_, err := c.BroadcastTxCommit(tx)
+		require.NoError(t, err)
+	}
 
+	// since we're not using an isolated test server, we'll have lingering transactions
+	// from other tests as well
+	result, err := c.TxSearch("tx.height >= 0", true, 1, 100, "asc")
+	require.NoError(t, err)
+	txCount := len(result.Txs)
+
+	// pick out the last tx to have something to search for in tests
+	find := result.Txs[len(result.Txs)-1]
 	anotherTxHash := types.Tx("a different tx").Hash()
 
 	for i, c := range GetClients() {
 		t.Logf("client %d", i)
 
 		// now we query for the tx.
-		// since there's only one tx, we know index=0.
-		result, err := c.TxSearch(fmt.Sprintf("tx.hash='%v'", txHash), true, 1, 30)
-		require.Nil(t, err, "%+v", err)
+		result, err := c.TxSearch(fmt.Sprintf("tx.hash='%v'", find.Hash), true, 1, 30, "asc")
+		require.Nil(t, err)
 		require.Len(t, result.Txs, 1)
+		require.Equal(t, find.Hash, result.Txs[0].Hash)
 
 		ptx := result.Txs[0]
-		assert.EqualValues(t, txHeight, ptx.Height)
-		assert.EqualValues(t, tx, ptx.Tx)
+		assert.EqualValues(t, find.Height, ptx.Height)
+		assert.EqualValues(t, find.Tx, ptx.Tx)
 		assert.Zero(t, ptx.Index)
 		assert.True(t, ptx.TxResult.IsOK())
-		assert.EqualValues(t, txHash, ptx.Hash)
+		assert.EqualValues(t, find.Hash, ptx.Hash)
 
 		// time to verify the proof
-		proof := ptx.Proof
-		if assert.EqualValues(t, tx, proof.Data) {
-			assert.NoError(t, proof.Proof.Verify(proof.RootHash, txHash))
+		if assert.EqualValues(t, find.Tx, ptx.Proof.Data) {
+			assert.NoError(t, ptx.Proof.Proof.Verify(ptx.Proof.RootHash, find.Hash))
 		}
 
 		// query by height
-		result, err = c.TxSearch(fmt.Sprintf("tx.height=%d", txHeight), true, 1, 30)
-		require.Nil(t, err, "%+v", err)
+		result, err = c.TxSearch(fmt.Sprintf("tx.height=%d", find.Height), true, 1, 30, "asc")
+		require.Nil(t, err)
 		require.Len(t, result.Txs, 1)
 
 		// query for non existing tx
-		result, err = c.TxSearch(fmt.Sprintf("tx.hash='%X'", anotherTxHash), false, 1, 30)
-		require.Nil(t, err, "%+v", err)
+		result, err = c.TxSearch(fmt.Sprintf("tx.hash='%X'", anotherTxHash), false, 1, 30, "asc")
+		require.Nil(t, err)
 		require.Len(t, result.Txs, 0)
 
-		// query using a tag (see kvstore application)
-		result, err = c.TxSearch("app.creator='Cosmoshi Netowoko'", false, 1, 30)
-		require.Nil(t, err, "%+v", err)
+		// query using a compositeKey (see kvstore application)
+		result, err = c.TxSearch("app.creator='Cosmoshi Netowoko'", false, 1, 30, "asc")
+		require.Nil(t, err)
 		if len(result.Txs) == 0 {
 			t.Fatal("expected a lot of transactions")
 		}
 
-		// query using a tag (see kvstore application) and height
-		result, err = c.TxSearch("app.creator='Cosmoshi Netowoko' AND tx.height<10000", true, 1, 30)
-		require.Nil(t, err, "%+v", err)
+		// query using a compositeKey (see kvstore application) and height
+		result, err = c.TxSearch("app.creator='Cosmoshi Netowoko' AND tx.height<10000", true, 1, 30, "asc")
+		require.Nil(t, err)
 		if len(result.Txs) == 0 {
 			t.Fatal("expected a lot of transactions")
 		}
 
 		// query a non existing tx with page 1 and txsPerPage 1
-		result, err = c.TxSearch("app.creator='Cosmoshi Neetowoko'", true, 1, 1)
-		require.Nil(t, err, "%+v", err)
+		result, err = c.TxSearch("app.creator='Cosmoshi Neetowoko'", true, 1, 1, "asc")
+		require.Nil(t, err)
 		require.Len(t, result.Txs, 0)
+
+		// check sorting
+		result, err = c.TxSearch(fmt.Sprintf("tx.height >= 1"), false, 1, 30, "asc")
+		require.Nil(t, err)
+		for k := 0; k < len(result.Txs)-1; k++ {
+			require.LessOrEqual(t, result.Txs[k].Height, result.Txs[k+1].Height)
+			require.LessOrEqual(t, result.Txs[k].Index, result.Txs[k+1].Index)
+		}
+
+		result, err = c.TxSearch(fmt.Sprintf("tx.height >= 1"), false, 1, 30, "desc")
+		require.Nil(t, err)
+		for k := 0; k < len(result.Txs)-1; k++ {
+			require.GreaterOrEqual(t, result.Txs[k].Height, result.Txs[k+1].Height)
+			require.GreaterOrEqual(t, result.Txs[k].Index, result.Txs[k+1].Index)
+		}
+
+		// check pagination
+		var (
+			seen      = map[int64]bool{}
+			maxHeight int64
+			perPage   = 3
+			pages     = int(math.Ceil(float64(txCount) / float64(perPage)))
+		)
+		for page := 1; page <= pages; page++ {
+			result, err = c.TxSearch("tx.height >= 1", false, page, perPage, "asc")
+			require.NoError(t, err)
+			if page < pages {
+				require.Len(t, result.Txs, perPage)
+			} else {
+				require.LessOrEqual(t, len(result.Txs), perPage)
+			}
+			require.Equal(t, txCount, result.TotalCount)
+			for _, tx := range result.Txs {
+				require.False(t, seen[tx.Height],
+					"Found duplicate height %v in page %v", tx.Height, page)
+				require.Greater(t, tx.Height, maxHeight,
+					"Found decreasing height %v (max seen %v) in page %v", tx.Height, maxHeight, page)
+				seen[tx.Height] = true
+				maxHeight = tx.Height
+			}
+		}
+		require.Len(t, seen, txCount)
 	}
 }
 
@@ -477,6 +561,7 @@ func deepcpVote(vote *types.Vote) (res *types.Vote) {
 		Height:           vote.Height,
 		Round:            vote.Round,
 		Type:             vote.Type,
+		Timestamp:        vote.Timestamp,
 		BlockID: types.BlockID{
 			Hash:        make([]byte, len(vote.BlockID.Hash)),
 			PartsHeader: vote.BlockID.PartsHeader,
@@ -497,15 +582,11 @@ func newEvidence(
 	chainID string,
 ) types.DuplicateVoteEvidence {
 	var err error
-	vote2_ := deepcpVote(vote2)
-	vote2_.Signature, err = val.Key.PrivKey.Sign(vote2_.SignBytes(chainID))
+	deepcpVote2 := deepcpVote(vote2)
+	deepcpVote2.Signature, err = val.Key.PrivKey.Sign(deepcpVote2.SignBytes(chainID))
 	require.NoError(t, err)
 
-	return types.DuplicateVoteEvidence{
-		PubKey: val.Key.PubKey,
-		VoteA:  vote,
-		VoteB:  vote2_,
-	}
+	return *types.NewDuplicateVoteEvidence(val.Key.PubKey, vote, deepcpVote2)
 }
 
 func makeEvidences(
@@ -519,6 +600,7 @@ func makeEvidences(
 		Height:           1,
 		Round:            0,
 		Type:             types.PrevoteType,
+		Timestamp:        time.Now().UTC(),
 		BlockID: types.BlockID{
 			Hash: tmhash.Sum([]byte("blockhash")),
 			PartsHeader: types.PartSetHeader{
@@ -581,13 +663,12 @@ func TestBroadcastEvidenceDuplicateVote(t *testing.T) {
 	pv := privval.LoadOrGenFilePV(pvKeyFile, pvKeyStateFile)
 
 	ev, fakes := makeEvidences(t, pv, chainID)
-
 	t.Logf("evidence %v", ev)
 
 	for i, c := range GetClients() {
 		t.Logf("client %d", i)
 
-		result, err := c.BroadcastEvidence(&types.DuplicateVoteEvidence{PubKey: ev.PubKey, VoteA: ev.VoteA, VoteB: ev.VoteB})
+		result, err := c.BroadcastEvidence(&ev)
 		require.Nil(t, err)
 		require.Equal(t, ev.Hash(), result.Hash, "Invalid response, result %+v", result)
 
@@ -624,7 +705,7 @@ func TestBatchedJSONRPCCalls(t *testing.T) {
 	testBatchedJSONRPCCalls(t, c)
 }
 
-func testBatchedJSONRPCCalls(t *testing.T, c *client.HTTP) {
+func testBatchedJSONRPCCalls(t *testing.T, c *rpchttp.HTTP) {
 	k1, v1, tx1 := MakeTxKV()
 	k2, v2, tx2 := MakeTxKV()
 
@@ -645,7 +726,7 @@ func testBatchedJSONRPCCalls(t *testing.T, c *client.HTTP) {
 	bresult2, ok := bresults[1].(*ctypes.ResultBroadcastTxCommit)
 	require.True(t, ok)
 	require.Equal(t, *bresult2, *r2)
-	apph := cmn.MaxInt64(bresult1.Height, bresult2.Height) + 1
+	apph := tmmath.MaxInt64(bresult1.Height, bresult2.Height) + 1
 
 	client.WaitForHeight(c, apph, nil)
 

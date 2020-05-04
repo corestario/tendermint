@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	tmbytes "github.com/tendermint/tendermint/libs/bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -12,8 +13,6 @@ import (
 	"go.dedis.ch/kyber/v3/pairing/bn256"
 	"go.dedis.ch/kyber/v3/sign/bls"
 	"go.dedis.ch/kyber/v3/sign/tbls"
-
-	cmn "github.com/tendermint/tendermint/libs/common"
 
 	dkgBLS "github.com/corestario/dkglib/lib/blsShare"
 )
@@ -110,7 +109,7 @@ func testRecover(st *testing.T, t, n int) {
 
 		votes = append(votes, &Vote{
 			BlockID: BlockID{
-				Hash: cmn.HexBytes("text"),
+				Hash: tmbytes.HexBytes("text"),
 			},
 			ValidatorAddress: Address("test"),
 			BLSSignature:     signs[i],

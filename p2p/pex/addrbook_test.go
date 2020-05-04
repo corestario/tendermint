@@ -7,14 +7,18 @@ import (
 	"math"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+	tmmath "github.com/tendermint/tendermint/libs/math"
+	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/p2p"
 )
+
+// FIXME These tests should not rely on .(*addrBook) assertions
 
 func TestAddrBookPickAddress(t *testing.T) {
 	fname := createTempFileName("addrbook_test")
@@ -59,13 +63,13 @@ func TestAddrBookSaveLoad(t *testing.T) {
 	// 0 addresses
 	book := NewAddrBook(fname, true)
 	book.SetLogger(log.TestingLogger())
-	book.saveToFile(fname)
+	book.Save()
 
 	book = NewAddrBook(fname, true)
 	book.SetLogger(log.TestingLogger())
-	book.loadFromFile(fname)
+	book.Start()
 
-	assert.Zero(t, book.Size())
+	assert.True(t, book.Empty())
 
 	// 100 addresses
 	randAddrs := randNetAddressPairs(t, 100)
@@ -75,11 +79,11 @@ func TestAddrBookSaveLoad(t *testing.T) {
 	}
 
 	assert.Equal(t, 100, book.Size())
-	book.saveToFile(fname)
+	book.Save()
 
 	book = NewAddrBook(fname, true)
 	book.SetLogger(log.TestingLogger())
-	book.loadFromFile(fname)
+	book.Start()
 
 	assert.Equal(t, 100, book.Size())
 }
@@ -97,12 +101,8 @@ func TestAddrBookLookup(t *testing.T) {
 		src := addrSrc.src
 		book.AddAddress(addr, src)
 
-		ka := book.addrLookup[addr.ID]
-		assert.NotNil(t, ka, "Expected to find KnownAddress %v but wasn't there.", addr)
-
-		if !(ka.Addr.Equals(addr) && ka.Src.Equals(src)) {
-			t.Fatalf("KnownAddress doesn't match addr & src")
-		}
+		ka := book.HasAddress(addr)
+		assert.True(t, ka, "Expected to find KnownAddress %v but wasn't there.", addr)
 	}
 }
 
@@ -184,13 +184,13 @@ func randNetAddressPairs(t *testing.T, n int) []netAddressPair {
 func randIPv4Address(t *testing.T) *p2p.NetAddress {
 	for {
 		ip := fmt.Sprintf("%v.%v.%v.%v",
-			cmn.RandIntn(254)+1,
-			cmn.RandIntn(255),
-			cmn.RandIntn(255),
-			cmn.RandIntn(255),
+			tmrand.Intn(254)+1,
+			tmrand.Intn(255),
+			tmrand.Intn(255),
+			tmrand.Intn(255),
 		)
-		port := cmn.RandIntn(65535-1) + 1
-		id := p2p.ID(hex.EncodeToString(cmn.RandBytes(p2p.IDByteLength)))
+		port := tmrand.Intn(65535-1) + 1
+		id := p2p.ID(hex.EncodeToString(tmrand.Bytes(p2p.IDByteLength)))
 		idAddr := p2p.IDAddressString(id, fmt.Sprintf("%v:%v", ip, port))
 		addr, err := p2p.NewNetAddressString(idAddr)
 		assert.Nil(t, err, "error generating rand network address")
@@ -344,7 +344,7 @@ func TestAddrBookGetSelectionWithBias(t *testing.T) {
 		}
 	}
 
-	got, expected := int((float64(good)/float64(len(selection)))*100), (100 - biasTowardsNewAddrs)
+	got, expected := int((float64(good)/float64(len(selection)))*100), 100-biasTowardsNewAddrs
 
 	// compute some slack to protect against small differences due to rounding:
 	slack := int(math.Round(float64(100) / float64(len(selection))))
@@ -395,6 +395,33 @@ func testCreatePrivateAddrs(t *testing.T, numAddrs int) ([]*p2p.NetAddress, []st
 		private[i] = string(addr.ID)
 	}
 	return addrs, private
+}
+
+func TestBanBadPeers(t *testing.T) {
+	fname := createTempFileName("addrbook_test")
+	defer deleteTempFile(fname)
+
+	book := NewAddrBook(fname, true)
+	book.SetLogger(log.TestingLogger())
+
+	addr := randIPv4Address(t)
+	_ = book.AddAddress(addr, addr)
+
+	book.MarkBad(addr, 1*time.Second)
+	// addr should not reachable
+	assert.False(t, book.HasAddress(addr))
+	assert.True(t, book.IsBanned(addr))
+
+	err := book.AddAddress(addr, addr)
+	// book should not add address from the blacklist
+	assert.Error(t, err)
+
+	time.Sleep(1 * time.Second)
+	book.ReinstateBadPeers()
+	// address should be reinstated in the new bucket
+	assert.EqualValues(t, 1, book.Size())
+	assert.True(t, book.HasAddress(addr))
+	assert.False(t, book.IsGood(addr))
 }
 
 func TestAddrBookEmpty(t *testing.T) {
@@ -482,8 +509,8 @@ func testAddrBookAddressSelection(t *testing.T, bookSize int) {
 		// There is at least one partition and at most three.
 		var (
 			k      = percentageOfNum(biasToSelectNewPeers, nAddrs)
-			expNew = cmn.MinInt(nNew, cmn.MaxInt(k, nAddrs-nBookOld))
-			expOld = cmn.MinInt(nOld, nAddrs-expNew)
+			expNew = tmmath.MinInt(nNew, tmmath.MaxInt(k, nAddrs-nBookOld))
+			expOld = tmmath.MinInt(nOld, nAddrs-expNew)
 		)
 
 		// Verify that the number of old and new addresses are as expected
@@ -537,7 +564,7 @@ func TestMultipleAddrBookAddressSelection(t *testing.T) {
 	ranges := [...][]int{{33, 100}, {100, 175}}
 	bookSizes := make([]int, 0, len(ranges))
 	for _, r := range ranges {
-		bookSizes = append(bookSizes, cmn.RandIntn(r[1]-r[0])+r[0])
+		bookSizes = append(bookSizes, tmrand.Intn(r[1]-r[0])+r[0])
 	}
 	t.Logf("Testing address selection for the following book sizes %v\n", bookSizes)
 	for _, bookSize := range bookSizes {
@@ -574,7 +601,7 @@ func deleteTempFile(fname string) {
 func createAddrBookWithMOldAndNNewAddrs(t *testing.T, nOld, nNew int) (book *addrBook, fname string) {
 	fname = createTempFileName("addrbook_test")
 
-	book = NewAddrBook(fname, true)
+	book = NewAddrBook(fname, true).(*addrBook)
 	book.SetLogger(log.TestingLogger())
 	assert.Zero(t, book.Size())
 

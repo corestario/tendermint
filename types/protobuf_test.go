@@ -4,10 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" // nolint: staticcheck // still used by gogoproto
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	amino "github.com/tendermint/go-amino"
+
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
@@ -70,12 +72,10 @@ func TestABCIConsensusParams(t *testing.T) {
 }
 
 func newHeader(
-	height, numTxs int64,
-	commitHash, dataHash, evidenceHash []byte,
+	height int64, commitHash, dataHash, evidenceHash []byte,
 ) *Header {
 	return &Header{
 		Height:         height,
-		NumTxs:         numTxs,
 		LastCommitHash: commitHash,
 		DataHash:       dataHash,
 		EvidenceHash:   evidenceHash,
@@ -85,11 +85,7 @@ func newHeader(
 func TestABCIHeader(t *testing.T) {
 	// build a full header
 	var height int64 = 5
-	var numTxs int64 = 3
-	header := newHeader(
-		height, numTxs,
-		[]byte("lastCommitHash"), []byte("dataHash"), []byte("evidenceHash"),
-	)
+	header := newHeader(height, []byte("lastCommitHash"), []byte("dataHash"), []byte("evidenceHash"))
 	protocolVersion := version.Consensus{Block: 7, App: 8}
 	timestamp := time.Now()
 	lastBlockID := BlockID{
@@ -99,10 +95,8 @@ func TestABCIHeader(t *testing.T) {
 			Hash:  []byte("hash"),
 		},
 	}
-	var totalTxs int64 = 100
 	header.Populate(
-		protocolVersion, "chainID",
-		timestamp, lastBlockID, totalTxs,
+		protocolVersion, "chainID", timestamp, lastBlockID,
 		[]byte("valHash"), []byte("nextValHash"),
 		[]byte("consHash"), []byte("appHash"), []byte("lastResultsHash"),
 		[]byte("proposerAddress"),
@@ -121,8 +115,6 @@ func TestABCIHeader(t *testing.T) {
 	assert.EqualValues(t, "chainID", pbHeader.ChainID)
 	assert.EqualValues(t, height, pbHeader.Height)
 	assert.EqualValues(t, timestamp, pbHeader.Time)
-	assert.EqualValues(t, numTxs, pbHeader.NumTxs)
-	assert.EqualValues(t, totalTxs, pbHeader.TotalTxs)
 	assert.EqualValues(t, lastBlockID.Hash, pbHeader.LastBlockId.Hash)
 	assert.EqualValues(t, []byte("lastCommitHash"), pbHeader.LastCommitHash)
 	assert.Equal(t, []byte("proposerAddress"), pbHeader.ProposerAddress)
@@ -141,11 +133,12 @@ func TestABCIEvidence(t *testing.T) {
 	blockID := makeBlockID([]byte("blockhash"), 1000, []byte("partshash"))
 	blockID2 := makeBlockID([]byte("blockhash2"), 1000, []byte("partshash"))
 	const chainID = "mychain"
-	pubKey := val.GetPubKey()
+	pubKey, err := val.GetPubKey()
+	require.NoError(t, err)
 	ev := &DuplicateVoteEvidence{
 		PubKey: pubKey,
-		VoteA:  makeVote(val, chainID, 0, 10, 2, 1, blockID),
-		VoteB:  makeVote(val, chainID, 0, 10, 2, 1, blockID2),
+		VoteA:  makeVote(t, val, chainID, 0, 10, 2, 1, blockID),
+		VoteB:  makeVote(t, val, chainID, 0, 10, 2, 1, blockID2),
 	}
 	abciEv := TM2PB.Evidence(
 		ev,

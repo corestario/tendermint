@@ -17,14 +17,14 @@ method via Websocket.
 {
     "jsonrpc": "2.0",
     "method": "subscribe",
-    "id": "0",
+    "id": 0,
     "params": {
         "query": "tm.event='NewBlock'"
     }
 }
 ```
 
-Check out [API docs](https://tendermint.com/rpc/) for
+Check out [API docs](https://docs.tendermint.com/master/rpc/) for
 more information on query syntax and other options.
 
 You can also use tags, given you had included them into DeliverTx
@@ -36,7 +36,7 @@ transactions](./indexing-transactions.md) for details.
 When validator set changes, ValidatorSetUpdates event is published. The
 event carries a list of pubkey/power pairs. The list is the same
 Tendermint receives from ABCI application (see [EndBlock
-section](../spec/abci/abci.md#endblock) in
+section](https://github.com/tendermint/spec/blob/master/spec/abci/abci.md#endblock) in
 the ABCI spec).
 
 Response:
@@ -44,7 +44,7 @@ Response:
 ```
 {
     "jsonrpc": "2.0",
-    "id": "0#event",
+    "id": 0,
     "result": {
         "query": "tm.event='ValidatorSetUpdates'",
         "data": {

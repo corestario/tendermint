@@ -1,11 +1,11 @@
-## v0.32.9
+## v0.33.5
+
 
 \*\*
 
 Special thanks to external contributors on this release:
 
-Friendly reminder, we have a [bug bounty
-program](https://hackerone.com/tendermint).
+Friendly reminder, we have a [bug bounty program](https://hackerone.com/tendermint).
 
 ### BREAKING CHANGES:
 
@@ -13,10 +13,14 @@ program](https://hackerone.com/tendermint).
 
 - Apps
 
+- P2P Protocol
+
 - Go API
 
 ### FEATURES:
 
+
 ### IMPROVEMENTS:
+
 
 ### BUG FIXES:

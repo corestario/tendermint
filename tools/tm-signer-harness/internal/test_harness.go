@@ -13,8 +13,9 @@ import (
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/state"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+	tmnet "github.com/tendermint/tendermint/libs/net"
+	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -189,9 +190,17 @@ func (th *TestHarness) Run() {
 // local Tendermint version.
 func (th *TestHarness) TestPublicKey() error {
 	th.logger.Info("TEST: Public key of remote signer")
-	th.logger.Info("Local", "pubKey", th.fpv.GetPubKey())
-	th.logger.Info("Remote", "pubKey", th.signerClient.GetPubKey())
-	if th.fpv.GetPubKey() != th.signerClient.GetPubKey() {
+	fpvk, err := th.fpv.GetPubKey()
+	if err != nil {
+		return err
+	}
+	th.logger.Info("Local", "pubKey", fpvk)
+	sck, err := th.signerClient.GetPubKey()
+	if err != nil {
+		return err
+	}
+	th.logger.Info("Remote", "pubKey", sck)
+	if fpvk != sck {
 		th.logger.Error("FAILED: Local and remote public keys do not match")
 		return newTestHarnessError(ErrTestPublicKeyFailed, nil, "")
 	}
@@ -229,8 +238,12 @@ func (th *TestHarness) TestSignProposal() error {
 		th.logger.Error("FAILED: Signed proposal is invalid", "err", err)
 		return newTestHarnessError(ErrTestSignProposalFailed, err, "")
 	}
+	sck, err := th.signerClient.GetPubKey()
+	if err != nil {
+		return err
+	}
 	// now validate the signature on the proposal
-	if th.signerClient.GetPubKey().VerifyBytes(propBytes, prop.Signature) {
+	if sck.VerifyBytes(propBytes, prop.Signature) {
 		th.logger.Info("Successfully validated proposal signature")
 	} else {
 		th.logger.Error("FAILED: Proposal signature validation failed")
@@ -273,8 +286,13 @@ func (th *TestHarness) TestSignVote() error {
 			th.logger.Error("FAILED: Signed vote is invalid", "err", err)
 			return newTestHarnessError(ErrTestSignVoteFailed, err, fmt.Sprintf("voteType=%d", voteType))
 		}
+		sck, err := th.signerClient.GetPubKey()
+		if err != nil {
+			return err
+		}
+
 		// now validate the signature on the proposal
-		if th.signerClient.GetPubKey().VerifyBytes(voteBytes, vote.Signature) {
+		if sck.VerifyBytes(voteBytes, vote.Signature) {
 			th.logger.Info("Successfully validated vote signature", "type", voteType)
 		} else {
 			th.logger.Error("FAILED: Vote signature validation failed", "type", voteType)
@@ -321,10 +339,10 @@ func (th *TestHarness) Shutdown(err error) {
 
 // newTestHarnessListener creates our client instance which we will use for testing.
 func newTestHarnessListener(logger log.Logger, cfg TestHarnessConfig) (*privval.SignerListenerEndpoint, error) {
-	proto, addr := cmn.ProtocolAndAddress(cfg.BindAddr)
+	proto, addr := tmnet.ProtocolAndAddress(cfg.BindAddr)
 	if proto == "unix" {
 		// make sure the socket doesn't exist - if so, try to delete it
-		if cmn.FileExists(addr) {
+		if tmos.FileExists(addr) {
 			if err := os.Remove(addr); err != nil {
 				logger.Error("Failed to remove existing Unix domain socket", "addr", addr)
 				return nil, err

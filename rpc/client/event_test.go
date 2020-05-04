@@ -1,15 +1,17 @@
 package client_test
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	abci "github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/rpc/client"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tendermint/tendermint/types"
@@ -19,8 +21,8 @@ var waitForEventTimeout = 5 * time.Second
 
 // MakeTxKV returns a text transaction, allong with expected key, value pair
 func MakeTxKV() ([]byte, []byte, []byte) {
-	k := []byte(cmn.RandStr(8))
-	v := []byte(cmn.RandStr(8))
+	k := []byte(tmrand.Str(8))
+	v := []byte(tmrand.Str(8))
 	return k, v, append(k, append([]byte("="), v...)...)
 }
 
@@ -135,4 +137,22 @@ func testTxEventsSent(t *testing.T, broadcastMethod string) {
 // Test Local client resubscribes upon subscription error.
 func TestClientsResubscribe(t *testing.T) {
 	// TODO(melekes)
+}
+
+func TestHTTPReturnsErrorIfClientIsNotRunning(t *testing.T) {
+	c := getHTTPClient()
+
+	// on Subscribe
+	_, err := c.Subscribe(context.Background(), "TestHeaderEvents",
+		types.QueryForEvent(types.EventNewBlockHeader).String())
+	assert.Error(t, err)
+
+	// on Unsubscribe
+	err = c.Unsubscribe(context.Background(), "TestHeaderEvents",
+		types.QueryForEvent(types.EventNewBlockHeader).String())
+	assert.Error(t, err)
+
+	// on UnsubscribeAll
+	err = c.UnsubscribeAll(context.Background(), "TestHeaderEvents")
+	assert.Error(t, err)
 }

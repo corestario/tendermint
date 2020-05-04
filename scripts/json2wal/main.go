@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	amino "github.com/tendermint/go-amino"
+
 	cs "github.com/tendermint/tendermint/consensus"
 	"github.com/tendermint/tendermint/types"
 )
@@ -22,7 +23,7 @@ import (
 var cdc = amino.NewCodec()
 
 func init() {
-	cs.RegisterConsensusMessages(cdc)
+	cs.RegisterMessages(cdc)
 	cs.RegisterWALMessages(cdc)
 	types.RegisterBlockAmino(cdc)
 }
@@ -52,19 +53,19 @@ func main() {
 	dec := cs.NewWALEncoder(walFile)
 
 	for {
-		msgJson, _, err := br.ReadLine()
+		msgJSON, _, err := br.ReadLine()
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			panic(fmt.Errorf("failed to read file: %v", err))
 		}
 		// ignore the ENDHEIGHT in json.File
-		if strings.HasPrefix(string(msgJson), "ENDHEIGHT") {
+		if strings.HasPrefix(string(msgJSON), "ENDHEIGHT") {
 			continue
 		}
 
 		var msg cs.TimedWALMessage
-		err = cdc.UnmarshalJSON(msgJson, &msg)
+		err = cdc.UnmarshalJSON(msgJSON, &msg)
 		if err != nil {
 			panic(fmt.Errorf("failed to unmarshal json: %v", err))
 		}

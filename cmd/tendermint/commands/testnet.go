@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/corestario/dkglib/lib/blsShare"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	cfg "github.com/tendermint/tendermint/config"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/bytes"
+	tmrand "github.com/tendermint/tendermint/libs/rand"
 	"github.com/tendermint/tendermint/p2p"
 	"github.com/tendermint/tendermint/privval"
 	"github.com/tendermint/tendermint/types"
@@ -150,11 +152,15 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 
 		pvKeyFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorKey)
 		pvStateFile := filepath.Join(nodeDir, config.BaseConfig.PrivValidatorState)
-
 		pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
+
+		pubKey, err := pv.GetPubKey()
+		if err != nil {
+			return errors.Wrap(err, "can't get pubkey")
+		}
 		genVals[i] = types.GenesisValidator{
-			Address: pv.GetPubKey().Address(),
-			PubKey:  pv.GetPubKey(),
+			Address: pubKey.Address(),
+			PubKey:  pubKey,
 			Power:   1,
 			Name:    nodeDirName,
 		}
@@ -184,7 +190,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	// Generate genesis doc from generated validators
 	genDoc := &types.GenesisDoc{
 		GenesisTime:     tmtime.Now(),
-		ChainID:         "chain-" + cmn.RandStr(6),
+		ChainID:         "chain-" + tmrand.Str(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		Validators:      genVals,
 		BLSMasterPubKey: blsShare.TestnetMasterPubKey,
@@ -285,5 +291,5 @@ func moniker(i int) string {
 }
 
 func randomMoniker() string {
-	return cmn.HexBytes(cmn.RandBytes(8)).String()
+	return bytes.HexBytes(tmrand.Bytes(8)).String()
 }

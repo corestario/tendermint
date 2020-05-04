@@ -16,7 +16,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	app := kvstore.NewKVStoreApplication()
+	app := kvstore.NewApplication()
 	node := rpctest.StartTendermint(app)
 	node.GetConsensusState().SetVerifier(dkgOffChain.GetVerifier(1, 1)("TestMain", 0))
 	code := m.Run()
@@ -37,7 +37,10 @@ func TestProvider(t *testing.T) {
 	}
 	chainID := genDoc.ChainID
 	t.Log("chainID:", chainID)
-	p := liteClient.NewHTTPProvider(chainID, rpcAddr)
+	p, err := liteClient.NewHTTPProvider(chainID, rpcAddr)
+	if err != nil {
+		panic(err)
+	}
 	require.NotNil(t, p)
 
 	// let it produce some blocks
